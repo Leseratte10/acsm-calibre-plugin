@@ -1,0 +1,23 @@
+name: Build binaries
+
+on:
+  push:
+    branches: [ master ]
+
+jobs: 
+  build-linux:
+    runs-on: ubuntu-latest
+    steps: 
+      - uses: actions/checkout@v2
+      - name: Compile
+        run: |
+          DOCKER_BUILDKIT=1 docker build -o final .
+          cp calibre-plugin/* final/stretch/
+
+      - name: Upload
+        uses: actions/upload-artifact@v2
+        with: 
+          name: linux
+          path: |
+            final/stretch/
+    

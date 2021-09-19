@@ -1,0 +1,8 @@
+- Linux x86_64 only
+
+- Debian Stretch or newer (or comparable)
+
+- You need these packages: 
+- qtbase5-dev 
+
+
