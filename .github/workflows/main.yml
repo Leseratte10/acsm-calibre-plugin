@@ -9,15 +9,16 @@ jobs:
     runs-on: ubuntu-latest
     steps: 
       - uses: actions/checkout@v2
+
       - name: Compile
         run: |
-          DOCKER_BUILDKIT=1 docker build -o final .
-          cp calibre-plugin/* final/stretch/
+          ./bundle_calibre_plugin.sh
 
       - name: Upload
         uses: actions/upload-artifact@v2
         with: 
           name: linux
           path: |
-            final/stretch/
+            calibre-plugin.zip
+            libgourou_bundle_raw.tar.xz
     

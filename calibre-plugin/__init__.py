@@ -13,6 +13,7 @@ PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
 
 import os
 import traceback
+import subprocess
 
 from calibre.utils.config import config_dir         # type: ignore
 from calibre.constants import iswindows, isosx      # type: ignore
@@ -53,20 +54,20 @@ class DeACSM(FileTypePlugin):
             # only continue if we've never run this version of the plugin before
             self.verdir = os.path.join(self.maindir,PLUGIN_VERSION)
             if not os.path.exists(self.verdir):
-                if iswindows:
-                    print("Windows not supported yet")
-                    return
-                elif isosx:
-                    print("Mac not supported yet")
+                if iswindows or isosx:
+                    print("Windows and MacOS not supported!")
                     return
                 else:
-                    names = ["acsmdownloader", "adept_activate", "libgourou.so", "libzip.so.4"]
+                    names = ["libgourou_bundle_release.tar.xz"]
+
+                # mark that this version has been initialized
+                os.mkdir(self.verdir)
                     
                 lib_dict = self.load_resources(names)
-                print("{0} v{1}: Copying needed library files from plugin's zip".format(PLUGIN_NAME, PLUGIN_VERSION))
+                print("{0} v{1}: Copying needed library files from plugin zip".format(PLUGIN_NAME, PLUGIN_VERSION))
 
                 for entry, data in lib_dict.items():
-                    file_path = os.path.join(self.alfdir, entry)
+                    file_path = os.path.join(self.verdir, entry)
                     try:
                         os.remove(file_path)
                     except:
@@ -79,8 +80,6 @@ class DeACSM(FileTypePlugin):
                         traceback.print_exc()
                         pass
 
-                # mark that this version has been initialized
-                os.mkdir(self.verdir)
         except Exception as e:
             traceback.print_exc()
             raise
@@ -100,6 +99,36 @@ class DeACSM(FileTypePlugin):
         # We need to check if it's an ACSM file
 
         print("{0} v{1}: Trying to parse file {2}".format(PLUGIN_NAME, PLUGIN_VERSION, os.path.basename(path_to_ebook)))
+
+        ext = os.path.splitext(path_to_ebook)[1].lower()
+
+        if (ext != ".acsm"):
+            print("{0} v{1}: That's not an ACSM, returning (is {2} instead)... ".format(PLUGIN_NAME, PLUGIN_VERSION, ext))
+            return path_to_ebook
+
+        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
+        deacsmprefs = prefs.DeACSM_Prefs()
+
+        print("{0} v{1}: Try to execute {2} ".format(PLUGIN_NAME, PLUGIN_VERSION, os.path.join(self.verdir, "acsmdownloader")))
+
+        outputname = self.temporary_file(".epub").name
+
+        my_env = os.environ.copy()
+        my_env["LD_LIBRARY_PATH"] = ".:" + my_env["LD_LIBRARY_PATH"]
+
+        os.chmod(os.path.join(self.verdir, "acsmdownloader"), 0o775)
+
+        ret = subprocess.run([os.path.join(self.verdir, "acsmdownloader"), "-d", os.path.join(deacsmprefs["path_to_account_data"], "device.xml"), 
+        "-a", os.path.join(deacsmprefs["path_to_account_data"], "activation.xml"), 
+        "-k", os.path.join(deacsmprefs["path_to_account_data"], "devicesalt"), 
+        "-o", outputname, 
+        "-v", "-v", 
+        "-f", path_to_ebook ], capture_output=True, shell=False, cwd=self.verdir, env=my_env)
+
+        print(ret)
+
+        return outputname
+        
 
         print("{0} v{1}: Failed, return original ...".format(PLUGIN_NAME, PLUGIN_VERSION))
         return path_to_ebook
