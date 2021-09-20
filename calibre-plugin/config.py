@@ -117,6 +117,9 @@ class ConfigWidget(QWidget):
         filters = [("ZIP", ["zip"])]
         filename = choose_save_file(self, "Export ADE activation files", _("Export ADE activation files"), filters, all_files=False)
 
+        if (filename is None):
+            return
+
         print("would export to " + filename)
 
         try: 
@@ -220,6 +223,9 @@ class ConfigWidget(QWidget):
 
 
         filename = choose_save_file(self, "Export ADE keys", _("Export ADE keys"), filters, all_files=False)
+
+        if (filename is None):
+            return
 
         print("would export to " + filename)
 
