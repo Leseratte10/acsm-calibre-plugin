@@ -9,7 +9,6 @@ import traceback
 
 from calibre.utils.config import JSONConfig, config_dir  # type: ignore
 from calibre_plugins.deacsm.__init__ import PLUGIN_NAME  # type: ignore
-from calibre.constants import isosx, islinux            # type: ignore
 
 
 class DeACSM_Prefs():

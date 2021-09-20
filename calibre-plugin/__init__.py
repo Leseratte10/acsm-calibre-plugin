@@ -17,14 +17,15 @@ import subprocess
 
 from calibre.utils.config import config_dir         # type: ignore
 from calibre.constants import iswindows, isosx      # type: ignore
+from calibre.gui2 import (question_dialog, error_dialog, info_dialog, choose_save_file)                     # type: ignore
 
 
 
 class DeACSM(FileTypePlugin):
     name                        = PLUGIN_NAME
-    description                 = "Takes an Adobe ACSM file and converts that into a useable EPUB file"
+    description                 = "Takes an Adobe ACSM file and converts that into a useable EPUB file."
     supported_platforms         = ['linux']
-    author                      = "Leseratte10"
+    author                      = "Leseratte10 (Plugin), Grégory Soutadé (libgourou)"
     version                     = PLUGIN_VERSION_TUPLE
     minimum_calibre_version     = (5, 0, 0)
     file_types                  = set(['acsm'])
@@ -34,14 +35,7 @@ class DeACSM(FileTypePlugin):
 
     def initialize(self):
         """
-        Dynamic modules can't be imported/loaded from a zipfile.
-        So this routine will extract the appropriate
-        library for the target OS and copy it to the 'alfcrypto' subdirectory of
-        calibre's configuration directory. That 'alfcrypto' directory is then
-        inserted into the syspath (as the very first entry) in the run function
-        so the CDLL stuff will work in the alfcrypto.py script.
-        The extraction only happens once per version of the plugin
-        Also perform upgrade of preferences once per version
+        On initialization, make sure the libgourou code is present for compilation.
         """
         try:
             self.pluginsdir = os.path.join(config_dir,"plugins")
@@ -127,11 +121,15 @@ class DeACSM(FileTypePlugin):
 
         print(ret)
 
+        if not (os.path.exists(outputname)):
+            error_dialog(None, "ACSM->EPUB failed", "Could not convert ACSM to EPUB:", det_msg=str(ret), show=True, show_copy_button=True)
+            print("{0} v{1}: Failed, return original ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+            return path_to_ebook
+
+
         return outputname
         
 
-        print("{0} v{1}: Failed, return original ...".format(PLUGIN_NAME, PLUGIN_VERSION))
-        return path_to_ebook
-
+        
 
 
