@@ -4,14 +4,19 @@
 # Calibre plugin for ACSM files.
 
 
+# Revision history: 
+# v0.0.1: First version.
+# v0.0.2: Allow key extraction without extra binary call.
+
+
 from calibre.customize import FileTypePlugin        # type: ignore
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = tuple([int(x) for x in __version__.split(".")])
 PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
 
-import os
+import os, shutil
 import traceback
 import subprocess
 
@@ -125,6 +130,15 @@ class DeACSM(FileTypePlugin):
             error_dialog(None, "ACSM->EPUB failed", "Could not convert ACSM to EPUB:", det_msg=str(ret), show=True, show_copy_button=True)
             print("{0} v{1}: Failed, return original ...".format(PLUGIN_NAME, PLUGIN_VERSION))
             return path_to_ebook
+
+        if ("Parse PDF" in ret.stdout.decode("latin-1") or "Parse PDF" in ret.stderr.decode("latin-1")):
+            # Looks like this is a PDF, move to PDF ...
+            print("{0} v{1}: That's a PDF".format(PLUGIN_NAME, PLUGIN_VERSION))
+            outputname2 = self.temporary_file(".pdf").name
+            os.rename(outputname, outputname2)
+            shutil.copy(outputname2, "/tmp/test.pdf")
+            return outputname2
+
 
 
         return outputname

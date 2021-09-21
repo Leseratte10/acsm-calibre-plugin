@@ -3,7 +3,7 @@
 
 # pyright: reportUndefinedVariable=false
 
-import os, glob, shutil, tarfile, subprocess, time, tempfile, datetime
+import os, glob, shutil, tarfile, subprocess, time, tempfile, datetime, base64
 
 from lxml import etree
 
@@ -221,7 +221,6 @@ class ConfigWidget(QWidget):
 
         filters = [("DER Files", ["der"])]
 
-
         filename = choose_save_file(self, "Export ADE keys", _("Export ADE keys"), filters, all_files=False)
 
         if (filename is None):
@@ -229,50 +228,36 @@ class ConfigWidget(QWidget):
 
         print("would export to " + filename)
 
-        my_env = os.environ.copy()
-        my_env["LD_LIBRARY_PATH"] = ".:" + my_env["LD_LIBRARY_PATH"]
-
-
-        old_files = glob.glob(os.path.join(verdir, "*.der"))
-        for file in old_files:
-            try: 
-                os.remove(file)
-            except:
-                pass
-
-        try: 
-            os.chmod(os.path.join(verdir, "acsmdownloader"), 0o775)
-        except FileNotFoundError:
-            return error_dialog(None, "Tool not found", "Helper tool not found. Press \"Compile\" then try again.", show=True, show_copy_button=False)
-
-        ret = None
-
         import calibre_plugins.deacsm.prefs as prefs     # type: ignore
         deacsmprefs = prefs.DeACSM_Prefs()
 
-        try:
-            ret = subprocess.run([os.path.join(verdir, "acsmdownloader"), "-d", os.path.join(deacsmprefs["path_to_account_data"], "device.xml"), 
-            "-a", os.path.join(deacsmprefs["path_to_account_data"], "activation.xml"), 
-            "-k", os.path.join(deacsmprefs["path_to_account_data"], "devicesalt"), 
-            "-e"
-            ], capture_output=True, shell=False, cwd=verdir, env=my_env)
 
-            print(ret)
+        activation_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "activation.xml")
 
-        except:
-            return error_dialog(None, "Export failed", "Export failed.", det_msg=str(ret), show=True, show_copy_button=True)
+        container = None
+        try: 
+            container = etree.parse(activation_xml_path)
+        except (FileNotFoundError, OSError) as e:
+            return error_dialog(None, "Export failed", "Export failed - Can't open activation.xml", show=True, show_copy_button=False)
+
+        key_binary = None
+        try: 
+            adeptNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)        
+            usernameXML = container.find(adeptNS("credentials")).find(adeptNS("privateLicenseKey"))
+            key_base64 = usernameXML.text
+            key_binary = base64.decodebytes(key_base64.encode())[26:]
+        except: 
+            return error_dialog(None, "Export failed", "Export failed - Can't read key from activation.xml", show=True, show_copy_button=False)
 
         try: 
-            new_key = glob.glob(os.path.join(verdir, "*.der"))[0]
-            shutil.move(new_key, filename)
-            info_dialog(None, "Done", "Key successfully exported", show=True, show_copy_button=False)
-        except IndexError: 
-            return error_dialog(None, "Export failed", "Export failed.", show=True, show_copy_button=True)
+            output_file = open(filename, "wb")
+            output_file.write(key_binary)
+            output_file.close()
+        except: 
+            return error_dialog(None, "Export failed", "Export failed - Can't write key to file", show=True, show_copy_button=False)
 
 
-
-
-
+        info_dialog(None, "Done", "Key successfully exported", show=True, show_copy_button=False)
 
     def compile(self):
 
