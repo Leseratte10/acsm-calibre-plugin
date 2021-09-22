@@ -3,9 +3,8 @@
 
 '''
 This is an experimental Python version of libgourou. Right now it only supports part of the authorization
-(and doesn't support fulfillment at all). All the encryption / decryption stuff works, but
-I'm stuck at the XML node hashing / signing that's required for the last authorization step. 
-Also, I'm not sure if the nonce function is implemented correctly. 
+(and doesn't support fulfillment at all). All the encryption / decryption stuff works, the node hashing
+also works, only thing I'm stuck at is the signature. Right now the Adobe server responds with "BadPadding".
 
 Who knows, maybe there will someday be a full Python version of libgourou so it can be used in 
 Calibre on all operating systems without additional dependencies.
@@ -16,12 +15,12 @@ Calibre on all operating systems without additional dependencies.
 
 import os, pwd, hashlib, base64, locale, urllib.request, datetime
 from datetime import datetime, timedelta
+from OpenSSL import crypto
 from Crypto import Random
 from Crypto.PublicKey import RSA
 from Crypto.Util.asn1 import DerSequence
 from Crypto.Cipher import AES
 from Crypto.Cipher import PKCS1_v1_5
-from binascii import a2b_base64
 from uuid import getnode
 from lxml import etree
 
@@ -43,6 +42,7 @@ licensekey_pub = None
 licensekey_priv = None
 
 user_uuid = None
+pkcs12 = None
 
 def createDeviceKeyFile():
     # Original implementation: Device::createDeviceKeyFile()
@@ -392,6 +392,9 @@ def signIn(username: str, passwd: str):
     global user_uuid
     user_uuid = credentialsXML.find("./%s" % (adNS("user"))).text
 
+    global pkcs12
+    pkcs12 = credentialsXML.find("./%s" % (adNS("pkcs12"))).text
+
 
 
 def encrypt_with_device_key(data):
@@ -425,8 +428,6 @@ def decrypt_with_device_key(data):
 
 
 def addNonce(): 
-
-    # Not sure if this code is correct yet.
 
     dt = datetime.now()
     usec = dt.microsecond
@@ -521,11 +522,26 @@ def activateDevice():
     print("activate")
     print(activate_req)
 
+    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
+    etree.register_namespace("adept", NSMAP["adept"])
+
     req_xml = etree.fromstring(activate_req)
 
     print(req_xml)
 
-    #signature = signNode(req_xml)
+    signature = sign_node(req_xml)
+
+    etree.SubElement(req_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
+
+    print ("final request:")
+    print(etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
+
+    data = "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
+
+    ret = sendRequestDocu(data, VAR_ACS_SERVER + "/Activate")
+    print(ret)
+
+
 
 
 '''
@@ -563,12 +579,33 @@ def activateDevice():
 
 '''
 
-# I've got no idea how this signing and hashing is supposed to work ...
-
 
 def sign_node(node):
 
     sha_hash = hash_node(node)
+
+    print("SHA1 HASH is " + sha_hash.hex())
+
+    global devkey_bytes
+    global pkcs12
+
+    print("pkcs12 is")
+    print(pkcs12)
+
+    my_pkcs12 = base64.b64decode(pkcs12)
+
+    pkcs_data = crypto.load_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))
+
+    my_priv_key = crypto.dump_privatekey(crypto.FILETYPE_ASN1, pkcs_data.get_privatekey())
+
+    print(my_priv_key)
+
+    key = RSA.importKey(my_priv_key)
+    cipherAC = PKCS1_v1_5.new(key)
+    crypted_msg = cipherAC.encrypt(bytes(sha_hash))
+
+    print("Encrypted SHA hash: " + str(crypted_msg))
+    return base64.b64encode(crypted_msg)
 
     
 
@@ -578,11 +615,91 @@ def hash_node(node):
     hash_node_ctx(node, hash_ctx)
     return hash_ctx.digest()
 
-def hash_node_ctx(node, hash_ctx):
-    pass
 
+
+ASN_NONE = 0
+ASN_NS_TAG = 1
+ASN_CHILD = 2
+ASN_END_TAG = 3
+ASN_TEXT = 4
+ASN_ATTRIBUTE = 5
+
+debug = False
+
+def hash_node_ctx(node, hash_ctx):
+
+    qtag = etree.QName(node.tag)
+
+    hash_do_append_tag(hash_ctx, ASN_NS_TAG)
+    hash_do_append_string(hash_ctx, qtag.namespace)
+    hash_do_append_string(hash_ctx, qtag.localname)
+
+
+    attrKeys = node.keys()
+    attrKeys.sort()
+    for attribute in attrKeys: 
+        hash_do_append_tag(hash_ctx, ASN_ATTRIBUTE)
+        hash_do_append_string(hash_ctx, "")
+        hash_do_append_string(hash_ctx, attribute)  # "requestType"
+        hash_do_append_string(hash_ctx, node.get(attribute))    # "initial"
 
     
+    if (node.text is not None):
+        hash_do_append_tag(hash_ctx, ASN_CHILD)
+        hash_do_append_tag(hash_ctx, ASN_TEXT)
+        hash_do_append_string(hash_ctx, node.text.strip()) 
+        hash_do_append_tag(hash_ctx, ASN_END_TAG)
+    else: 
+        hash_do_append_tag(hash_ctx, ASN_CHILD)
+        for child in node: 
+            hash_node_ctx(child, hash_ctx)
+        hash_do_append_tag(hash_ctx, ASN_END_TAG)
+
+
+def hash_do_append_string(hash_ctx, string: str):
+    length = len(string)
+    len_upper = int(length / 256)
+    len_lower = int(length & 0xFF)
+
+    global debug
+
+    if debug: 
+        print("[STR %02x %02x => %s ]" % (len_upper, len_lower, string))
+
+    hash_do_append_raw_bytes(hash_ctx, [len_upper, len_lower])
+    hash_do_append_raw_bytes(hash_ctx, bytes(string, encoding="latin-1"))
+
+def hash_do_append_tag(hash_ctx, tag: int):
+
+    global debug
+
+    if debug: 
+        if (tag == ASN_NONE):
+            print("[TAG ASN_NONE (0) ]")
+        elif (tag == ASN_NS_TAG):
+            print("[TAG ASN_NS_TAG (1) ]")
+        elif (tag == ASN_CHILD):
+            print("[TAG ASN_CHILD (2) ]")
+        elif (tag == ASN_END_TAG):
+            print("[TAG ASN_END_TAG (3) ]")
+        elif (tag == ASN_TEXT):
+            print("[TAG ASN_TEXT (4) ]")
+        elif (tag == ASN_ATTRIBUTE):
+            print("[TAG ASN_ATTRIBUTE (5) ]")
+        else: 
+            print("[ INVALID TAG!!!! %d" % (tag))
+
+    if (tag > 5):
+        return
+    
+    hash_do_append_raw_bytes(hash_ctx, [tag])
+
+def hash_do_append_raw_bytes(hash_ctx, data: bytes):
+    hash_ctx.update(bytearray(data))
+
+
+
+
 
 
 def main():
@@ -591,6 +708,7 @@ def main():
 
     signIn(VAR_MAIL, VAR_PASS)
     activateDevice()
+
 
 if __name__ == "__main__":
     main()
