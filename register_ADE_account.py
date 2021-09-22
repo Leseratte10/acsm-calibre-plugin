@@ -3,8 +3,8 @@
 
 '''
 This is an experimental Python version of libgourou. Right now it only supports part of the authorization
-(and doesn't support fulfillment at all). All the encryption / decryption stuff works, the node hashing
-also works, only thing I'm stuck at is the signature. Right now the Adobe server responds with "BadPadding".
+(and doesn't support fulfillment at all). All the encryption / decryption stuff works, but once I send
+the final request to the Adobe server, it responds with E_AUTH_USER_AUTH, and I have no idea what that means.
 
 Who knows, maybe there will someday be a full Python version of libgourou so it can be used in 
 Calibre on all operating systems without additional dependencies.
@@ -19,6 +19,8 @@ from OpenSSL import crypto
 from Crypto import Random
 from Crypto.PublicKey import RSA
 from Crypto.Util.asn1 import DerSequence
+from Crypto.Signature import PKCS1_v1_5 as pkcssign
+from Crypto.Hash import SHA
 from Crypto.Cipher import AES
 from Crypto.Cipher import PKCS1_v1_5
 from uuid import getnode
@@ -584,13 +586,8 @@ def sign_node(node):
 
     sha_hash = hash_node(node)
 
-    print("SHA1 HASH is " + sha_hash.hex())
-
     global devkey_bytes
     global pkcs12
-
-    print("pkcs12 is")
-    print(pkcs12)
 
     my_pkcs12 = base64.b64decode(pkcs12)
 
@@ -598,22 +595,19 @@ def sign_node(node):
 
     my_priv_key = crypto.dump_privatekey(crypto.FILETYPE_ASN1, pkcs_data.get_privatekey())
 
-    print(my_priv_key)
-
     key = RSA.importKey(my_priv_key)
-    cipherAC = PKCS1_v1_5.new(key)
-    crypted_msg = cipherAC.encrypt(bytes(sha_hash))
+    cipherAC = pkcssign.new(key)
+    crypted_msg = cipherAC.sign(sha_hash)
 
-    print("Encrypted SHA hash: " + str(crypted_msg))
     return base64.b64encode(crypted_msg)
 
     
 
 def hash_node(node):
 
-    hash_ctx = hashlib.sha1()
+    hash_ctx = SHA.new()
     hash_node_ctx(node, hash_ctx)
-    return hash_ctx.digest()
+    return hash_ctx
 
 
 
