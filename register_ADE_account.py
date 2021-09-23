@@ -141,7 +141,7 @@ def createDeviceFile(hobbes: str, randomSerial: bool):
 
 def createDevice():
     createDeviceKeyFile()
-    createDeviceFile(VAR_HOBBES_VERSION, False)
+    createDeviceFile(VAR_HOBBES_VERSION, True)
 
 def sendHTTPRequest_getSimple(URL: str):
 
@@ -162,14 +162,6 @@ def sendHTTPRequest_getSimple(URL: str):
 
     if loc is not None: 
         return sendHTTPRequest_getSimple(loc)
-
-    try: 
-        ct = req.headers.get("Content-Type")
-    except: 
-        ct = None
-
-    if ct == "application/vnd.adobe.adept+xml":
-        print("Got adobe XML")
 
     return content
 
@@ -193,14 +185,6 @@ def sendPOSTHTTPRequest(URL: str, document: bytes, type: str):
 
     if loc is not None: 
         return sendPOSTHTTPRequest(loc, document, type)
-
-    try: 
-        ct = req.headers.get("Content-Type")
-    except: 
-        ct = None
-
-    if ct == "application/vnd.adobe.adept+xml":
-        print("Got adobe XML")
 
     return content
 
@@ -231,7 +215,11 @@ def createUser():
     activationURL = VAR_ACS_SERVER + "/ActivationServiceInfo"
     response = sendRawRequest(activationURL)
 
+    print("======================================================")
+    print("Sending request to " + activationURL)
+    print("got response:")
     print(response)
+    print("======================================================")
 
     adobe_response_xml = etree.fromstring(response)
 
@@ -253,6 +241,14 @@ def createUser():
 
     authenticationURL = authURL + "/AuthenticationServiceInfo"
     response2 = sendRawRequest(authenticationURL)
+
+
+    print("======================================================")
+    print("Sending request to " + authenticationURL)
+    print("got response:")
+    print(response2)
+    print("======================================================")
+
     adobe_response_xml2 = etree.fromstring(response2)
     authCert = adobe_response_xml2.find("./%s" % (adNS("certificate"))).text
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authenticationCertificate")).text = authCert
@@ -294,8 +290,6 @@ def buildSignInRequest(adobeID: str, adobePassword: str, authenticationCertifica
     cipherAC = PKCS1_v1_5.new(rsakey)
     crypted_msg = cipherAC.encrypt(bytes(ar))
 
-    print(crypted_msg)
-
     etree.SubElement(root, etree.QName(NSMAP["adept"], "signInData")).text = base64.b64encode(crypted_msg)
 
     # Generate Auth key and License Key
@@ -304,13 +298,37 @@ def buildSignInRequest(adobeID: str, adobePassword: str, authenticationCertifica
 
     global authkey_pub, authkey_priv, licensekey_pub, licensekey_priv
 
+    # original
+	#// Generate Auth key and License Key
+	#void* rsaAuth = client->generateRSAKey(1024);
+	#void* rsaLicense = client->generateRSAKey(1024);
+
+	#std::string serializedData = serializeRSAPublicKey(rsaAuth);
+	#appendTextElem(signIn, "adept:publicAuthKey", serializedData);
+	#serializedData = serializeRSAPrivateKey(rsaAuth);
+	#appendTextElem(signIn, "adept:encryptedPrivateAuthKey", serializedData.data());
+    #
+
+    #void* DRMProcessorClientImpl::generateRSAKey(int keyLengthBits)
+    #{
+    #BIGNUM * bn = BN_new();
+    #RSA * rsa = RSA_new();
+    #BN_set_word(bn, 0x10001);
+    #RSA_generate_key_ex(rsa, keyLengthBits, bn, 0);
+    #BN_free(bn);
+    #return rsa;
+    #}
+
     authkey_pub = authkey.publickey().exportKey("DER")
-    authkey_priv = authkey.exportKey("DER")
+    authkey_priv = authkey.exportKey("DER", pkcs=8)
     authkey_priv_enc = encrypt_with_device_key(authkey_priv) 
 
     licensekey_pub = licensekey.publickey().exportKey("DER")
-    licensekey_priv = licensekey.exportKey("DER")
+    licensekey_priv = licensekey.exportKey("DER", pkcs=8)
     licensekey_priv_enc = encrypt_with_device_key(licensekey_priv) 
+
+    print("authkey_priv is")
+    print(base64.b64encode(authkey_priv))
 
 
     etree.SubElement(root, etree.QName(NSMAP["adept"], "publicAuthKey")).text = base64.b64encode(authkey_pub)
@@ -319,7 +337,7 @@ def buildSignInRequest(adobeID: str, adobePassword: str, authenticationCertifica
     etree.SubElement(root, etree.QName(NSMAP["adept"], "publicLicenseKey")).text = base64.b64encode(licensekey_pub)
     etree.SubElement(root, etree.QName(NSMAP["adept"], "encryptedPrivateLicenseKey")).text = base64.b64encode(licensekey_priv_enc)
 
-    print(etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
+    # print(etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
 
     return "<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
     
@@ -329,7 +347,6 @@ def signIn(username: str, passwd: str):
 
     # Get authenticationCertificate
     activationxml = etree.parse(FILE_ACTIVATIONXML)
-    print(activationxml)
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     authenticationCertificate = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
 
@@ -338,7 +355,16 @@ def signIn(username: str, passwd: str):
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/SignInDirect"
 
     credentials = sendRequestDocu(signInRequest, signInURL)
-    print (credentials)
+    
+    
+    print("======================================================")
+    print("Sending request to " + signInURL)
+    print("Payload:")
+    print(signInRequest)
+    print("got response:")
+    print(credentials)
+    print("======================================================")
+
 
     try: 
         credentialsXML = etree.fromstring(credentials)
@@ -431,7 +457,7 @@ def decrypt_with_device_key(data):
 
 def addNonce(): 
 
-    dt = datetime.now()
+    dt = datetime.utcnow()
     usec = dt.microsecond
     sec = (dt - datetime(1970,1,1)).total_seconds()
 
@@ -451,7 +477,7 @@ def addNonce():
 
     ret += "<adept:nonce>%s</adept:nonce>" % (base64.b64encode(final).decode("latin-1"))
 
-    m10m = datetime.now() + timedelta(minutes=10)
+    m10m = datetime.utcnow() + timedelta(minutes=10)
     m10m_str = m10m.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     ret += "<adept:expiration>%s</adept:expiration>" % (m10m_str)
@@ -521,6 +547,7 @@ def activateDevice():
 
     activate_req = buildActivateReq()
 
+    print("======================================================")
     print("activate")
     print(activate_req)
 
@@ -528,8 +555,6 @@ def activateDevice():
     etree.register_namespace("adept", NSMAP["adept"])
 
     req_xml = etree.fromstring(activate_req)
-
-    print(req_xml)
 
     signature = sign_node(req_xml)
 
@@ -541,7 +566,15 @@ def activateDevice():
     data = "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
 
     ret = sendRequestDocu(data, VAR_ACS_SERVER + "/Activate")
+
+    print("======================================================")
+    print("Sending request to " + VAR_ACS_SERVER + "/Activate")
+    print("Payload:")
+    print(data)
+    print("got response:")
     print(ret)
+    print("======================================================")
+
 
 
 
@@ -592,7 +625,6 @@ def sign_node(node):
     my_pkcs12 = base64.b64decode(pkcs12)
 
     pkcs_data = crypto.load_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))
-
     my_priv_key = crypto.dump_privatekey(crypto.FILETYPE_ASN1, pkcs_data.get_privatekey())
 
     key = RSA.importKey(my_priv_key)
