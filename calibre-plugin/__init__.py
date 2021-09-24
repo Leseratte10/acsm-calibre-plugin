@@ -25,12 +25,27 @@ from calibre.constants import iswindows, isosx      # type: ignore
 from calibre.gui2 import (question_dialog, error_dialog, info_dialog, choose_save_file)                     # type: ignore
 
 
+# Test - need these:
+import sys, os, zipfile, shutil, pwd, hashlib, base64, locale, urllib.request, datetime
+from datetime import datetime, timedelta
+
+
+from Crypto import Random
+from Crypto.PublicKey import RSA
+from Crypto.Util.asn1 import DerSequence
+from Crypto.Hash import SHA
+from Crypto.Cipher import AES
+from Crypto.Cipher import PKCS1_v1_5
+from uuid import getnode
+from lxml import etree
+
+
 
 class DeACSM(FileTypePlugin):
     name                        = PLUGIN_NAME
-    description                 = "Takes an Adobe ACSM file and converts that into a useable EPUB file."
+    description                 = "Takes an Adobe ACSM file and converts that into a useable EPUB file. Python reimplementation of libgourou by Grégory Soutadé"
     supported_platforms         = ['linux']
-    author                      = "Leseratte10 (Plugin), Grégory Soutadé (libgourou)"
+    author                      = "Leseratte10"
     version                     = PLUGIN_VERSION_TUPLE
     minimum_calibre_version     = (5, 0, 0)
     file_types                  = set(['acsm'])
@@ -40,8 +55,10 @@ class DeACSM(FileTypePlugin):
 
     def initialize(self):
         """
-        On initialization, make sure the libgourou code is present for compilation.
+        On initialization, make sure we have all the libraries (python-rsa and cryptography)
+        that we need.
         """
+
         try:
             self.pluginsdir = os.path.join(config_dir,"plugins")
             if not os.path.exists(self.pluginsdir):
@@ -50,38 +67,56 @@ class DeACSM(FileTypePlugin):
             if not os.path.exists(self.maindir):
                 os.mkdir(self.maindir)
 
-            # only continue if we've never run this version of the plugin before
-            self.verdir = os.path.join(self.maindir,PLUGIN_VERSION)
-            if not os.path.exists(self.verdir):
-                if iswindows or isosx:
-                    print("Windows and MacOS not supported!")
-                    return
-                else:
-                    names = ["libgourou_bundle_release.tar.xz"]
+            # Re-Extract modules
 
-                # mark that this version has been initialized
-                os.mkdir(self.verdir)
-                    
-                lib_dict = self.load_resources(names)
-                print("{0} v{1}: Copying needed library files from plugin zip".format(PLUGIN_NAME, PLUGIN_VERSION))
+            self.moddir = os.path.join(self.maindir,"modules")
+            if os.path.exists(self.moddir):
+                shutil.rmtree(self.moddir, ignore_errors=True)
+            
+            os.mkdir(self.moddir)
 
-                for entry, data in lib_dict.items():
-                    file_path = os.path.join(self.verdir, entry)
-                    try:
-                        os.remove(file_path)
-                    except:
-                        pass
+            names = ["cryptography.zip", "rsa.zip"]
+                
+            lib_dict = self.load_resources(names)
+            print("{0} v{1}: Copying needed library files from plugin zip".format(PLUGIN_NAME, PLUGIN_VERSION))
 
-                    try:
-                        open(file_path,'wb').write(data)
-                    except:
-                        print("{0} v{1}: Exception when copying needed library files".format(PLUGIN_NAME, PLUGIN_VERSION))
-                        traceback.print_exc()
-                        pass
+            for entry, data in lib_dict.items():
+                file_path = os.path.join(self.moddir, entry)
+                try:
+                    os.remove(file_path)
+                except:
+                    pass
+
+                try:
+                    open(file_path,'wb').write(data)
+                    with zipfile.ZipFile(file_path, 'r') as ref:
+                        ref.extractall(self.moddir)
+                    os.remove(file_path)
+
+                except:
+                    print("{0} v{1}: Exception when copying needed library files".format(PLUGIN_NAME, PLUGIN_VERSION))
+                    traceback.print_exc()
+                    pass
+
+            try: 
+                from cryptography.hazmat.primitives.serialization import pkcs12 as pkcs12module
+            except: 
+                sys.path.insert(0, os.path.join(self.moddir, "cryptography"))
+                from cryptography.hazmat.primitives.serialization import pkcs12 as pkcs12module
+                
+            try: 
+                import rsa
+            except: 
+                sys.path.insert(0, os.path.join(self.moddir, "rsa"))
+                import rsa
 
         except Exception as e:
             traceback.print_exc()
             raise
+
+        
+
+            
 
     def is_customizable(self):
         return True

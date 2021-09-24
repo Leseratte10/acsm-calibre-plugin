@@ -1,7 +1,19 @@
-# Calibe ACSM plugin (Linux only)
+# Calibre ACSM plugin (Linux only)
 
 This is a Linux-only Calibre plugin that allows you to turn ACSM files into EPUBs without the need for ADE. 
 It's based on libgourou by Grégory Soutadé (http://indefero.soutade.fr/p/libgourou/).
+
+## Note
+
+The source code in this repository currently doesn't work because it's being updated. If you want to check the currently working source, check out the Release, the plugin source is included in the ZIP, and there's also an additional tar.xz with the libgourou source. 
+
+## Plans for the future
+
+Right now this plugin is for Linux only, as it's using libgourou by Grégory Soutadé which only supports Linux. 
+
+I am currently reimplementing this library in Python so it will work on all operating systems in the future. Current state of that implementation is that account authorization works, so all that's now missing is the actual Fulfillment. And potentially allowing anonymous accounts in the future. 
+
+This Python implementation isn't useable to normal end-users right now, so if you're on Linux please use the released plugin instead of the raw source code, and if you're on Windows or on MacOS please wait for the native Python version of this plugin.
 
 ## Setup
 

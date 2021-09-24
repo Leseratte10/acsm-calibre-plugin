@@ -2,9 +2,8 @@
 # -*- coding: utf-8 -*-
 
 '''
-This is an experimental Python version of libgourou. Right now it only supports part of the authorization
-(and doesn't support fulfillment at all). All the encryption / decryption stuff works, but once I send
-the final request to the Adobe server, it responds with E_AUTH_USER_AUTH, and I have no idea what that means.
+This is an experimental Python version of libgourou. Right now it only supports authorization, 
+it does not yet support ACSM fulfillment. 
 
 Who knows, maybe there will someday be a full Python version of libgourou so it can be used in 
 Calibre on all operating systems without additional dependencies.
@@ -15,16 +14,17 @@ Calibre on all operating systems without additional dependencies.
 
 import os, pwd, hashlib, base64, locale, urllib.request, datetime
 from datetime import datetime, timedelta
-from OpenSSL import crypto
 from Crypto import Random
 from Crypto.PublicKey import RSA
 from Crypto.Util.asn1 import DerSequence
-from Crypto.Signature import PKCS1_v1_5 as pkcssign
 from Crypto.Hash import SHA
 from Crypto.Cipher import AES
 from Crypto.Cipher import PKCS1_v1_5
 from uuid import getnode
+from cryptography.hazmat.primitives import serialization
 from lxml import etree
+from cryptography.hazmat.primitives.serialization import pkcs12 as pkcs12module
+import rsa
 
 
 VAR_MAIL = "test@example.com"
@@ -298,27 +298,6 @@ def buildSignInRequest(adobeID: str, adobePassword: str, authenticationCertifica
 
     global authkey_pub, authkey_priv, licensekey_pub, licensekey_priv
 
-    # original
-	#// Generate Auth key and License Key
-	#void* rsaAuth = client->generateRSAKey(1024);
-	#void* rsaLicense = client->generateRSAKey(1024);
-
-	#std::string serializedData = serializeRSAPublicKey(rsaAuth);
-	#appendTextElem(signIn, "adept:publicAuthKey", serializedData);
-	#serializedData = serializeRSAPrivateKey(rsaAuth);
-	#appendTextElem(signIn, "adept:encryptedPrivateAuthKey", serializedData.data());
-    #
-
-    #void* DRMProcessorClientImpl::generateRSAKey(int keyLengthBits)
-    #{
-    #BIGNUM * bn = BN_new();
-    #RSA * rsa = RSA_new();
-    #BN_set_word(bn, 0x10001);
-    #RSA_generate_key_ex(rsa, keyLengthBits, bn, 0);
-    #BN_free(bn);
-    #return rsa;
-    #}
-
     authkey_pub = authkey.publickey().exportKey("DER")
     authkey_priv = authkey.exportKey("DER", pkcs=8)
     authkey_priv_enc = encrypt_with_device_key(authkey_priv) 
@@ -327,17 +306,12 @@ def buildSignInRequest(adobeID: str, adobePassword: str, authenticationCertifica
     licensekey_priv = licensekey.exportKey("DER", pkcs=8)
     licensekey_priv_enc = encrypt_with_device_key(licensekey_priv) 
 
-    print("authkey_priv is")
-    print(base64.b64encode(authkey_priv))
-
 
     etree.SubElement(root, etree.QName(NSMAP["adept"], "publicAuthKey")).text = base64.b64encode(authkey_pub)
     etree.SubElement(root, etree.QName(NSMAP["adept"], "encryptedPrivateAuthKey")).text = base64.b64encode(authkey_priv_enc)
 
     etree.SubElement(root, etree.QName(NSMAP["adept"], "publicLicenseKey")).text = base64.b64encode(licensekey_pub)
     etree.SubElement(root, etree.QName(NSMAP["adept"], "encryptedPrivateLicenseKey")).text = base64.b64encode(licensekey_priv_enc)
-
-    # print(etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
 
     return "<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
     
@@ -477,7 +451,7 @@ def addNonce():
 
     ret += "<adept:nonce>%s</adept:nonce>" % (base64.b64encode(final).decode("latin-1"))
 
-    m10m = datetime.utcnow() + timedelta(minutes=10)
+    m10m = dt + timedelta(minutes=10)
     m10m_str = m10m.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     ret += "<adept:expiration>%s</adept:expiration>" % (m10m_str)
@@ -566,72 +540,47 @@ def activateDevice():
     data = "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
 
     ret = sendRequestDocu(data, VAR_ACS_SERVER + "/Activate")
-
-    print("======================================================")
-    print("Sending request to " + VAR_ACS_SERVER + "/Activate")
-    print("Payload:")
-    print(data)
-    print("got response:")
+   
+    print("Response from server: ")
     print(ret)
-    print("======================================================")
 
-
-
-
-
-'''
+    # Soooo, lets go and append that to the XML: 
     
-    void DRMProcessor::activateDevice()
-    {
-	pugi::xml_document activateReq;
+    f = open(FILE_ACTIVATIONXML, "r")
+    old_xml = f.read().replace("</activationInfo>", "")
+    f.close()
+    
+    f = open(FILE_ACTIVATIONXML, "w")
 
-	GOUROU_LOG(INFO, "Activate device");
-
-	buildActivateReq(activateReq);
-
-	pugi::xml_node root = activateReq.select_node("adept:activate").node();
-
-	std::string signature = signNode(root);
-
-	root = activateReq.select_node("adept:activate").node();
-	appendTextElem(root, "adept:signature", signature);
-
-	pugi::xml_document activationDoc;
-	user->readActivation(activationDoc);
-
-	std::string activationURL = user->getProperty("//adept:activationURL");
-	activationURL += "/Activate";
-	
-	ByteArray reply = sendRequest(activateReq, activationURL);
-
-	pugi::xml_document activationToken;
-	activationToken.load_buffer(reply.data(), reply.length());
-	
-	root = activationDoc.select_node("activationInfo").node();
-	root.append_copy(activationToken.first_child());
-	user->updateActivationFile(activationDoc);
-    }
-
-'''
-
+    f.write(old_xml)
+    f.write(ret.decode("latin-1"))
+    f.write("</activationInfo>\n")
+    f.close()
+    
 
 def sign_node(node):
 
     sha_hash = hash_node(node)
+    sha_hash = sha_hash.digest()
 
     global devkey_bytes
     global pkcs12
 
     my_pkcs12 = base64.b64decode(pkcs12)
 
-    pkcs_data = crypto.load_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))
-    my_priv_key = crypto.dump_privatekey(crypto.FILETYPE_ASN1, pkcs_data.get_privatekey())
+    my_priv_key, _, _ = pkcs12module.load_key_and_certificates(my_pkcs12, base64.b64encode(devkey_bytes))
+    my_priv_key = my_priv_key.private_bytes(serialization.Encoding.DER, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
 
-    key = RSA.importKey(my_priv_key)
-    cipherAC = pkcssign.new(key)
-    crypted_msg = cipherAC.sign(sha_hash)
 
-    return base64.b64encode(crypted_msg)
+    key = rsa.PrivateKey.load_pkcs1(RSA.importKey(my_priv_key).exportKey())
+    keylen = rsa.pkcs1.common.byte_size(key.n)
+    padded = rsa.pkcs1._pad_for_signing(sha_hash, keylen)
+    payload = rsa.pkcs1.transform.bytes2int(padded)
+    encrypted = key.blinded_encrypt(payload)
+    block = rsa.pkcs1.transform.int2bytes(encrypted, keylen)
+    signature = base64.b64encode(block).decode()
+
+    return signature
 
     
 
@@ -666,8 +615,8 @@ def hash_node_ctx(node, hash_ctx):
     for attribute in attrKeys: 
         hash_do_append_tag(hash_ctx, ASN_ATTRIBUTE)
         hash_do_append_string(hash_ctx, "")
-        hash_do_append_string(hash_ctx, attribute)  # "requestType"
-        hash_do_append_string(hash_ctx, node.get(attribute))    # "initial"
+        hash_do_append_string(hash_ctx, attribute)
+        hash_do_append_string(hash_ctx, node.get(attribute))
 
     
     if (node.text is not None):
@@ -687,33 +636,10 @@ def hash_do_append_string(hash_ctx, string: str):
     len_upper = int(length / 256)
     len_lower = int(length & 0xFF)
 
-    global debug
-
-    if debug: 
-        print("[STR %02x %02x => %s ]" % (len_upper, len_lower, string))
-
     hash_do_append_raw_bytes(hash_ctx, [len_upper, len_lower])
     hash_do_append_raw_bytes(hash_ctx, bytes(string, encoding="latin-1"))
 
 def hash_do_append_tag(hash_ctx, tag: int):
-
-    global debug
-
-    if debug: 
-        if (tag == ASN_NONE):
-            print("[TAG ASN_NONE (0) ]")
-        elif (tag == ASN_NS_TAG):
-            print("[TAG ASN_NS_TAG (1) ]")
-        elif (tag == ASN_CHILD):
-            print("[TAG ASN_CHILD (2) ]")
-        elif (tag == ASN_END_TAG):
-            print("[TAG ASN_END_TAG (3) ]")
-        elif (tag == ASN_TEXT):
-            print("[TAG ASN_TEXT (4) ]")
-        elif (tag == ASN_ATTRIBUTE):
-            print("[TAG ASN_ATTRIBUTE (5) ]")
-        else: 
-            print("[ INVALID TAG!!!! %d" % (tag))
 
     if (tag > 5):
         return
