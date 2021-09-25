@@ -3,7 +3,7 @@
 
 # pyright: reportUndefinedVariable=false
 
-import os, glob, shutil, tarfile, subprocess, time, tempfile, datetime, base64
+import os, base64
 
 from lxml import etree
 
@@ -21,7 +21,6 @@ from calibre.gui2 import (question_dialog, error_dialog, info_dialog, choose_sav
 from calibre_plugins.deacsm.__init__ import PLUGIN_NAME, PLUGIN_VERSION      # type: ignore
 import calibre_plugins.deacsm.prefs as prefs                                 # type: ignore
 from calibre.utils.config import config_dir         # type: ignore
-
 
 
 class ConfigWidget(QWidget):
@@ -42,22 +41,11 @@ class ConfigWidget(QWidget):
         layout = QVBoxLayout(self)
         self.setLayout(layout)
 
-        self.button_compile = QtGui.QPushButton(self)
-        self.button_compile.setToolTip(_("Click to compile"))
-        self.button_compile.setText(_("Compile"))
-        self.button_compile.clicked.connect(self.compile)
-        layout.addWidget(self.button_compile)
-
 
         ua_group_box = QGroupBox(_('Account information:'), self)
         layout.addWidget(ua_group_box)
         ua_group_box_layout = QVBoxLayout()
         ua_group_box.setLayout(ua_group_box_layout)
-
-        #self.txtboxUA = QtGui.QLineEdit(self)
-        #self.txtboxUA.setToolTip(_("Enter folder path to account data"))
-        #self.txtboxUA.setText(self.tempdeacsmprefs['path_to_account_data'])
-        #ua_group_box_layout.addWidget(self.txtboxUA)
 
         info_string, activated = self.get_account_info()
 
@@ -83,6 +71,19 @@ class ConfigWidget(QWidget):
         self.button_export_activation.setEnabled(activated)
         ua_group_box_layout.addWidget(self.button_export_activation)
 
+        try: 
+            from calibre_plugins.deacsm.libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
+            from calibre_plugins.deacsm.libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+        except: 
+            try: 
+                from libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
+                from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+            except: 
+                print("error Account")
+                raise
+            raise
+
+        update_account_path(self.deacsmprefs["path_to_account_data"])
 
         self.resize(self.sizeHint())
 
@@ -105,14 +106,19 @@ class ConfigWidget(QWidget):
             ade_type = usernameXML.get('method', "unknown")
             ade_mail = usernameXML.text
             ade_device_name = devicenameXML.text
+
+            if container.find(adeptNS("activationToken")) == None:
+                return "ADE authorization seems to be corrupted (activationToken missing)", False
+
+            if container.find(adeptNS("credentials")).find(adeptNS("pkcs12")) == None:
+                return "ADE authorization seems to be corrupted (pkcs12 missing)", False
+
             return "Authorized with ADE ID ("+ade_type+") " + ade_mail + "\non device " + ade_device_name, True
         except: 
             return "ADE authorization seems to be corrupted", False
 
 
     def export_activation(self):
-        pluginsdir = os.path.join(config_dir,"plugins")
-        maindir = os.path.join(pluginsdir,"DeACSM")
 
         filters = [("ZIP", ["zip"])]
         filename = choose_save_file(self, "Export ADE activation files", _("Export ADE activation files"), filters, all_files=False)
@@ -133,75 +139,47 @@ class ConfigWidget(QWidget):
 
 
     def link_account(self):
-        pluginsdir = os.path.join(config_dir,"plugins")
-        maindir = os.path.join(pluginsdir,"DeACSM")
-        verdir = os.path.join(maindir,PLUGIN_VERSION)
-
-        mail, ok = QInputDialog.getText(self, "Authorizing ADE account", "Please enter mail address")
-        passwd, ok = QInputDialog.getText(self, "Authorizing ADE account", "Please enter password", QLineEdit.Password)
-                
-
-        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-        deacsmprefs = prefs.DeACSM_Prefs()
-
-        output_dir = tempfile.mkdtemp()
-
-        my_env = os.environ.copy()
-        my_env["LD_LIBRARY_PATH"] = ".:" + my_env["LD_LIBRARY_PATH"]
-
-        # Make backup ...
-        if (os.path.exists(os.path.join(deacsmprefs["path_to_account_data"], "device.xml")) or 
-            os.path.exists(os.path.join(deacsmprefs["path_to_account_data"], "activation.xml")) or
-            os.path.exists(os.path.join(deacsmprefs["path_to_account_data"], "devicesalt")) ): 
-
-            try: 
-                currenttime = datetime.datetime.now()
-                backup_file = "backup_" + str(currenttime.year) + "-" + str(currenttime.month) + "-" + str(currenttime.day) + "_"
-                backup_file += str(currenttime.hour) + "-" + str(currenttime.minute) + "-" + str(currenttime.second) + ".zip"
-                with ZipFile(os.path.join(deacsmprefs["path_to_account_data"], backup_file), 'w') as zipfile:
-                    try: 
-                        zipfile.write(os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml"), "device.xml")
-                    except: 
-                        pass
-                    try: 
-                        zipfile.write(os.path.join(self.deacsmprefs["path_to_account_data"], "activation.xml"), "activation.xml")
-                    except: 
-                        pass
-                    try: 
-                        zipfile.write(os.path.join(self.deacsmprefs["path_to_account_data"], "devicesalt"), "devicesalt")
-                    except: 
-                        pass
-            except: 
-                raise
-
-        ret = None
-
-        try:
-
-            
-            ret = subprocess.run([os.path.join(verdir, "adept_activate"), 
-            "-u", mail, 
-            "-p", passwd, 
-            "-O", output_dir,
-            "-v"
-            ], capture_output=True, shell=False, cwd=verdir, env=my_env)
-
-            print(ret)
-
-        except:
-            return error_dialog(None, "ADE activation failed", "ADE activation failed", det_msg=str(ret), show=True, show_copy_button=True)
-
 
         try: 
-            shutil.copy(os.path.join(output_dir, "device.xml"), os.path.join(deacsmprefs["path_to_account_data"], "device.xml"))
-            shutil.copy(os.path.join(output_dir, "activation.xml"), os.path.join(deacsmprefs["path_to_account_data"], "activation.xml"))
-            shutil.copy(os.path.join(output_dir, "devicesalt"), os.path.join(deacsmprefs["path_to_account_data"], "devicesalt"))
-            shutil.rmtree(output_dir)
+            from calibre_plugins.deacsm.libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
+            from calibre_plugins.deacsm.libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+        except: 
+            try: 
+                from libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
+                from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+            except: 
+                print("error Account")
+                raise
+            raise
 
-            info_dialog(None, "Done", "Authorization successful!", show=True, show_copy_button=False)
+        update_account_path(self.deacsmprefs["path_to_account_data"])
+        
+        mail, ok = QInputDialog.getText(self, "Authorizing ADE account", "Please enter mail address")
 
-        except IndexError: 
-            return error_dialog(None, "Authorization failed", "Authorization failed", show=True, det_msg=str(ret), show_copy_button=True)
+        if (not ok or mail is None or len(mail) == 0):
+            return
+
+        passwd, ok = QInputDialog.getText(self, "Authorizing ADE account", "Please enter password", QLineEdit.Password)
+
+        if (not ok or passwd is None or len(passwd) == 0):
+            return
+                
+        createDeviceKeyFile()
+        createDeviceFile(VAR_HOBBES_VERSION, False)
+        success, resp = createUser()
+        if (success is False):
+            return error_dialog(None, "ADE activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
+
+        success, resp = signIn(mail, passwd)
+        if (success is False):
+            return error_dialog(None, "ADE activation failed", "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
+
+        success, resp = activateDevice()
+        if (success is False):
+            return error_dialog(None, "ADE activation failed", "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
+
+        print("Authorized to account " + mail)
+
 
         # update display
         info_string, activated = self.get_account_info()
@@ -210,6 +188,8 @@ class ConfigWidget(QWidget):
         self.button_link_account.setEnabled(False)
         self.button_export_key.setEnabled(True)
         self.button_export_activation.setEnabled(True)
+
+        info_dialog(None, "Done", "Authorized to account " + mail, show=True, show_copy_button=False)
 
 
 
@@ -258,44 +238,6 @@ class ConfigWidget(QWidget):
 
 
         info_dialog(None, "Done", "Key successfully exported", show=True, show_copy_button=False)
-
-    def compile(self):
-
-        # Get path to source code:
-        pluginsdir = os.path.join(config_dir,"plugins")
-        maindir = os.path.join(pluginsdir,"DeACSM")
-        verdir = os.path.join(maindir,PLUGIN_VERSION)
-
-        # Delete old version
-        try: 
-            shutil.rmtree(os.path.join(verdir, "libgourou"))
-        except: 
-            pass
-
-        # extract source
-        with tarfile.open(os.path.join(verdir, "libgourou_bundle_release.tar.xz")) as f:
-            f.extractall(verdir)
-
-        # Run script, compile 1st:
-        os.chmod(os.path.join(verdir, "libgourou", "scripts", "setup.sh"), 0o775)
-
-
-        ret1 = subprocess.run([ os.path.join(verdir, "libgourou", "scripts", "setup.sh") ], capture_output=True, shell=True, cwd=os.path.join(verdir, "libgourou"))
-        print(ret1)
-
-        ret2 = subprocess.run([ "make", "BUILD_SHARED=1", "BUILD_UTILS=1" ], capture_output=True, shell=True, cwd=os.path.join(verdir, "libgourou"))
-        print(ret2)
-
-        try: 
-            shutil.copy(os.path.join(verdir, "libgourou", "libgourou.so"), verdir)
-            shutil.copy(os.path.join(verdir, "libgourou", "utils", "acsmdownloader"), verdir)
-            shutil.copy(os.path.join(verdir, "libgourou", "utils", "adept_activate"), verdir)
-            info_dialog(None, "Done", "Compiling successful", show=True, show_copy_button=False)
-        except: 
-            print("Can't copy ...")
-            error_dialog(None, "Compiling failed", "Compiling failed. Did you install all dependencies?", det_msg=str(ret1) + "\n" + str(ret2), show=True, show_copy_button=True)
-            
-
 
     def save_settings(self):
         #self.deacsmprefs.set('path_to_account_data', self.txtboxUA.text())
