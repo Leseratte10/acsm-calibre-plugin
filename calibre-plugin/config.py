@@ -3,7 +3,7 @@
 
 # pyright: reportUndefinedVariable=false
 
-import os, base64
+import os, base64, traceback
 
 from lxml import etree
 
@@ -79,9 +79,9 @@ class ConfigWidget(QWidget):
                 from libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
                 from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
             except: 
-                print("error Account")
-                raise
-            raise
+                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
+
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
 
@@ -126,7 +126,7 @@ class ConfigWidget(QWidget):
         if (filename is None):
             return
 
-        print("would export to " + filename)
+        print("{0} v{1}: Exporting activation data to {2}".format(PLUGIN_NAME, PLUGIN_VERSION, filename))
 
         try: 
             with ZipFile(filename, 'w') as zipfile:
@@ -148,9 +148,8 @@ class ConfigWidget(QWidget):
                 from libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
                 from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
             except: 
-                print("error Account")
-                raise
-            raise
+                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
         
@@ -195,9 +194,20 @@ class ConfigWidget(QWidget):
 
 
     def export_key(self):
-        pluginsdir = os.path.join(config_dir,"plugins")
-        maindir = os.path.join(pluginsdir,"DeACSM")
-        verdir = os.path.join(maindir,PLUGIN_VERSION)
+
+        try: 
+            from calibre_plugins.deacsm.libadobe import update_account_path
+            from calibre_plugins.deacsm.libadobeAccount import exportAccountEncryptionKeyDER
+        except: 
+            try: 
+                from libadobe import update_account_path
+                from libadobeAccount import exportAccountEncryptionKeyDER
+            except: 
+                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
+
+
+        update_account_path(self.deacsmprefs["path_to_account_data"])
 
         filters = [("DER Files", ["der"])]
 
@@ -206,38 +216,16 @@ class ConfigWidget(QWidget):
         if (filename is None):
             return
 
-        print("would export to " + filename)
+        print("{0} v{1}: Exporting encryption key to {2}".format(PLUGIN_NAME, PLUGIN_VERSION, filename))
 
-        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-        deacsmprefs = prefs.DeACSM_Prefs()
+        ret = exportAccountEncryptionKeyDER(filename)
 
-
-        activation_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "activation.xml")
-
-        container = None
-        try: 
-            container = etree.parse(activation_xml_path)
-        except (FileNotFoundError, OSError) as e:
-            return error_dialog(None, "Export failed", "Export failed - Can't open activation.xml", show=True, show_copy_button=False)
-
-        key_binary = None
-        try: 
-            adeptNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)        
-            usernameXML = container.find(adeptNS("credentials")).find(adeptNS("privateLicenseKey"))
-            key_base64 = usernameXML.text
-            key_binary = base64.decodebytes(key_base64.encode())[26:]
-        except: 
-            return error_dialog(None, "Export failed", "Export failed - Can't read key from activation.xml", show=True, show_copy_button=False)
-
-        try: 
-            output_file = open(filename, "wb")
-            output_file.write(key_binary)
-            output_file.close()
-        except: 
-            return error_dialog(None, "Export failed", "Export failed - Can't write key to file", show=True, show_copy_button=False)
+        if ret:
+            return info_dialog(None, "Done", "Key successfully exported", show=True, show_copy_button=False)
+        else: 
+            return error_dialog(None, "Export failed", "Export failed", show=True, show_copy_button=False)
 
 
-        info_dialog(None, "Done", "Key successfully exported", show=True, show_copy_button=False)
 
     def save_settings(self):
         #self.deacsmprefs.set('path_to_account_data', self.txtboxUA.text())

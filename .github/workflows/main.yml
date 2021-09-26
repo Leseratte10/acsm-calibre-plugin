@@ -20,5 +20,4 @@ jobs:
           name: linux
           path: |
             calibre-plugin.zip
-            libgourou_bundle_raw.tar.xz
     

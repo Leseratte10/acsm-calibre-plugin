@@ -8,10 +8,11 @@
 # v0.0.1: First version.
 # v0.0.2: Allow key extraction without extra binary call (unreleased test version)
 # v0.0.3: Standalone Calibre plugin for Linux, Windows, MacOS without the need for libgourou.
+# v0.0.4: Manually execute DeDRM (if installed) after converting ACSM to EPUB.
 
 
 from calibre.customize import FileTypePlugin        # type: ignore
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = tuple([int(x) for x in __version__.split(".")])
@@ -23,7 +24,6 @@ from calibre.utils.config import config_dir         # type: ignore
 import os, shutil, traceback, sys
 import zipfile
 from lxml import etree
-
 
 class DeACSM(FileTypePlugin):
     name                        = PLUGIN_NAME
@@ -101,9 +101,8 @@ class DeACSM(FileTypePlugin):
                     from libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
                     from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
                 except: 
-                    print("error Account")
-                    raise
-                raise
+                    print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                    traceback.print_exc()
 
             # Fulfill:
             try: 
@@ -114,11 +113,8 @@ class DeACSM(FileTypePlugin):
                     from libadobe import sendHTTPRequest
                     from libadobeFulfill import buildRights, fulfill
                 except: 
-                    print("error Fulfill")
-                    raise
-                raise
-
-
+                    print("{0} v{1}: Error while importing Fulfillment stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                    traceback.print_exc()
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
             deacsmprefs = prefs.DeACSM_Prefs()
@@ -127,9 +123,6 @@ class DeACSM(FileTypePlugin):
         except Exception as e:
             traceback.print_exc()
             raise
-
-        
-
             
 
     def is_customizable(self):
@@ -178,9 +171,8 @@ class DeACSM(FileTypePlugin):
                 from libadobe import sendHTTPRequest
                 from libadobeFulfill import buildRights, fulfill
             except: 
-                print("error Fulfill")
-                raise
-            raise
+                print("{0} v{1}: Error while importing Fulfillment stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
 
 
         adobe_fulfill_response = etree.fromstring(replyData)
@@ -264,9 +256,8 @@ class DeACSM(FileTypePlugin):
                 from libadobe import sendHTTPRequest
                 from libadobeFulfill import buildRights, fulfill
             except: 
-                print("error Fulfill")
-                raise
-            raise
+                print("{0} v{1}: Error while importing Fulfillment stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
 
 
         success, replyData = fulfill(path_to_ebook)
@@ -276,6 +267,23 @@ class DeACSM(FileTypePlugin):
             print("{0} v{1}: Downloading book ...".format(PLUGIN_NAME, PLUGIN_VERSION))
             rpl = self.download(replyData)
             if (rpl is not None):
+                # Got a file
+
+                # Because Calibre still thinks this is an ACSM file (not an EPUB)
+                # it will not run other plugins like Alf / DeDRM. 
+                # So we have to manually check if it's installed,
+                # and if it is, run it to remove DRM.
+                try: 
+                    from calibre.customize.ui import _initialized_plugins
+                    for plugin in _initialized_plugins:
+                        if (plugin.name == "DeDRM"):
+                            print("{0} v{1}: Executing DeDRM plugin ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+                            return plugin.run(rpl)
+                except: 
+                    print("{0} v{1}: Error while checking for DeDRM plugin.".format(PLUGIN_NAME, PLUGIN_VERSION))
+                    pass
+
+                # Looks like DeDRM is not installed, return book with DRM.
                 return rpl
 
 
