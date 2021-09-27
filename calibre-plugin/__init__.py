@@ -9,10 +9,11 @@
 # v0.0.2: Allow key extraction without extra binary call (unreleased test version)
 # v0.0.3: Standalone Calibre plugin for Linux, Windows, MacOS without the need for libgourou.
 # v0.0.4: Manually execute DeDRM (if installed) after converting ACSM to EPUB.
+# v0.0.5: Bugfix: DeDRM plugin was also executed if it's installed but disabled.
 
 
 from calibre.customize import FileTypePlugin        # type: ignore
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = tuple([int(x) for x in __version__.split(".")])
@@ -144,7 +145,7 @@ class DeACSM(FileTypePlugin):
         container = None
         try: 
             container = etree.parse(activation_xml_path)
-        except (FileNotFoundError, OSError) as e:
+        except:
             return False
 
         try: 
@@ -274,9 +275,9 @@ class DeACSM(FileTypePlugin):
                 # So we have to manually check if it's installed,
                 # and if it is, run it to remove DRM.
                 try: 
-                    from calibre.customize.ui import _initialized_plugins
+                    from calibre.customize.ui import _initialized_plugins, is_disabled
                     for plugin in _initialized_plugins:
-                        if (plugin.name == "DeDRM"):
+                        if (plugin.name == "DeDRM" and not is_disabled(plugin)):
                             print("{0} v{1}: Executing DeDRM plugin ...".format(PLUGIN_NAME, PLUGIN_VERSION))
                             return plugin.run(rpl)
                 except: 
