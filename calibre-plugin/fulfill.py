@@ -7,6 +7,11 @@ This is an experimental Python version of libgourou.
 
 # pyright: reportUndefinedVariable=false
 
+import sys
+if sys.version_info[0] < 3:
+    print("This script requires Python 3.")
+    exit(1)
+
 import zipfile
 from lxml import etree
 
@@ -20,7 +25,8 @@ FILE_ACTIVATIONXML = "activation.xml"
 #######################################################################
 
 
-def download(replyData: str):
+def download(replyData):
+    # replyData: str
     adobe_fulfill_response = etree.fromstring(replyData)
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
