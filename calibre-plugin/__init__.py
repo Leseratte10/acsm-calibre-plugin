@@ -10,10 +10,11 @@
 # v0.0.3: Standalone Calibre plugin for Linux, Windows, MacOS without the need for libgourou.
 # v0.0.4: Manually execute DeDRM (if installed) after converting ACSM to EPUB.
 # v0.0.5: Bugfix: DeDRM plugin was also executed if it's installed but disabled.
+# v0.0.6: First PDF support, allow importing previously exported activation data.
 
 
 from calibre.customize import FileTypePlugin        # type: ignore
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = tuple([int(x) for x in __version__.split(".")])
@@ -175,13 +176,22 @@ class DeACSM(FileTypePlugin):
                 print("{0} v{1}: Error while importing Fulfillment stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
                 traceback.print_exc()
 
+        try:
+            from calibre_plugins.deacsm.libpdf import patch_drm_into_pdf, prepare_string_from_xml
+        except: 
+            try: 
+                from libpdf import patch_drm_into_pdf, prepare_string_from_xml
+            except: 
+                print("{0} v{1}: Error while importing PDF patch".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
+
 
         adobe_fulfill_response = etree.fromstring(replyData)
         NSMAP = { "adept" : "http://ns.adobe.com/adept" }
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
         adDC = lambda tag: '{%s}%s' % ('http://purl.org/dc/elements/1.1/', tag)
 
-
+        metadata_node = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("metadata")))
         download_url = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("src"))).text
         license_token_node = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken")))
 
@@ -205,6 +215,19 @@ class DeACSM(FileTypePlugin):
 
         filename = self.temporary_file(filetype).name
 
+        author = "None"
+        title = "None"
+        
+        try: 
+            title = metadata_node.find("./%s" % (adDC("title"))).text
+            author = metadata_node.find("./%s" % (adDC("creator"))).text
+
+            title = title.replace("(", "").replace(")", "").replace("/", "")
+            author = author.replace("(", "").replace(")", "").replace("/", "")
+
+        except:
+            pass
+
         # Store book:
         f = open(filename, "wb")
         f.write(book_content)
@@ -219,13 +242,13 @@ class DeACSM(FileTypePlugin):
             return filename
 
         elif filetype == ".pdf":
-            print("Successfully downloaded PDF, but PDF encryption is not yet supported")
-            print("You will not be able to use the downloaded PDF file")
-            print("Here's the raw string:")
-            print(rights_xml_str)
-            return None
+            print("{0} v{1}: Downloaded PDF, adding encryption config ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+            pdf_tmp_file = self.temporary_file(filetype).name
+            patch_drm_into_pdf(filename, prepare_string_from_xml(rights_xml_str, author, title), pdf_tmp_file)
+            print("{0} v{1}: File successfully fulfilled ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+            return pdf_tmp_file
         else: 
-            print("Error: Weird filetype")
+            print("{0} v{1}: Error: Unsupported file type ...".format(PLUGIN_NAME, PLUGIN_VERSION))
             return None
 
     def run(self, path_to_ebook: str):

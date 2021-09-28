@@ -276,11 +276,8 @@ def fulfill(acsm_file):
     mimetype = acsmxml.find("./%s/%s/%s" % (adNS("resourceItemInfo"), adNS("metadata"), dcNS("format"))).text
 
     if (mimetype == "application/pdf"):
-        print("You're trying to fulfill a PDF file.")
-        print("While that's technically possible with this script, the script doesn't yet support embedding the DRM information into PDF files.")
-        print("This means the PDF would be unusable.")
-        print("Thus, PDF fulfillment is disabled for now.")
-        return False, "PDF not supported"
+        #print("You're trying to fulfill a PDF file.")
+        pass
     elif (mimetype == "application/epub+zip"):
         #print("Trying to fulfill an EPUB file ...")
         pass

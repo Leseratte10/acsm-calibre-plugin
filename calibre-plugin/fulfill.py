@@ -7,7 +7,7 @@ This is an experimental Python version of libgourou.
 
 # pyright: reportUndefinedVariable=false
 
-import sys
+import sys, os
 if sys.version_info[0] < 3:
     print("This script requires Python 3.")
     exit(1)
@@ -17,6 +17,7 @@ from lxml import etree
 
 from libadobe import sendHTTPRequest
 from libadobeFulfill import buildRights, fulfill
+from libpdf import patch_drm_into_pdf, prepare_string_from_xml
 
 FILE_DEVICEKEY = "devicesalt"
 FILE_DEVICEXML = "device.xml"
@@ -32,6 +33,8 @@ def download(replyData):
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     adDC = lambda tag: '{%s}%s' % ('http://purl.org/dc/elements/1.1/', tag)
 
+    print (replyData)
+
 
     metadata_node = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("metadata")))
     download_url = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("src"))).text
@@ -45,12 +48,26 @@ def download(replyData):
         exit(1)
 
     book_name = None
+    author = "None"
+    title = "None"
     try: 
         book_name = metadata_node.find("./%s" % (adDC("title"))).text
     except: 
         book_name = "Book"
+    
+    try: 
+        title = metadata_node.find("./%s" % (adDC("title"))).text
+        author = metadata_node.find("./%s" % (adDC("creator"))).text
+
+        title = title.replace("(", "").replace(")", "").replace("/", "")
+        author = author.replace("(", "").replace(")", "").replace("/", "")
+
+    except:
+        pass
 
     # Download eBook: 
+
+    print(download_url)
 
     book_content = sendHTTPRequest(download_url)
     filetype = ".bin"
@@ -75,14 +92,17 @@ def download(replyData):
         zf.writestr("META-INF/rights.xml", rights_xml_str)
         zf.close()
 
-        print("File successfully fulfilled!")
+        print("File successfully fulfilled to " + filename)
         exit(0)
+    
     elif filetype == ".pdf":
-        print("Successfully downloaded PDF, but PDF encryption is not yet supported")
-        print("You will not be able to use the downloaded PDF file")
-        print("Here's the raw string:")
-        print(rights_xml_str)
-        exit(1)
+        print("Successfully downloaded PDF, patching encryption ...")
+        
+        os.rename(filename, "tmp_" + filename)
+        patch_drm_into_pdf("tmp_" + filename, prepare_string_from_xml(rights_xml_str, author, title), filename)
+        os.remove("tmp_" + filename)
+        print("File successfully fulfilled to " + filename)
+        exit(0)
     else: 
         print("Error: Weird filetype")
         exit(1)
