@@ -46,7 +46,13 @@ def createDeviceFile(hobbes: str, randomSerial: bool):
 
     atr_ver3 = etree.SubElement(root, etree.QName(NSMAP["adept"], "version"))
     atr_ver3.set("name", "clientLocale")
-    atr_ver3.set("value", locale.getdefaultlocale()[0])
+
+    language = locale.getdefaultlocale()[0]
+    if language is None or language == "": 
+        # Can sometimes happen on MacOS with default English language
+        language = "en_US"
+
+    atr_ver3.set("value", language)
 
     etree.SubElement(root, etree.QName(NSMAP["adept"], "fingerprint")).text = fingerprint
 

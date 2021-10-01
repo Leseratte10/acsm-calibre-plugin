@@ -1,4 +1,4 @@
-# Calibre ACSM plugin
+# Calibre ACSM Input plugin
 
 This is a Calibre plugin that allows you to turn ACSM files into EPUB or PDF files without the need for ADE. 
 It is a full Python reimplementation of libgourou by Grégory Soutadé (http://indefero.soutade.fr/p/libgourou/).
@@ -18,7 +18,7 @@ IMPORTANT:
 
 - I would suggest creating a new dummy AdobeID to use for Calibre so just in case Adobe detects this and bans you, you don't lose your main AdobeID. 
 - Combined with that I suggest importing the DER file into the DeDRM plugin to make sure that losing your AdobeID doesn't also mean you'll lose access to all your eBooks. 
-- Support for PDFs might be unreliable. You will need to apply pull request #1689 (including my additional bugfix in the comments of that PR) to the DeDRM plugin in order to remove the DRM from PDF files. If you still encounter an issue with a PDF file created by this tool even with these bugfixes, please report a bug and attach the corrupted PDF (in this repository, not in the DeDRM one).
+- Support for PDFs might be unreliable. You will need to apply pull request #1689 (including my additional bugfix in the comments of that PR) to the DeDRM plugin in order to remove the DRM from PDF files. If you still encounter an issue with a PDF file created by this tool even with these bugfixes, please report a bug (in this repository, not in the DeDRM one) and attach the corrupted PDF.
 - This software is not approved by Adobe. I am not responsible if Adobe detects that you're using nonstandard software and bans your account. Do not complain to me if Adobe bans your main ADE account - you have been warned. 
 
 

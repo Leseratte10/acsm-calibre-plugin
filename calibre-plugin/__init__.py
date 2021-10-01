@@ -11,10 +11,11 @@
 # v0.0.4: Manually execute DeDRM (if installed) after converting ACSM to EPUB.
 # v0.0.5: Bugfix: DeDRM plugin was also executed if it's installed but disabled.
 # v0.0.6: First PDF support, allow importing previously exported activation data.
+# v0.0.7: More PDF logging, PDF reading in latin-1, MacOS locale bugfix
 
 
 from calibre.customize import FileTypePlugin        # type: ignore
-__version__ = '0.0.6'
+__version__ = '0.0.7'
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = tuple([int(x) for x in __version__.split(".")])
@@ -29,7 +30,7 @@ from lxml import etree
 
 class DeACSM(FileTypePlugin):
     name                        = PLUGIN_NAME
-    description                 = "Takes an Adobe ACSM file and converts that into a useable EPUB file. Python reimplementation of libgourou by Grégory Soutadé"
+    description                 = "ACSM Input Plugin - Takes an Adobe ACSM file and converts that into a useable EPUB or PDF file. Python reimplementation of libgourou by Grégory Soutadé"
     supported_platforms         = ['linux', 'osx', 'windows']
     author                      = "Leseratte10"
     version                     = PLUGIN_VERSION_TUPLE
@@ -202,6 +203,7 @@ class DeACSM(FileTypePlugin):
             return None
 
         # Download eBook: 
+        print("{0} v{1}: Loading book from {2}".format(PLUGIN_NAME, PLUGIN_VERSION, download_url))
 
         book_content = sendHTTPRequest(download_url)
         filetype = ".bin"
@@ -244,7 +246,7 @@ class DeACSM(FileTypePlugin):
         elif filetype == ".pdf":
             print("{0} v{1}: Downloaded PDF, adding encryption config ...".format(PLUGIN_NAME, PLUGIN_VERSION))
             pdf_tmp_file = self.temporary_file(filetype).name
-            patch_drm_into_pdf(filename, prepare_string_from_xml(rights_xml_str, author, title), pdf_tmp_file)
+            patch_drm_into_pdf(filename, prepare_string_from_xml(rights_xml_str, title, author), pdf_tmp_file)
             print("{0} v{1}: File successfully fulfilled ...".format(PLUGIN_NAME, PLUGIN_VERSION))
             return pdf_tmp_file
         else: 

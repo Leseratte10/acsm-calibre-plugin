@@ -22,7 +22,7 @@ def read_reverse_order(file_name):
             # If the read byte is new line character then it means one line is read
             if new_byte == b'\n':
                 # Fetch the line from buffer and yield it
-                yield buffer.decode()[::-1]
+                yield buffer.decode("latin-1")[::-1]
                 # Reinitialize the byte array to save next line
                 buffer = bytearray()
             else:
@@ -31,7 +31,7 @@ def read_reverse_order(file_name):
         # As file is read completely, if there is still data in buffer, then its the first line.
         if len(buffer) > 0:
             # Yield the first line too
-            yield buffer.decode()[::-1]
+            yield buffer.decode("latin-1")[::-1]
 
 def deflate_and_base64_encode( string_val ):
     zlibbed_str = zlib.compress( string_val )
@@ -53,15 +53,18 @@ def patch_drm_into_pdf(filename_in, drm_string, filename_out):
     ORIG_FILE = filename_in
 
     trailer = ""
-
     trailer_idx = 0
+
+    print("DRM data is %s" % (drm_string))
 
     for line in read_reverse_order(ORIG_FILE):
         trailer_idx += 1
         trailer = line + "\n" + trailer
+        print("DEBUG: pdfdata[%d] = %s" % (trailer_idx, line))
+        if (trailer_idx == 20):
+            print("trailer_idx is very large (%d). Usually it's 10 or less. File might be corrupted." % trailer_idx)
         if (line == "trailer"): 
-            if (trailer_idx > 20):
-                print("trailer_idx is very large (%d). Usually it's 10 or less. File might be corrupted." % trailer_idx)
+            print("Found trailer at idx %d" % (trailer_idx))
             break
 
     r_encrypt_offs1 = 0
@@ -136,6 +139,8 @@ def patch_drm_into_pdf(filename_in, drm_string, filename_out):
     additional_data = additional_data[:-1]
 
     additional_data += "\r" + "startxref\r" + str(ptr) + "\r" + "%%EOF"
+
+    print("Appending DRM data: %s" % (additional_data))
 
 
     inp = open(ORIG_FILE, "rb")

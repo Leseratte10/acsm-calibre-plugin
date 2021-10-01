@@ -180,7 +180,7 @@ class ConfigWidget(QWidget):
                 output_salt.close()
 
             except: 
-                err = traceback.print_exc()
+                err = traceback.format_exc()
                 return error_dialog(None, "Import failed", "Can't write file", show=True, det_msg=err, show_copy_button=False)
 
         # update display
