@@ -1,6 +1,6 @@
 # Calibre ACSM Input plugin
 
-This is a Calibre plugin that allows you to turn ACSM files into EPUB or PDF files without the need for ADE. 
+This is a Calibre plugin that allows you to turn ACSM files into EPUB or PDF files without the need for Adobe Digital Editions. 
 It is a full Python reimplementation of libgourou by Grégory Soutadé (http://indefero.soutade.fr/p/libgourou/).
 
 ## Setup
