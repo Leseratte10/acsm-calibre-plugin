@@ -7,7 +7,7 @@ This is an experimental Python version of libgourou.
 
 # pyright: reportUndefinedVariable=false
 
-import sys, os
+import sys, os, time, shutil
 if sys.version_info[0] < 3:
     print("This script requires Python 3.")
     exit(1)
@@ -15,9 +15,9 @@ if sys.version_info[0] < 3:
 import zipfile
 from lxml import etree
 
-from libadobe import sendHTTPRequest
+from libadobe import sendHTTPRequest_DL2FILE
 from libadobeFulfill import buildRights, fulfill
-from libpdf import patch_drm_into_pdf, prepare_string_from_xml
+from libpdf import patch_drm_into_pdf
 
 FILE_DEVICEKEY = "devicesalt"
 FILE_DEVICEXML = "device.xml"
@@ -48,28 +48,31 @@ def download(replyData):
         exit(1)
 
     book_name = None
-    author = "None"
-    title = "None"
+
     try: 
         book_name = metadata_node.find("./%s" % (adDC("title"))).text
     except: 
         book_name = "Book"
     
-    try: 
-        title = metadata_node.find("./%s" % (adDC("title"))).text
-        author = metadata_node.find("./%s" % (adDC("creator"))).text
-
-        title = title.replace("(", "").replace(")", "").replace("/", "")
-        author = author.replace("(", "").replace(")", "").replace("/", "")
-
-    except:
-        pass
 
     # Download eBook: 
 
     print(download_url)
 
-    book_content = sendHTTPRequest(download_url)
+    filename_tmp = book_name + ".tmp"
+
+    dl_start_time = int(time.time() * 1000)
+    ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp)
+    dl_end_time = int(time.time() * 1000)
+    print("Download took %d milliseconds" % (dl_end_time - dl_start_time))
+
+    if (ret != 200):
+        print("Download failed with error %d" % (ret))
+        exit()
+
+    with open(filename_tmp, "rb") as f:
+        book_content = f.read(10)
+
     filetype = ".bin"
     
     if (book_content.startswith(b"PK")):
@@ -80,11 +83,7 @@ def download(replyData):
         filetype = ".pdf"
 
     filename = book_name + filetype
-
-    # Store book:
-    f = open(filename, "wb")
-    f.write(book_content)
-    f.close()
+    shutil.move(filename_tmp, filename)
 
     if filetype == ".epub":
         # Store EPUB rights / encryption stuff
@@ -97,11 +96,20 @@ def download(replyData):
     
     elif filetype == ".pdf":
         print("Successfully downloaded PDF, patching encryption ...")
+
+        adobe_fulfill_response = etree.fromstring(rights_xml_str)
+        NSMAP = { "adept" : "http://ns.adobe.com/adept" }
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+        resource = adobe_fulfill_response.find("./%s/%s" % (adNS("licenseToken"), adNS("resource"))).text
         
         os.rename(filename, "tmp_" + filename)
-        patch_drm_into_pdf("tmp_" + filename, prepare_string_from_xml(rights_xml_str, author, title), filename)
+        ret = patch_drm_into_pdf("tmp_" + filename, rights_xml_str, filename, resource)
         os.remove("tmp_" + filename)
-        print("File successfully fulfilled to " + filename)
+        if (ret):
+            print("File successfully fulfilled to " + filename)
+        else: 
+            print("Errors occurred while patching " + filename)
+            exit(1)
         exit(0)
     else: 
         print("Error: Weird filetype")

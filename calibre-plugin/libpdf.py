@@ -1,112 +1,221 @@
-import os, zlib, base64
-from lxml import etree
+import os, zlib, base64, time
 
+class BackwardReader:
 
-def read_reverse_order(file_name):
-    # Open file for reading in binary mode
-    with open(file_name, 'rb') as read_obj:
-        # Move the cursor to the end of the file
-        read_obj.seek(0, os.SEEK_END)
-        # Get the current position of pointer i.e eof
-        pointer_location = read_obj.tell()
-        # Create a buffer to keep the last read line
+    def __init__(self, file):
+        self.file = file
+
+    def readlines(self):
+        BLKSIZE = 4096
+        # Move reader to the end of file
+        self.file.seek(0, os.SEEK_END)
         buffer = bytearray()
-        # Loop till pointer reaches the top of the file
-        while pointer_location >= 0:
-            # Move the file pointer to the location pointed by pointer_location
-            read_obj.seek(pointer_location)
-            # Shift pointer location by -1
-            pointer_location = pointer_location -1
-            # read that byte / character
-            new_byte = read_obj.read(1)
-            # If the read byte is new line character then it means one line is read
-            if new_byte == b'\n':
-                # Fetch the line from buffer and yield it
-                yield buffer.decode("latin-1")[::-1]
-                # Reinitialize the byte array to save next line
-                buffer = bytearray()
+
+        while True:
+            pos_newline = buffer.rfind(bytes([0x0a]))
+            # Get the current position of the reader
+            current_pos = self.file.tell()
+            if pos_newline != -1:
+                # Newline is found
+                line = buffer[pos_newline+1:]
+                buffer = buffer[:pos_newline]
+                yield line.decode("latin-1")
+            elif current_pos:
+                # Need to fill the buffer
+                to_read = min(BLKSIZE, current_pos)
+                self.file.seek(current_pos-to_read, 0)
+                buffer = self.file.read(to_read) + buffer
+                self.file.seek(current_pos-to_read, 0)
+                if current_pos is to_read:
+                    buffer = bytes([0x0a]) + buffer
             else:
-                # If last read character is not eol then add it in buffer
-                buffer.extend(new_byte)
-        # As file is read completely, if there is still data in buffer, then its the first line.
-        if len(buffer) > 0:
-            # Yield the first line too
-            yield buffer.decode("latin-1")[::-1]
+                # Start of file
+                return
+
+
+
+def trim_encrypt_string(encrypt):
+
+    string_list = list(encrypt)
+    strlen = len(encrypt)
+
+    i = 0
+    bracket_count = 0
+    while (i < strlen):
+        if string_list[i] == "<" and string_list[i+1] == "<":
+            bracket_count += 1
+
+        if string_list[i] == ">" and string_list[i+1] == ">":
+            bracket_count -= 1
+
+        if bracket_count == 0: 
+            break
+
+        i = i + 1
+
+    len_to_use = i+2
+
+    return encrypt[0:len_to_use]
+
+def cleanup_encrypt_element(element):
+
+    if element.startswith("ID[<"):
+        element = element.replace("><", "> <")
+
+    element = ' '.join(element.split())
+    element = element.replace("[ ", "[").replace("] ", "]")
+
+    return element
+
+
+
 
 def deflate_and_base64_encode( string_val ):
     zlibbed_str = zlib.compress( string_val )
     compressed_string = zlibbed_str[2:-4]
     return base64.b64encode( compressed_string )
 
-def prepare_string_from_xml(xmlstring, title, author):
-    b64data = deflate_and_base64_encode(xmlstring.encode("utf-8")).decode("utf-8")
+def update_ebx_with_keys(ebx_data, adept_license, ebx_bookid):
 
-    adobe_fulfill_response = etree.fromstring(xmlstring)
-    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
-    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-    resource = adobe_fulfill_response.find("./%s/%s" % (adNS("licenseToken"), adNS("resource"))).text
+    b64data = deflate_and_base64_encode(adept_license.encode("utf-8")).decode("utf-8")
 
-    return "<</Length 128/EBX_TITLE(%s)/Filter/EBX_HANDLER/EBX_AUTHOR(%s)/V 4/ADEPT_ID(%s)/EBX_BOOKID(%s)/ADEPT_LICENSE(%s)>>" % (title, author, resource, resource, b64data)
+    ebx_new = ebx_data[:-2]
+    ebx_new += "/EBX_BOOKID(%s)/ADEPT_LICENSE(%s)>>" % (ebx_bookid, b64data)
 
-def patch_drm_into_pdf(filename_in, drm_string, filename_out):
+    return ebx_new
 
-    ORIG_FILE = filename_in
+
+def find_ebx(filename_in):
+    find_ebx_start = int(time.time() * 1000)
+    i = 0
+
+    fl = open(filename_in, "rb")
+    br = BackwardReader(fl)
+
+    for line in br.readlines():
+        i = i + 1
+        if "/EBX_HANDLER/" in line:
+            find_ebx_end = int(time.time() * 1000)
+            print("Found EBX after %d attempts - took %d ms" % (i, find_ebx_end - find_ebx_start))
+            return line
+
+    find_ebx_end = int(time.time() * 1000)
+    print("Error: Did not find EBX_HANDLER - took %d ms" % (find_ebx_end - find_ebx_start))
+    return None
+
+def find_enc(filename_in):
+    find_enc_start = int(time.time() * 1000)
+    i = 0
+
+    fl = open(filename_in, "rb")
+    br = BackwardReader(fl)
+
+    for line in br.readlines():
+        i = i + 1
+        if "R/Encrypt" in line and "R/ID" in line:
+            find_enc_end = int(time.time() * 1000)
+            print("Found ENC after %d attempts - took %d ms" % (i, find_enc_end - find_enc_start))
+            return line
+    
+    find_enc_end = int(time.time() * 1000)
+    print("Error: Did not find ENC - took %d ms" % (find_enc_end - find_enc_start))
+    return None
+
+
+
+def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_bookid):
+
+    drm_start_time = int(time.time() * 1000)
 
     trailer = ""
     trailer_idx = 0
 
-    print("DRM data is %s" % (drm_string))
+    startxref_offset = 0
+    prevline = ""
 
-    for line in read_reverse_order(ORIG_FILE):
+
+    fl = open(filename_in, "rb")
+    br = BackwardReader(fl)
+
+    print("Searching for startxref ...")
+    for line in br.readlines():
         trailer_idx += 1
         trailer = line + "\n" + trailer
-        print("DEBUG: pdfdata[%d] = %s" % (trailer_idx, line))
-        if (trailer_idx == 20):
-            print("trailer_idx is very large (%d). Usually it's 10 or less. File might be corrupted." % trailer_idx)
-        if (line == "trailer"): 
-            print("Found trailer at idx %d" % (trailer_idx))
+
+        print ("LINE: " + line)
+
+        if (trailer_idx > 10):
+            print("Took more than 10 attempts to find startxref ...")
+            return False
+        
+        if (line == "startxref"):
+            startxref_offset = int(prevline)
+            print("Got startxref: %d" % (startxref_offset))            
             break
+        prevline = line
+
+
 
     r_encrypt_offs1 = 0
     r_encrypt_offs2 = 0
-    root_str = None
-    next_startxref = False
-    startxref = None
 
-    for line in trailer.split('\n'):
-        #print(line)
-        if ("R/Encrypt" in line):
-            root_str = line
-            line_split = line.split(' ')
+    encrypt = None
+
+
+    encrypt = find_enc(filename_in)
+    if encrypt is None:
+        print("Error, enc not found")
+        return False
+
+    line_split = encrypt.split(' ')
+    next = 0
+    for element in line_split:
+        if element == "R/Encrypt":
+            next = 2
+            continue
+        if next == 2:
+            r_encrypt_offs1 = element
+            next = 1
+            continue
+        if next == 1: 
+            r_encrypt_offs2 = element
             next = 0
-            for element in line_split:
-                if element == "R/Encrypt":
-                    next = 2
-                    continue
-                if next == 2:
-                    r_encrypt_offs1 = element
-                    next = 1
-                    continue
-                if next == 1: 
-                    r_encrypt_offs2 = element
-                    next = 0
-                    continue
-        if "startxref" in line: 
-            next_startxref = True
             continue
-        if next_startxref:
-            startxref = line
-            next_startxref = False
-            continue
+
+
+    # read EBX element:
+    ebx_elem = find_ebx(filename_in)
+    
+    if (ebx_elem is None):
+        print("Err: EBX is None")
+        return False
+
+    
+    print("")
+    print("")
+    print("Encryption handler:")
+    print(encrypt)
+    print("EBX handler:")
+    print(ebx_elem)
+
+    encrypt = trim_encrypt_string(encrypt)
+
+    print("Trimmed encryption handler:")
+    print(encrypt)
+
+    ebx_elem = update_ebx_with_keys(ebx_elem, adept_license_string, ebx_bookid)
+
+    print("Updated EBX handler not logged due to sensitive data")
+    #print(ebx_elem)
         
 
-    filesize_str = str(os.path.getsize(ORIG_FILE))
+    filesize_str = str(os.path.getsize(filename_in))
     filesize_pad = filesize_str.zfill(10)
 
 
     additional_data = "\r"
     additional_data += r_encrypt_offs1 + " " + r_encrypt_offs2 + " " + "obj" + "\r"
-    additional_data += drm_string
+    additional_data += ebx_elem
     additional_data += "\r"
     additional_data += "endobj"
 
@@ -117,36 +226,40 @@ def patch_drm_into_pdf(filename_in, drm_string, filename_out):
     additional_data += "trailer"
     additional_data += "\r"
 
-    arr_root_str = root_str.split('/')
+    arr_root_str = encrypt.split('/')
     did_prev = False
     for elem in arr_root_str: 
         if elem.startswith("Prev"):
             did_prev = True
-            additional_data += "Prev " + startxref
+            additional_data += "Prev " + str(startxref_offset)
             #print("Replacing prev from '%s' to '%s'" % (elem, "Prev " + startxref))
-        elif elem.startswith("ID[<"):
-            additional_data += elem.replace("><", "> <")
         else:
-            additional_data += elem
+            additional_data += cleanup_encrypt_element(elem)
         additional_data += "/"
 
     if not did_prev:
         # remove two >> at end
         additional_data = additional_data[:-3]
-        additional_data += "/Prev " + startxref + ">>" + "/"
+        additional_data += "/Prev " + str(startxref_offset) + ">>" + "/"
         #print("Faking Prev %s" % startxref)
 
     additional_data = additional_data[:-1]
 
     additional_data += "\r" + "startxref\r" + str(ptr) + "\r" + "%%EOF"
 
-    print("Appending DRM data: %s" % (additional_data))
+    #print("Appending DRM data: %s" % (additional_data))
 
 
-    inp = open(ORIG_FILE, "rb")
+    inp = open(filename_in, "rb")
 
     out = open(filename_out, "wb")
     out.write(inp.read())
     out.write(additional_data.encode("latin-1"))
     inp.close()
     out.close()
+
+    drm_end_time = int(time.time() * 1000)
+
+    print("Whole DRM patching took %d milliseconds." % (drm_end_time - drm_start_time))
+
+    return True

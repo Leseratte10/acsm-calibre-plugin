@@ -12,10 +12,11 @@
 # v0.0.5: Bugfix: DeDRM plugin was also executed if it's installed but disabled.
 # v0.0.6: First PDF support, allow importing previously exported activation data.
 # v0.0.7: More PDF logging, PDF reading in latin-1, MacOS locale bugfix
+# v0.0.8: More PDF bugfixes, support unlimited PDF file sizes, tell Calibre ACSMs are books.
 
 
 from calibre.customize import FileTypePlugin        # type: ignore
-__version__ = '0.0.7'
+__version__ = '0.0.8'
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = tuple([int(x) for x in __version__.split(".")])
@@ -24,7 +25,7 @@ PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
 
 from calibre.utils.config import config_dir         # type: ignore
 
-import os, shutil, traceback, sys
+import os, shutil, traceback, sys, time
 import zipfile
 from lxml import etree
 
@@ -49,6 +50,18 @@ class DeACSM(FileTypePlugin):
         """
 
         try:
+
+            # Patch Calibre to consider "ACSM" a book. This makes ACSM files show up
+            # in the "Add Book" file selection, and it also makes the auto-add feature useable.
+            try: 
+                from calibre.ebooks import BOOK_EXTENSIONS
+                if ("acsm" not in BOOK_EXTENSIONS):
+                    BOOK_EXTENSIONS.append("acsm")
+            except:
+                print("{0} v{1}: Couldn't add ACSM to book extension list:".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
+
+
             self.pluginsdir = os.path.join(config_dir,"plugins")
             if not os.path.exists(self.pluginsdir):
                 os.mkdir(self.pluginsdir)
@@ -167,21 +180,21 @@ class DeACSM(FileTypePlugin):
 
 
         try: 
-            from calibre_plugins.deacsm.libadobe import sendHTTPRequest
+            from calibre_plugins.deacsm.libadobe import sendHTTPRequest_DL2FILE
             from calibre_plugins.deacsm.libadobeFulfill import buildRights, fulfill
         except: 
             try: 
-                from libadobe import sendHTTPRequest
+                from libadobe import sendHTTPRequest_DL2FILE
                 from libadobeFulfill import buildRights, fulfill
             except: 
                 print("{0} v{1}: Error while importing Fulfillment stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
                 traceback.print_exc()
 
         try:
-            from calibre_plugins.deacsm.libpdf import patch_drm_into_pdf, prepare_string_from_xml
+            from calibre_plugins.deacsm.libpdf import patch_drm_into_pdf
         except: 
             try: 
-                from libpdf import patch_drm_into_pdf, prepare_string_from_xml
+                from libpdf import patch_drm_into_pdf
             except: 
                 print("{0} v{1}: Error while importing PDF patch".format(PLUGIN_NAME, PLUGIN_VERSION))
                 traceback.print_exc()
@@ -190,9 +203,7 @@ class DeACSM(FileTypePlugin):
         adobe_fulfill_response = etree.fromstring(replyData)
         NSMAP = { "adept" : "http://ns.adobe.com/adept" }
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-        adDC = lambda tag: '{%s}%s' % ('http://purl.org/dc/elements/1.1/', tag)
 
-        metadata_node = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("metadata")))
         download_url = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("src"))).text
         license_token_node = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken")))
 
@@ -205,9 +216,25 @@ class DeACSM(FileTypePlugin):
         # Download eBook: 
         print("{0} v{1}: Loading book from {2}".format(PLUGIN_NAME, PLUGIN_VERSION, download_url))
 
-        book_content = sendHTTPRequest(download_url)
+        filename_tmp = self.temporary_file(".blob").name
+
+        dl_start_time = int(time.time() * 1000)
+        ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp)
+        dl_end_time = int(time.time() * 1000)
+
+        print("Download took %d ms (HTTP %d)" % (dl_end_time - dl_start_time, ret))
+
+        if (ret != 200):
+            print("{0} v{1}: Download failed with error {2}".format(PLUGIN_NAME, PLUGIN_VERSION, ret))
+            return None            
+
         filetype = ".bin"
-        
+
+        book_content = None
+
+        with open(filename_tmp, "rb") as f:
+            book_content = f.read(10)
+                
         if (book_content.startswith(b"PK")):
             print("That's a ZIP file -> EPUB")
             filetype = ".epub"
@@ -217,23 +244,9 @@ class DeACSM(FileTypePlugin):
 
         filename = self.temporary_file(filetype).name
 
-        author = "None"
-        title = "None"
-        
-        try: 
-            title = metadata_node.find("./%s" % (adDC("title"))).text
-            author = metadata_node.find("./%s" % (adDC("creator"))).text
+        # Move to file name with matching extension
+        shutil.move(filename_tmp, filename)
 
-            title = title.replace("(", "").replace(")", "").replace("/", "")
-            author = author.replace("(", "").replace(")", "").replace("/", "")
-
-        except:
-            pass
-
-        # Store book:
-        f = open(filename, "wb")
-        f.write(book_content)
-        f.close()
 
         if filetype == ".epub":
             # Store EPUB rights / encryption stuff
@@ -244,10 +257,19 @@ class DeACSM(FileTypePlugin):
             return filename
 
         elif filetype == ".pdf":
+            adobe_fulfill_response = etree.fromstring(rights_xml_str)
+            NSMAP = { "adept" : "http://ns.adobe.com/adept" }
+            adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+            resource = adobe_fulfill_response.find("./%s/%s" % (adNS("licenseToken"), adNS("resource"))).text
+
             print("{0} v{1}: Downloaded PDF, adding encryption config ...".format(PLUGIN_NAME, PLUGIN_VERSION))
             pdf_tmp_file = self.temporary_file(filetype).name
-            patch_drm_into_pdf(filename, prepare_string_from_xml(rights_xml_str, title, author), pdf_tmp_file)
-            print("{0} v{1}: File successfully fulfilled ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+            ret = patch_drm_into_pdf(filename, rights_xml_str, pdf_tmp_file, resource)
+            if (ret):
+                print("{0} v{1}: File successfully fulfilled ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+            else:
+                print("{0} v{1}: There was an error patching the PDF file.".format(PLUGIN_NAME, PLUGIN_VERSION))
+
             return pdf_tmp_file
         else: 
             print("{0} v{1}: Error: Unsupported file type ...".format(PLUGIN_NAME, PLUGIN_VERSION))

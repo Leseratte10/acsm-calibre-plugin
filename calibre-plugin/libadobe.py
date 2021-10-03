@@ -121,6 +121,40 @@ def makeFingerprint(serial: str):
 
 ############################################## HTTP stuff:
 
+def sendHTTPRequest_DL2FILE(URL: str, outputfile: str):
+    headers = {
+        "Accept": "*/*",
+        "User-Agent": "book2png",
+    }
+    req = urllib.request.Request(url=URL, headers=headers)
+    handler = urllib.request.urlopen(req)
+
+    chunksize = 16 * 1024
+
+    ret_code = handler.getcode()
+
+
+    loc = None
+    try: 
+        loc = req.headers.get("Location")
+    except:
+        pass
+
+    if loc is not None: 
+        return sendHTTPRequest_DL2FILE(loc)
+
+    if ret_code != 200:
+        return ret_code
+
+    with open(outputfile, "wb") as f:
+        while True: 
+            chunk = handler.read(chunksize)
+            if not chunk: 
+                break
+            f.write(chunk)
+
+    return 200
+
 def sendHTTPRequest_getSimple(URL: str):
 
     headers = {
