@@ -13,10 +13,11 @@
 # v0.0.6: First PDF support, allow importing previously exported activation data.
 # v0.0.7: More PDF logging, PDF reading in latin-1, MacOS locale bugfix
 # v0.0.8: More PDF bugfixes, support unlimited PDF file sizes, tell Calibre ACSMs are books.
+# v0.0.9: Add FulfillmentNotification support, add LoanReturn support.
 
 
 from calibre.customize import FileTypePlugin        # type: ignore
-__version__ = '0.0.8'
+__version__ = '0.0.9'
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = tuple([int(x) for x in __version__.split(".")])
@@ -308,7 +309,12 @@ class DeACSM(FileTypePlugin):
                 traceback.print_exc()
 
 
-        success, replyData = fulfill(path_to_ebook)
+        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
+        deacsmprefs = prefs.DeACSM_Prefs()
+
+
+        success, replyData = fulfill(path_to_ebook, deacsmprefs["notify_fulfillment"])
+
         if (success is False):
             print("{0} v{1}: Hey, that didn't work: \n".format(PLUGIN_NAME, PLUGIN_VERSION) + replyData)
         else: 

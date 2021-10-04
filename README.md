@@ -21,6 +21,14 @@ IMPORTANT:
 - Support for PDFs might be unreliable. You will need to apply pull request #1689 (including my additional bugfix in the comments of that PR) to the DeDRM plugin in order to remove the DRM from PDF files. If you still encounter an issue with a PDF file created by this tool even with these bugfixes, please report a bug (in this repository, not in the DeDRM one) and attach the corrupted PDF.
 - This software is not approved by Adobe. I am not responsible if Adobe detects that you're using nonstandard software and bans your account. Do not complain to me if Adobe bans your main ADE account - you have been warned. 
 
+## Returning books
+
+If a book is marked as returnable (like a library book), you can "return" it to the library using this plugin. 
+Just open the plugin settings, click "Show loaned books" (the option is only visible if you have at least one loaned book that's been downloaded with this plugin), select the book, then click the arrow button to return. Or click the "X" button to just remove the loan record from the list without returning the book.
+
+This makes the book available for someone else again, but it does not automatically get deleted from your Calibre library - you are responsible for doing that after returning a book.
+
+Note: You can only return books that you downloaded with version 0.0.9 (or newer) of this plugin. You cannot return books downloaded with ADE or with earlier versions of this plugin.
 
 ## Standalone version
 
@@ -38,5 +46,4 @@ There's a bunch of features that could still be added, but most of them aren't i
 
 - Support for anonymous Adobe IDs
 - Support for un-authorizing a machine
-- Support for returning loan books
 - ...

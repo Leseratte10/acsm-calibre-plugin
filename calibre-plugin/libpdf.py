@@ -142,7 +142,7 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
         trailer_idx += 1
         trailer = line + "\n" + trailer
 
-        print ("LINE: " + line)
+        #print ("LINE: " + line)
 
         if (trailer_idx > 10):
             print("Took more than 10 attempts to find startxref ...")

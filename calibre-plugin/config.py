@@ -7,10 +7,14 @@ import os, base64, traceback
 
 from lxml import etree
 
+import time, datetime
+
 
 from PyQt5.Qt import (Qt, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit,
                       QGroupBox, QPushButton, QListWidget, QListWidgetItem, QInputDialog, 
                       QLineEdit, QAbstractItemView, QIcon, QDialog, QDialogButtonBox, QUrl)
+
+from PyQt5 import QtCore
 
 from PyQt5 import Qt as QtGui
 from zipfile import ZipFile
@@ -35,6 +39,10 @@ class ConfigWidget(QWidget):
         # make a local copy
         self.tempdeacsmprefs = {}
         self.tempdeacsmprefs['path_to_account_data'] = self.deacsmprefs['path_to_account_data']
+
+        self.tempdeacsmprefs['notify_fulfillment'] = self.deacsmprefs['notify_fulfillment']
+
+        self.tempdeacsmprefs['list_of_rented_books'] = self.deacsmprefs['list_of_rented_books']
 
 
         # Start Qt Gui dialog layout
@@ -75,6 +83,21 @@ class ConfigWidget(QWidget):
         self.button_export_activation.clicked.connect(self.export_activation)
         self.button_export_activation.setEnabled(activated)
         ua_group_box_layout.addWidget(self.button_export_activation)
+
+        self.button_rented_books = QtGui.QPushButton(self)
+        self.button_rented_books.setText(_("Show loaned books"))
+        self.button_rented_books.clicked.connect(self.show_rented_books)
+        self.button_rented_books.setEnabled(activated)
+        ua_group_box_layout.addWidget(self.button_rented_books)
+
+        if (len(self.deacsmprefs["list_of_rented_books"]) == 0):
+            self.button_rented_books.setEnabled(False)
+
+
+        self.chkNotifyFulfillment = QtGui.QCheckBox("Notify ACS server after successful fulfillment")
+        self.chkNotifyFulfillment.setToolTip("Default: True\n\nIf this is enabled, the ACS server will receive a notification once the ACSM has successfully been converted. \nThis is not strictly necessary, but it is what ADE does, so it's probably safer to just do it as well.\nAlso, it is required to be able to return loaned books.")
+        self.chkNotifyFulfillment.setChecked(self.tempdeacsmprefs["notify_fulfillment"])
+        layout.addWidget(self.chkNotifyFulfillment)
 
 
         try: 
@@ -288,6 +311,7 @@ class ConfigWidget(QWidget):
 
     def save_settings(self):
         #self.deacsmprefs.set('path_to_account_data', self.txtboxUA.text())
+        self.deacsmprefs.set('notify_fulfillment', self.chkNotifyFulfillment.isChecked())
         self.deacsmprefs.writeprefs()
 
     def load_resource(self, name):
@@ -296,3 +320,176 @@ class ConfigWidget(QWidget):
                 return zf.read(name).decode('utf-8')
         return ""
 
+
+
+    def show_rented_books(self):
+        d = RentedBooksDialog(self, self.deacsmprefs["list_of_rented_books"])
+        d.exec_()
+
+
+class RentedBooksDialog(QDialog):
+    def __init__(self, parent, booklist):
+        QDialog.__init__(self,parent)
+        self.parent = parent
+
+        self.setWindowTitle("DeACSM: Manage loaned Books")
+
+        # Start Qt Gui dialog layout
+        layout = QVBoxLayout(self)
+        self.setLayout(layout)
+
+        keys_group_box = QGroupBox("List of loaned books", self)
+        layout.addWidget(keys_group_box)
+        keys_group_box_layout = QHBoxLayout()
+        keys_group_box.setLayout(keys_group_box_layout)
+
+        self.listy = QListWidget(self)
+        self.listy.setToolTip("List of loaned books")
+        self.listy.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.populate_list()
+        keys_group_box_layout.addWidget(self.listy)
+
+
+        button_layout = QVBoxLayout()
+        keys_group_box_layout.addLayout(button_layout)
+        self._add_key_button = QtGui.QToolButton(self)
+        self._add_key_button.setIcon(QIcon(I('view-refresh.png')))
+        self._add_key_button.setToolTip("Return book to library")
+        self._add_key_button.clicked.connect(self.return_book)
+        button_layout.addWidget(self._add_key_button)
+
+        self._delete_key_button = QtGui.QToolButton(self)
+        self._delete_key_button.setToolTip(_("Delete book entry from list"))
+        self._delete_key_button.setIcon(QIcon(I('list_remove.png')))
+        self._delete_key_button.clicked.connect(self.delete_book_entry)
+        button_layout.addWidget(self._delete_key_button)
+
+        self.lblAccInfo = QtGui.QLabel(self)
+        self.lblAccInfo.setText("Click the arrow button to return a loaned book to the library.\nClick the red X to delete the loan record without returning the book.")
+        layout.addWidget(self.lblAccInfo)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+        self.resize(self.sizeHint())
+
+    def td_format(self, td_object):
+        seconds = int(td_object.total_seconds())
+        periods = [
+            ('y',        60*60*24*365),
+            ('M',        60*60*24*30),
+            ('d',        60*60*24),
+            ('h',        60*60),
+            ('m',        60),
+            ('s',        1)
+        ]
+
+        strings=[]
+        tick = 0
+        for period_name, period_seconds in periods:
+            if seconds > period_seconds:
+                period_value , seconds = divmod(seconds, period_seconds)
+                strings.append("%s%s" % (period_value, period_name))
+                tick += 1
+            if tick >= 2:
+                break
+
+        return " ".join(strings)
+
+    def populate_list(self):
+        self.listy.clear()
+
+        overdue_books = []
+
+        for book in self.parent.deacsmprefs["list_of_rented_books"]:
+
+            try: 
+                book_time_stamp = book["validUntil"]
+                timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%SZ")
+                currenttime = datetime.datetime.utcnow()
+            except: 
+                print("Invalid book timestamp")
+                continue
+
+
+            if (timestamp <= currenttime):
+                # Book is overdue, no need to return. Delete from list.
+                overdue_books.append(book)
+                continue
+            else: 
+                info = "(" + self.td_format(timestamp - currenttime)
+                info += " remaining)"
+
+
+            item = QListWidgetItem(book["book_name"] + " " + info)
+            item.setData(QtCore.Qt.UserRole, book["loanID"])
+            self.listy.addItem(item)
+
+        for book in overdue_books:
+            self.parent.deacsmprefs["list_of_rented_books"].remove(book)
+
+        self.parent.deacsmprefs.writeprefs()
+
+
+    def return_book(self): 
+        if not self.listy.currentItem(): 
+            return
+
+        userdata = str(self.listy.currentItem().data(QtCore.Qt.UserRole))
+        print("Returning book %s (ID %s)" % (self.listy.currentItem().text(), userdata))
+
+
+        try: 
+            from calibre_plugins.deacsm.libadobeFulfill import tryReturnBook
+        except: 
+            try: 
+                from libadobeFulfill import tryReturnBook
+            except: 
+                print("{0} v{1}: Error while importing book return stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
+
+        Ret_book = None
+        for book in self.parent.deacsmprefs["list_of_rented_books"]:
+            if book["loanID"] == userdata:
+                Ret_book = book
+                break
+
+        if Ret_book is None: 
+            return
+
+        ret, msg = tryReturnBook(Ret_book)
+
+        if (ret):
+            print("Book successfully returned:")
+            print(msg)
+            self.delete_book_entry(nomsg=True)
+            self.populate_list()
+            return info_dialog(None, "Done", "Book successfully returned", show=True, show_copy_button=False)
+        else: 
+            print("Book return failed:")
+            print(msg)
+            return error_dialog(None, "Error", "Book return failed", det_msg=msg, show=True, show_copy_button=False)
+
+
+    def delete_book_entry(self, nomsg = False): 
+        if not self.listy.currentItem(): 
+            return
+
+        userdata = str(self.listy.currentItem().data(QtCore.Qt.UserRole))
+        print("Deleting book entry %s (ID %s)" % (self.listy.currentItem().text(), userdata))
+
+        success = False
+        for book in self.parent.deacsmprefs["list_of_rented_books"]:
+            if book["loanID"] == userdata:
+                self.parent.deacsmprefs["list_of_rented_books"].remove(book)
+                success = True
+                break
+
+        self.populate_list()
+
+        if success and not nomsg:
+            return info_dialog(None, "Done", "Book entry deleted without returning.", show=True, show_copy_button=False)
+        if not nomsg: 
+            return error_dialog(None, "Error", "Error while deleting book entry", show=True, show_copy_button=False)

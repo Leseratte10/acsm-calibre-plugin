@@ -8,7 +8,7 @@ Helper library with code needed for Adobe stuff.
 from Crypto import Random
 from uuid import getnode
 import os, hashlib, base64
-import urllib.request
+import urllib.request, ssl
 from Crypto.Cipher import AES
 from datetime import datetime, timedelta
 
@@ -177,15 +177,27 @@ def sendHTTPRequest_getSimple(URL: str):
 
     return content
 
-def sendPOSTHTTPRequest(URL: str, document: bytes, type: str):
+def sendPOSTHTTPRequest(URL: str, document: bytes, type: str, returnRC = False):
 
     headers = {
         "Accept": "*/*",
         "User-Agent": "book2png",
         "Content-Type": type
     }
+
+    # Ignore SSL:
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
     req = urllib.request.Request(url=URL, headers=headers, data=document)
-    handler = urllib.request.urlopen(req)
+    handler = urllib.request.urlopen(req, context=ctx)
+
+    ret_code = handler.getcode()
+    if (ret_code == 204 and returnRC):
+        return 204, ""
+    if (ret_code != 200):
+        print("Post request returned something other than 200 - returned %d" % (ret_code))
 
     content = handler.read()
 
@@ -196,8 +208,11 @@ def sendPOSTHTTPRequest(URL: str, document: bytes, type: str):
         pass
 
     if loc is not None: 
-        return sendPOSTHTTPRequest(loc, document, type)
+        return sendPOSTHTTPRequest(loc, document, type, returnRC)
 
+    if returnRC:
+        return ret_code, content
+        
     return content
 
 
@@ -206,7 +221,11 @@ def sendHTTPRequest(URL: str):
 
 
 def sendRequestDocu(document: str, URL: str):
-    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml")
+    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", False)
+
+def sendRequestDocuRC(document: str, URL: str):
+    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", True)
+
 
 
 ######### Encryption and signing ###################

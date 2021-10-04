@@ -18,6 +18,15 @@ class DeACSM_Prefs():
 
         self.deacsmprefs.defaults['configured'] = False
 
+        self.deacsmprefs.defaults['notify_fulfillment'] = True
+
+        self.deacsmprefs.defaults['list_of_rented_books'] = []
+
+        if self.deacsmprefs['list_of_rented_books'] == []:
+            self.deacsmprefs['list_of_rented_books'] = []
+
+
+
         self.pluginsdir = os.path.join(config_dir,"plugins")
         if not os.path.exists(self.pluginsdir):
             os.mkdir(self.pluginsdir)
