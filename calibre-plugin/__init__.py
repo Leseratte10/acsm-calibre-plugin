@@ -114,24 +114,16 @@ class DeACSM(FileTypePlugin):
                 from calibre_plugins.deacsm.libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
                 from calibre_plugins.deacsm.libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
             except: 
-                try: 
-                    from libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
-                    from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
-                except: 
-                    print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                    traceback.print_exc()
+                from libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
+                from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
 
             # Fulfill:
             try: 
                 from calibre_plugins.deacsm.libadobe import sendHTTPRequest
                 from calibre_plugins.deacsm.libadobeFulfill import buildRights, fulfill
             except: 
-                try: 
-                    from libadobe import sendHTTPRequest
-                    from libadobeFulfill import buildRights, fulfill
-                except: 
-                    print("{0} v{1}: Error while importing Fulfillment stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                    traceback.print_exc()
+                from libadobe import sendHTTPRequest
+                from libadobeFulfill import buildRights, fulfill
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
             deacsmprefs = prefs.DeACSM_Prefs()
@@ -184,21 +176,13 @@ class DeACSM(FileTypePlugin):
             from calibre_plugins.deacsm.libadobe import sendHTTPRequest_DL2FILE
             from calibre_plugins.deacsm.libadobeFulfill import buildRights, fulfill
         except: 
-            try: 
-                from libadobe import sendHTTPRequest_DL2FILE
-                from libadobeFulfill import buildRights, fulfill
-            except: 
-                print("{0} v{1}: Error while importing Fulfillment stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
+            from libadobe import sendHTTPRequest_DL2FILE
+            from libadobeFulfill import buildRights, fulfill
 
         try:
             from calibre_plugins.deacsm.libpdf import patch_drm_into_pdf
         except: 
-            try: 
-                from libpdf import patch_drm_into_pdf
-            except: 
-                print("{0} v{1}: Error while importing PDF patch".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
+            from libpdf import patch_drm_into_pdf
 
 
         adobe_fulfill_response = etree.fromstring(replyData)
@@ -301,13 +285,8 @@ class DeACSM(FileTypePlugin):
             from calibre_plugins.deacsm.libadobe import sendHTTPRequest
             from calibre_plugins.deacsm.libadobeFulfill import buildRights, fulfill
         except: 
-            try: 
-                from libadobe import sendHTTPRequest
-                from libadobeFulfill import buildRights, fulfill
-            except: 
-                print("{0} v{1}: Error while importing Fulfillment stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
-
+            from libadobe import sendHTTPRequest
+            from libadobeFulfill import buildRights, fulfill
 
         import calibre_plugins.deacsm.prefs as prefs     # type: ignore
         deacsmprefs = prefs.DeACSM_Prefs()
