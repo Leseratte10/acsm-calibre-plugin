@@ -2,9 +2,16 @@ from lxml import etree
 import base64
 import os, locale, platform
 
-from Crypto.PublicKey import RSA
-from Crypto.Util.asn1 import DerSequence
-from Crypto.Cipher import PKCS1_v1_5
+try:
+    from Crypto.PublicKey import RSA
+    from Crypto.Util.asn1 import DerSequence
+    from Crypto.Cipher import PKCS1_v1_5
+except ImportError:
+    # Debian (and Ubuntu) ship pycryptodome, but not in its compatible mode with pycrypto
+    # If `Crypto` can't be found, try under pycryptodome's own namespace
+    from Cryptodome.PublicKey import RSA
+    from Cryptodome.Util.asn1 import DerSequence
+    from Cryptodome.Cipher import PKCS1_v1_5
 
 try: 
     from libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
