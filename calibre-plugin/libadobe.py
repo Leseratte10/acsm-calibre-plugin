@@ -5,19 +5,26 @@
 Helper library with code needed for Adobe stuff.
 '''
 
-from Crypto import Random
 from uuid import getnode
 import os, hashlib, base64
 import urllib.request, ssl
-from Crypto.Cipher import AES
 from datetime import datetime, timedelta
 
 from lxml import etree
 import rsa
 
-
-from Crypto.PublicKey import RSA
-from Crypto.Hash import SHA
+try:
+    from Crypto import Random
+    from Crypto.Cipher import AES
+    from Crypto.PublicKey import RSA
+    from Crypto.Hash import SHA
+except ImportError:
+    # Debian (and Ubuntu) ship pycryptodome, but not in its compatible mode with pycrypto
+    # If `Crypto` can't be found, try under pycryptodome's own namespace
+    from Cryptodome import Random
+    from Cryptodome.Cipher import AES
+    from Cryptodome.PublicKey import RSA
+    from Cryptodome.Hash import SHA
 
 from oscrypto import keys
 from oscrypto.asymmetric import dump_certificate, dump_private_key, dump_public_key
