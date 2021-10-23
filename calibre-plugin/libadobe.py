@@ -212,7 +212,7 @@ def sendPOSTHTTPRequest(URL: str, document: bytes, type: str, returnRC = False):
 
     if returnRC:
         return ret_code, content
-        
+
     return content
 
 
@@ -274,15 +274,13 @@ def addNonce():
     usec = dt.microsecond
     sec = (dt - datetime(1970,1,1)).total_seconds()
 
-    nonce320 = int(0x6f046000)
-    nonce321 = int(0x388a)
-    bigtime = int(sec * 1000)
 
-    nonce320 += int((bigtime & 0xFFFFFFFF) + usec/1000)
-    nonce321 += int(((bigtime >> 32) & 0xFFFFFFFF))
+    Ntime = int(int(sec * 1000) + usec/1000)
 
-    final = bytearray(nonce320.to_bytes(4, 'little'))
-    final.extend(nonce321.to_bytes(4, 'little'))
+    # Unixtime to gregorian timestamp
+    Ntime += 62167219200000
+
+    final = bytearray(Ntime.to_bytes(8, 'little'))
     tmp = 0
     final.extend(tmp.to_bytes(4, 'little'))
 

@@ -547,7 +547,7 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
         critical = True
 
         if element.get("critical", "yes") == "no":
-            critial = False
+            critical = False
             print("Notifying optional server %s" % (url))
         else: 
             print("Notifying server %s" % (url))

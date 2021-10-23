@@ -215,6 +215,8 @@ class ConfigWidget(QWidget):
         self.button_export_key.setEnabled(activated)
         self.button_export_activation.setEnabled(activated)
 
+        self.resize(self.sizeHint())
+
         info_dialog(None, "Done", "Successfully imported authorization for " + ade_mail, show=True, show_copy_button=False)
 
 
@@ -270,6 +272,8 @@ class ConfigWidget(QWidget):
         self.button_export_key.setEnabled(True)
         self.button_export_activation.setEnabled(True)
 
+        self.resize(self.sizeHint())
+
         info_dialog(None, "Done", "Authorized to account " + mail, show=True, show_copy_button=False)
 
 
@@ -293,7 +297,8 @@ class ConfigWidget(QWidget):
 
         filters = [("DER Files", ["der"])]
 
-        filename = choose_save_file(self, "Export ADE keys", _("Export ADE keys"), filters, all_files=False)
+        filename = choose_save_file(self, "Export ADE keys", _("Export ADE keys"), filters, 
+                    all_files=False, initial_filename="adobe_encryption_key.der")
 
         if (filename is None):
             return
