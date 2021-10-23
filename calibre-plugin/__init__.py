@@ -14,10 +14,11 @@
 # v0.0.7: More PDF logging, PDF reading in latin-1, MacOS locale bugfix
 # v0.0.8: More PDF bugfixes, support unlimited PDF file sizes, tell Calibre ACSMs are books.
 # v0.0.9: Add FulfillmentNotification support, add LoanReturn support.
+# v0.0.10: Fix nonce calculation, merge PRs #3 and #4 (PyCryptodome stuff)
 
 
 from calibre.customize import FileTypePlugin        # type: ignore
-__version__ = '0.0.9'
+__version__ = '0.0.10'
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = tuple([int(x) for x in __version__.split(".")])
