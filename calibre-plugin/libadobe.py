@@ -382,10 +382,17 @@ def hash_node_ctx(node, hash_ctx):
 
 
     attrKeys = node.keys()
+
+    # Attributes need to be sorted
     attrKeys.sort()
+    # TODO Implement UTF-8 bytewise sorting:
+    # "Attributes are sorted first by their namespaces and
+    # then by their names; sorting is done bytewise on UTF-8
+    # representations."
+
     for attribute in attrKeys: 
         hash_do_append_tag(hash_ctx, ASN_ATTRIBUTE)
-        hash_do_append_string(hash_ctx, "")
+        hash_do_append_string(hash_ctx, "")     # TODO: "Element namespace"? Whatever that means...
         hash_do_append_string(hash_ctx, attribute)
         hash_do_append_string(hash_ctx, node.get(attribute))
 
@@ -395,6 +402,9 @@ def hash_node_ctx(node, hash_ctx):
         if (node.text is not None):
             hash_do_append_tag(hash_ctx, ASN_TEXT)
             hash_do_append_string(hash_ctx, node.text.strip()) 
+
+            # TODO: If the text is longer than 0x7FFF, split it up and use multiple ASN_TEXT elements.
+
         hash_do_append_tag(hash_ctx, ASN_END_TAG)
     else: 
         hash_do_append_tag(hash_ctx, ASN_CHILD)

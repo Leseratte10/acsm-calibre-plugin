@@ -1,0 +1,54 @@
+name: Bug Report
+description: Report a bug with the ACSM plugin
+labels: ["new-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: Bug description
+      description: What were you doing, and what didn't work?
+      placeholder: |
+        Please include all relevant information, such as: 
+        - When does the error occur? (Installing plugin, linking ADE account, importing ACSM, ...)
+        - If the error happens during ACSM import: Is this an EPUB or a PDF book?
+        - If the error happens during ACSM import: In the plugin settings does it say "Authorized to ADE ID ..." or is there an error message?
+        - Did this work in the past and randomly stopped, or did this never work / you are installing the plugin for the first time?
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      description: Which OS are you running Calibre on?
+      multiple: true
+      options:
+        - Linux
+        - Windows
+        - MacOS
+    validations:
+      required: true
+  - type: input
+    id: calibre-version
+    attributes:
+      label: Which version of Calibre are you running?
+      description: "Example: 5.30"
+      placeholder: "5.30"
+    validations: 
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Which version of the DeACSM plugin are you running?
+      description: "Example: v0.0.10"
+      placeholder: "v0.0.10"
+    validations: 
+      required: true
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Further information
+      description: Anything else you'd like to add to this bug report?
