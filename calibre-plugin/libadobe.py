@@ -168,8 +168,17 @@ def sendHTTPRequest_getSimple(URL: str):
         "Accept": "*/*",
         "User-Agent": "book2png",
     }
+
+    # Ignore SSL:
+    # It appears as if lots of book distributors have either invalid or expired certs ...
+    # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
+    # Not the best solution, but it works.
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
     req = urllib.request.Request(url=URL, headers=headers)
-    handler = urllib.request.urlopen(req)
+    handler = urllib.request.urlopen(req, context=ctx)
 
     content = handler.read()
 
@@ -193,6 +202,9 @@ def sendPOSTHTTPRequest(URL: str, document: bytes, type: str, returnRC = False):
     }
 
     # Ignore SSL:
+    # It appears as if lots of book distributors have either invalid or expired certs ...
+    # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
+    # Not the best solution, but it works.
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
