@@ -114,6 +114,7 @@ def makeSerial(random: bool):
 def makeFingerprint(serial: str):
     # Original implementation: std::string Device::makeFingerprint(const std::string& serial)
     # base64(sha1(serial + privateKey))
+    # Fingerprint must be 20 bytes or less.
 
     f = open(FILE_DEVICEKEY, "rb")
     devkey_bytes = f.read()
@@ -373,11 +374,11 @@ def hash_node(node):
 
 
 ASN_NONE = 0
-ASN_NS_TAG = 1
-ASN_CHILD = 2
-ASN_END_TAG = 3
-ASN_TEXT = 4
-ASN_ATTRIBUTE = 5
+ASN_NS_TAG = 1      # aka "BEGIN_ELEMENT"
+ASN_CHILD = 2       # aka "END_ATTRIBUTES"
+ASN_END_TAG = 3     # aka "END_ELEMENT"
+ASN_TEXT = 4        # aka "TEXT_NODE"
+ASN_ATTRIBUTE = 5   # aka "ATTRIBUTE"
 
 debug = False
 
@@ -403,26 +404,51 @@ def hash_node_ctx(node, hash_ctx):
     # representations."
 
     for attribute in attrKeys: 
+        # Hash all the attributes
         hash_do_append_tag(hash_ctx, ASN_ATTRIBUTE)
         hash_do_append_string(hash_ctx, "")     # TODO: "Element namespace"? Whatever that means...
         hash_do_append_string(hash_ctx, attribute)
         hash_do_append_string(hash_ctx, node.get(attribute))
 
-    
-    if (not len(list(node))):
-        hash_do_append_tag(hash_ctx, ASN_CHILD)
-        if (node.text is not None):
-            hash_do_append_tag(hash_ctx, ASN_TEXT)
-            hash_do_append_string(hash_ctx, node.text.strip()) 
 
-            # TODO: If the text is longer than 0x7FFF, split it up and use multiple ASN_TEXT elements.
+    hash_do_append_tag(hash_ctx, ASN_CHILD)
 
-        hash_do_append_tag(hash_ctx, ASN_END_TAG)
-    else: 
-        hash_do_append_tag(hash_ctx, ASN_CHILD)
-        for child in node: 
-            hash_node_ctx(child, hash_ctx)
-        hash_do_append_tag(hash_ctx, ASN_END_TAG)
+    if (node.text is not None):
+        # If there's raw text, hash that.
+
+        # This code block used to just be the following:
+        #   hash_do_append_tag(hash_ctx, ASN_TEXT)
+        #   hash_do_append_string(hash_ctx, node.text.strip())
+        # though that only works with text nodes < 0x7fff.
+        # While I doubt we'll ever encounter text nodes larger than 32k in
+        # this application, I want to implement the spec correctly.
+        # So there's a loop going over the text, hashing 32k chunks.
+
+        text = node.text.strip()
+        textlen = len(text)
+        if textlen > 0:
+            done = 0
+            remaining = 0
+            while True: 
+                remaining = textlen - done
+                if remaining > 0x7fff:
+                    remaining = 0x7fff
+
+                hash_do_append_tag(hash_ctx, ASN_TEXT)
+                hash_do_append_string(hash_ctx, text[done:done+remaining]) 
+
+                done += remaining
+                if done >= textlen:
+                    break
+
+    for child in node: 
+        # If there's child nodes, hash these as well.
+        hash_node_ctx(child, hash_ctx)
+
+
+
+    hash_do_append_tag(hash_ctx, ASN_END_TAG)
+
 
 
 def hash_do_append_string(hash_ctx, string: str):
