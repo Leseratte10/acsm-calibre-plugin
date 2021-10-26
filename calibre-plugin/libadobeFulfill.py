@@ -512,23 +512,25 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-    reset = False
+    # Debug output for PassHash testing: 
+    # print(etree.tostring(fulfillmentResultToken, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8"))
+
     try: 
         notifiers = fulfillmentResultToken.findall("./%s/%s" % (adNS("fulfillmentResult"), adNS("notify")))
     except:
-        reset = True
+        pass
 
     if len(notifiers) == 0: 
         try: 
             notifiers = fulfillmentResultToken.findall("./%s" % (adNS("notify")))
         except: 
-            reset = True
+            pass
 
     if len(notifiers) == 0: 
         try: 
             notifiers = fulfillmentResultToken.findall("./%s/%s" % (adNS("envelope"), adNS("notify")))
         except: 
-            reset = True
+            pass
 
     if len(notifiers) == 0:
         print("<notify> tag not found. Guess nobody wants to be notified.")
@@ -554,10 +556,29 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
         
 
         if (user is None):
-            user = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("user"))).text
+            try: 
+                # "Normal" Adobe fulfillment
+                user = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("user"))).text
+            except AttributeError:
+                # B&N Adobe PassHash fulfillment
+                user = body.find("./%s" % (adNS("user"))).text
         
         if (device is None):
-            device = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("device"))).text
+            try: 
+                # "Normal" Adobe fulfillment
+                device = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("device"))).text
+            except:
+                # B&N Adobe PassHash fulfillment without device ID. 
+                # Not sure what to do in this case. 
+                # PassHash books aren't linked to a particular device, so there's no ID to send to Adobe.
+                # If I leave this out, I get E_ADEPT_MISSING_ELEMENT
+                # If I use the one from the ADE activation, I get E_LIC_USER_UNKNOWN
+                # Adobe documentation seems to imply that PassHash books don't support notifications, 
+                # so lets just skip if that's the case. 
+                print("Skipping notify due to passHash")
+                continue
+
+
 
         
         full_text = "<adept:notification xmlns:adept=\"http://ns.adobe.com/adept\">"
