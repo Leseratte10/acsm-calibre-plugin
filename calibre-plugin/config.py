@@ -149,9 +149,31 @@ class ConfigWidget(QWidget):
 
     def export_activation(self):
 
+        try: 
+            from calibre_plugins.deacsm.libadobe import update_account_path
+            from calibre_plugins.deacsm.libadobeAccount import getAccountUUID
+        except: 
+            try: 
+                from libadobe import update_account_path
+                from libadobeAccount import getAccountUUID
+            except: 
+                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
+
+
+        update_account_path(self.deacsmprefs["path_to_account_data"])
+
+        account_uuid = None
+        export_filename = "adobe_account_backup.zip"
+        try: 
+            account_uuid = getAccountUUID()
+            export_filename = "adobe_account_backup_uuid_" + account_uuid + ".zip"
+        except:
+            pass
+
         filters = [("ZIP", ["zip"])]
         filename = choose_save_file(self, "Export ADE activation files", _("Export ADE activation files"), 
-                filters, all_files=False, initial_filename="adobe_account_backup.zip")
+                filters, all_files=False, initial_filename=export_filename)
 
         if (filename is None):
             return
@@ -283,11 +305,11 @@ class ConfigWidget(QWidget):
 
         try: 
             from calibre_plugins.deacsm.libadobe import update_account_path
-            from calibre_plugins.deacsm.libadobeAccount import exportAccountEncryptionKeyDER
+            from calibre_plugins.deacsm.libadobeAccount import exportAccountEncryptionKeyDER, getAccountUUID
         except: 
             try: 
                 from libadobe import update_account_path
-                from libadobeAccount import exportAccountEncryptionKeyDER
+                from libadobeAccount import exportAccountEncryptionKeyDER, getAccountUUID
             except: 
                 print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
                 traceback.print_exc()
@@ -297,8 +319,16 @@ class ConfigWidget(QWidget):
 
         filters = [("DER Files", ["der"])]
 
+        account_uuid = None
+        export_filename = "adobe_encryption_key.der"
+        try: 
+            account_uuid = getAccountUUID()
+            export_filename = "adobe_uuid_" + account_uuid + ".der"
+        except:
+            pass
+
         filename = choose_save_file(self, "Export ADE keys", _("Export ADE keys"), filters, 
-                    all_files=False, initial_filename="adobe_encryption_key.der")
+                    all_files=False, initial_filename=export_filename)
 
         if (filename is None):
             return

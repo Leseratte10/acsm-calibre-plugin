@@ -15,10 +15,13 @@
 # v0.0.8: More PDF bugfixes, support unlimited PDF file sizes, tell Calibre ACSMs are books.
 # v0.0.9: Add FulfillmentNotification support, add LoanReturn support.
 # v0.0.10: Fix nonce calculation, merge PRs #3 and #4 (PyCryptodome stuff)
+# v0.0.11: Ignore SSL errors during ACS notify, improve element hashing code, 
+#          improve PassHash support, include UUID in key export filename, 
+#          fix bug that would block other FileTypePlugins
 
 
 from calibre.customize import FileTypePlugin        # type: ignore
-__version__ = '0.0.10'
+__version__ = '0.0.11'
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = tuple([int(x) for x in __version__.split(".")])
@@ -304,26 +307,86 @@ class DeACSM(FileTypePlugin):
                 # Got a file
 
                 # Because Calibre still thinks this is an ACSM file (not an EPUB)
-                # it will not run other plugins like Alf / DeDRM. 
-                # So we have to manually check if it's installed,
-                # and if it is, run it to remove DRM.
+                # it will not run other FileTypePlugins that handle EPUB (or PDF) files.
+                # Loop through all plugins (the list is already sorted by priority), 
+                # then execute all of them that can handle EPUB / PDF.
+
                 try: 
                     from calibre.customize.ui import _initialized_plugins, is_disabled
+                    from calibre.customize import FileTypePlugin
+
+                    original_file_for_plugins = rpl
+
+                    oo, oe = sys.stdout, sys.stderr
+
                     for plugin in _initialized_plugins:
-                        if (plugin.name == "DeDRM" and not is_disabled(plugin)):
-                            print("{0} v{1}: Executing DeDRM plugin ...".format(PLUGIN_NAME, PLUGIN_VERSION))
-                            return plugin.run(rpl)
+
+                        #print("{0} v{1}: Plugin '{2}' has prio {3}".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name, plugin.priority))
+
+                        # Check if this is a FileTypePlugin
+                        if not isinstance(plugin, FileTypePlugin):
+                            #print("{0} v{1}: Plugin '{2}' is no FileTypePlugin, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
+                            continue
+
+                        # Check if it's disabled
+                        if is_disabled(plugin):
+                            #print("{0} v{1}: Plugin '{2}' is disabled, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
+                            continue
+
+                        if plugin.name == self.name:
+                            #print("{0} v{1}: Plugin '{2}' is me - skipping".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
+                            continue
+
+                        # Check if it's supposed to run on import:
+                        if not plugin.on_import:
+                            #print("{0} v{1}: Plugin '{2}' isn't supposed to run during import, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
+                            continue
+
+                        # Check filetype
+                        # If neither the book file extension nor "*" is in the plugin,
+                        # don't execute it.
+                        my_file_type = os.path.splitext(rpl)[-1].lower().replace('.', '')
+                        if (not my_file_type in plugin.file_types):
+                            #print("{0} v{1}: Plugin '{2}' doesn't support {3} files, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name, my_file_type))
+                            continue
+
+                        if ("acsm" in plugin.file_types or "*" in plugin.file_types):
+                            #print("{0} v{1}: Plugin '{2}' would run anyways, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name, my_file_type))
+                            continue
+
+                        print("{0} v{1}: Executing plugin {2} ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
+
+                        plugin.original_path_to_file = original_file_for_plugins
+
+                        try: 
+                            plugin_ret = None
+                            plugin_ret = plugin.run(rpl)
+                        except: 
+                            print("{0} v{1}: Running file type plugin failed with traceback:".format(PLUGIN_NAME, PLUGIN_VERSION))
+                            traceback.print_exc(file=oe)
+
+                        # Restore stdout and stderr, in case a plugin broke them.
+                        sys.stdout, sys.stderr = oo, oe
+
+
+                        if plugin_ret is not None:
+                            # If the plugin returned a new path, update that.
+                            print("{0} v{1}: Plugin returned path '{2}', updating.".format(PLUGIN_NAME, PLUGIN_VERSION, plugin_ret))
+                            rpl = plugin_ret
+                        else: 
+                            print("{0} v{1}: Plugin returned nothing - skipping".format(PLUGIN_NAME, PLUGIN_VERSION))
+
+                            
+
                 except: 
-                    print("{0} v{1}: Error while checking for DeDRM plugin.".format(PLUGIN_NAME, PLUGIN_VERSION))
+                    print("{0} v{1}: Error while executing other plugins".format(PLUGIN_NAME, PLUGIN_VERSION))
+                    traceback.print_exc()
                     pass
 
-                # Looks like DeDRM is not installed, return book with DRM.
+                # Return path - either the original one or the one modified by the other plugins.
                 return rpl
 
 
         return path_to_ebook
         
-
-        
-
 

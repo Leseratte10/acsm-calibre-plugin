@@ -377,7 +377,21 @@ def activateDevice():
     f.write("</activationInfo>\n")
     f.close()
 
-    return True, ret    
+    return True, ret  
+
+def getAccountUUID():
+    try:
+        activationxml = etree.parse(get_activation_xml_path())
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+        user_uuid = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
+
+        if not user_uuid.startswith("urn:uuid:"):
+            return None
+
+        return user_uuid[9:]
+    except: 
+        return None
+
 
 def exportAccountEncryptionKeyDER(output_file: str):
     try: 
