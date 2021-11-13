@@ -21,7 +21,7 @@ if sys.version_info[0] < 3:
     exit(1)
 
 from libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
-from libadobeAccount import createDeviceFile, createUser, signIn, exportAccountEncryptionKeyDER
+from libadobeAccount import createDeviceFile, createUser, signIn, exportAccountEncryptionKeyDER, getAccountUUID
 
 # These are the only two variables you'll need to change
 # The mail address and password of your Adobe account 
@@ -50,6 +50,8 @@ def main():
     with tempfile.TemporaryDirectory() as temp_dir:
         update_account_path(temp_dir)
 
+        print ("Preparing keys ...")
+
         createDeviceKeyFile()
         createDeviceFile(VAR_HOBBES_VERSION, True)
         success, resp = createUser()
@@ -57,10 +59,21 @@ def main():
             print("Error, couldn't create user: %s" % resp)
             exit(1)
 
+        print("Logging in ...")
+
         success, resp = signIn(VAR_MAIL, VAR_PASS)
         if (success is False):
             print("Login unsuccessful: " + resp)
             exit(1)
+
+        print("Exporting keys ...")
+
+        try: 
+            account_uuid = getAccountUUID()
+            if (account_uuid is not None):
+                filename = "adobekey_" + VAR_MAIL + "_uuid_" + account_uuid + ".der"
+        except: 
+            pass
 
         success = exportAccountEncryptionKeyDER(filename)
         if (success is False):
