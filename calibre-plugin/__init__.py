@@ -30,7 +30,7 @@ __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
 
 from calibre.utils.config import config_dir         # type: ignore
 
-import os, shutil, traceback, sys, time
+import os, shutil, traceback, sys, time, io
 import zipfile
 from lxml import etree
 
@@ -74,13 +74,11 @@ class DeACSM(FileTypePlugin):
             if not os.path.exists(self.maindir):
                 os.mkdir(self.maindir)
 
-            # Re-Extract modules
+            # Extract new modules
 
             self.moddir = os.path.join(self.maindir,"modules")
-            if os.path.exists(self.moddir):
-                shutil.rmtree(self.moddir, ignore_errors=True)
-            
-            os.mkdir(self.moddir)
+            if not os.path.exists(self.moddir):
+                os.mkdir(self.moddir)
 
             names = ["cryptography.zip", "rsa.zip", "oscrypto.zip", "asn1crypto.zip", "pyasn1.zip"]
                 
@@ -90,15 +88,8 @@ class DeACSM(FileTypePlugin):
             for entry, data in lib_dict.items():
                 file_path = os.path.join(self.moddir, entry)
                 try:
-                    os.remove(file_path)
-                except:
-                    pass
-
-                try:
-                    open(file_path,'wb').write(data)
-                    with zipfile.ZipFile(file_path, 'r') as ref:
+                    with zipfile.ZipFile(io.BytesIO(data), 'r') as ref:
                         ref.extractall(self.moddir)
-                    os.remove(file_path)
 
                 except:
                     print("{0} v{1}: Exception when copying needed library files".format(PLUGIN_NAME, PLUGIN_VERSION))
