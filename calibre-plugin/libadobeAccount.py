@@ -218,6 +218,8 @@ def signIn(username: str, passwd: str):
             err = credentialsXML.get("data")
             if ("E_AUTH_FAILED" in err and "CUS05051" in err): 
                 return False, "Invalid username or password!"
+            elif ("E_AUTH_FAILED" in err and "LOGIN_FAILED" in err): 
+                return False, "E_AUTH_FAILED/LOGIN_FAILED. If you have 2FA enabled, please disable that and try again."
             else: 
                 return False, "Unknown Adobe error:" + credentials
             

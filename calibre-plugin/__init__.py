@@ -18,14 +18,14 @@
 # v0.0.11: Ignore SSL errors during ACS notify, improve element hashing code, 
 #          improve PassHash support, include UUID in key export filename, 
 #          fix bug that would block other FileTypePlugins
-
-
-from calibre.customize import FileTypePlugin        # type: ignore
-__version__ = '0.0.11'
+# v0.0.12: Fix Calibre Plugin index / updater
 
 PLUGIN_NAME = "DeACSM"
-PLUGIN_VERSION_TUPLE = tuple([int(x) for x in __version__.split(".")])
-PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
+PLUGIN_VERSION_TUPLE = (0, 0, 12)
+
+from calibre.customize import FileTypePlugin        # type: ignore
+__version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
+
 
 
 from calibre.utils.config import config_dir         # type: ignore
