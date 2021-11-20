@@ -37,7 +37,7 @@ def createDeviceFile(randomSerial: bool, useVersionIndex: int = 0):
         return False
 
     try: 
-        build_id = VAR_VER_BUILD_IDS.index(useVersionIndex)
+        build_id = VAR_VER_BUILD_IDS[useVersionIndex]
     except:
         return False
 
@@ -314,7 +314,7 @@ def buildActivateReq(useVersionIndex: int = 0):
         return False
 
     try: 
-        build_id = VAR_VER_BUILD_IDS.index(useVersionIndex)
+        build_id = VAR_VER_BUILD_IDS[useVersionIndex]
     except:
         return False
 
@@ -384,7 +384,7 @@ def changeDeviceVersion(useVersionIndex: int = 0):
         return False, "Invalid Version index"
 
     try: 
-        build_id = VAR_VER_BUILD_IDS.index(useVersionIndex)
+        build_id = VAR_VER_BUILD_IDS[useVersionIndex]
     except:
         return False, "Unknown build ID"
 
@@ -429,7 +429,7 @@ def activateDevice(useVersionIndex: int = 0):
         return False, "Invalid Version index"
 
     try: 
-        build_id = VAR_VER_BUILD_IDS.index(useVersionIndex)
+        build_id = VAR_VER_BUILD_IDS[useVersionIndex]
     except:
         return False, "error checking build ID"
 

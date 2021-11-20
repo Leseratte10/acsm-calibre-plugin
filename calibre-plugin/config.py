@@ -279,9 +279,10 @@ class ConfigWidget(QWidget):
 
             self.button_link_account.setEnabled(not activated)
             self.button_import_activation.setEnabled(not activated)
+            self.button_import_WinADE.setEnabled(not activated)
             self.button_export_key.setEnabled(activated)
             self.button_export_activation.setEnabled(activated)
-            self.button_import_WinADE.setEnabled(activated)
+            
 
             self.resize(self.sizeHint())
 
@@ -315,9 +316,9 @@ class ConfigWidget(QWidget):
 
             self.button_link_account.setEnabled(not activated)
             self.button_import_activation.setEnabled(not activated)
+            self.button_import_MacADE.setEnabled(not activated)
             self.button_export_key.setEnabled(activated)
             self.button_export_activation.setEnabled(activated)
-            self.button_import_MacADE.setEnabled(activated)
 
             self.resize(self.sizeHint())
 
@@ -478,7 +479,7 @@ class ConfigWidget(QWidget):
         msg += "Select ADE 2.0.1 if you are unsure\n\n"
         msg += "Which ADE version do you want to emulate?"
 
-        item, ok = QInputDialog.getItem(self, "Change ADE version", msg, VAR_VER_SUPP_CONFIG_NAMES, 1, False)
+        item, ok = QInputDialog.getItem(self, "Change ADE version", msg, allowed_strings, 1, False)
 
         if (not ok):
             return
