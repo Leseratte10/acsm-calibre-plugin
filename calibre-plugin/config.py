@@ -25,6 +25,7 @@ from calibre.gui2 import (question_dialog, error_dialog, info_dialog, choose_sav
 from calibre_plugins.deacsm.__init__ import PLUGIN_NAME, PLUGIN_VERSION      # type: ignore
 import calibre_plugins.deacsm.prefs as prefs                                 # type: ignore
 from calibre.utils.config import config_dir         # type: ignore
+from calibre.constants import isosx, iswindows                 # type: ignore
 
 
 class ConfigWidget(QWidget):
@@ -67,10 +68,29 @@ class ConfigWidget(QWidget):
             self.button_link_account.clicked.connect(self.link_account)
             ua_group_box_layout.addWidget(self.button_link_account)
 
+            if isosx:
+                self.button_import_MacADE = QtGui.QPushButton(self)
+                self.button_import_MacADE.setText(_("Import activation from ADE (MacOS)"))
+                self.button_import_MacADE.clicked.connect(self.import_activation_from_MAC)
+                ua_group_box_layout.addWidget(self.button_import_MacADE)
+
+            if iswindows:
+                self.button_import_WinADE = QtGui.QPushButton(self)
+                self.button_import_WinADE.setText(_("Import activation from ADE (Windows)"))
+                self.button_import_WinADE.clicked.connect(self.import_activation_from_Win)
+                ua_group_box_layout.addWidget(self.button_import_WinADE)
+
             self.button_import_activation = QtGui.QPushButton(self)
-            self.button_import_activation.setText(_("Import existing activation data (ZIP)"))
-            self.button_import_activation.clicked.connect(self.import_activation)
+            self.button_import_activation.setText(_("Import existing activation backup (ZIP)"))
+            self.button_import_activation.clicked.connect(self.import_activation_from_ZIP)
             ua_group_box_layout.addWidget(self.button_import_activation)
+
+        else:
+            self.button_switch_ade_version = QtGui.QPushButton(self)
+            self.button_switch_ade_version.setText(_("Change ADE version"))
+            self.button_switch_ade_version.clicked.connect(self.switch_ade_version)
+            ua_group_box_layout.addWidget(self.button_switch_ade_version)
+
 
         self.button_export_key = QtGui.QPushButton(self)
         self.button_export_key.setText(_("Export account encryption key"))
@@ -101,11 +121,11 @@ class ConfigWidget(QWidget):
 
 
         try: 
-            from calibre_plugins.deacsm.libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
+            from calibre_plugins.deacsm.libadobe import createDeviceKeyFile, update_account_path, are_ade_version_lists_valid
             from calibre_plugins.deacsm.libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
         except: 
             try: 
-                from libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
+                from libadobe import createDeviceKeyFile, update_account_path, are_ade_version_lists_valid
                 from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
             except: 
                 print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -113,10 +133,38 @@ class ConfigWidget(QWidget):
 
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
-
         self.resize(self.sizeHint())
 
+        if not are_ade_version_lists_valid():
+            # Internal error, this should never happen
+            if not activated:
+                self.button_link_account.setEnabled(False)
+                self.button_import_activation.setEnabled(False)
+                if isosx:
+                    self.button_import_MacADE.setEnabled(activated)
+                if iswindows:
+                    self.button_import_WinADE.setEnabled(activated)
+            else:
+                self.button_switch_ade_version.setEnabled(False)
+            self.button_export_key.setEnabled(False)
+            self.button_export_activation.setEnabled(False)
+            self.button_rented_books.setEnabled(False)
+            self.chkNotifyFulfillment.setEnabled(False)
+
+            error_dialog(None, "Internal error", "Version list mismatch. Please open a bug report.", show=True, show_copy_button=False)
+
+        
+
     def get_account_info(self): 
+
+        try: 
+            from calibre_plugins.deacsm.libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
+        except: 
+            try: 
+                from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
+            except: 
+                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
 
         activation_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "activation.xml")
         device_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml")
@@ -130,11 +178,36 @@ class ConfigWidget(QWidget):
 
         try: 
             adeptNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)        
-            usernameXML = container.find(adeptNS("credentials")).find(adeptNS("username"))
             devicenameXML = containerdev.find(adeptNS("deviceName"))
-            ade_type = usernameXML.get('method', "unknown")
-            ade_mail = usernameXML.text
             ade_device_name = devicenameXML.text
+            
+            anon = False
+            try: 
+                usernameXML = container.find(adeptNS("credentials")).find(adeptNS("username"))
+                ade_type = usernameXML.get('method', "unknown")
+                ade_mail = usernameXML.text
+            except: 
+                anon = True
+            
+
+            # Determine the ADE version we're emulating:
+            ver = containerdev.findall("./%s" % (adeptNS("version")))
+            ADE_version = None
+
+            for f in ver:
+                if f.get("name") == "hobbes":
+                    hobbes_version = f.get("value")
+            
+            if hobbes_version is not None:
+                try: 
+                    v_idx = VAR_VER_HOBBES_VERSIONS.index(hobbes_version)
+                    ADE_version = VAR_VER_SUPP_CONFIG_NAMES[v_idx] + " (" + hobbes_version + ")"
+
+                except:
+                    # Version not present, probably the "old" 10.0.4 entry. 
+                    # As 10.X is in the 3.0 range, assume we're on ADE 3.0
+                    ADE_version = "ADE 3.0.1 (" + hobbes_version + ")"
+          
 
             if container.find(adeptNS("activationToken")) == None:
                 return "ADE authorization seems to be corrupted (activationToken missing)", False, None
@@ -142,8 +215,12 @@ class ConfigWidget(QWidget):
             if container.find(adeptNS("credentials")).find(adeptNS("pkcs12")) == None:
                 return "ADE authorization seems to be corrupted (pkcs12 missing)", False, None
 
-            return "Authorized with ADE ID ("+ade_type+") " + ade_mail + "\non device " + ade_device_name, True, ade_mail
+            if not anon: 
+                return "Authorized with ADE ID ("+ade_type+") " + ade_mail + "\non device " + ade_device_name + ", emulating " + ADE_version + ".", True, ade_mail
+            else: 
+                return "Authorized with an anonymous ADE ID\non device " + ade_device_name + ", emulating " + ADE_version + ".", True, None
         except: 
+            traceback.print_exc()
             return "ADE authorization seems to be corrupted", False, None
 
 
@@ -188,7 +265,75 @@ class ConfigWidget(QWidget):
         except: 
             return error_dialog(None, "Export failed", "Export failed.", show=True, show_copy_button=False)
 
-    def import_activation(self):
+    def import_activation_from_Win(self):
+        # This will try to import the activation from Adobe Digital Editions on Windows ...
+
+        from calibre_plugins.deacsm.libadobeImportAccount import importADEactivationWindows
+
+        ret, msg = importADEactivationWindows()
+
+        if (ret):
+            # update display
+            info_string, activated, ade_mail = self.get_account_info()
+            self.lblAccInfo.setText(info_string)
+
+            self.button_link_account.setEnabled(not activated)
+            self.button_import_activation.setEnabled(not activated)
+            self.button_export_key.setEnabled(activated)
+            self.button_export_activation.setEnabled(activated)
+            self.button_import_WinADE.setEnabled(activated)
+
+            self.resize(self.sizeHint())
+
+            if (activated):
+                if ade_mail is None: 
+                    info_dialog(None, "Done", "Successfully imported an anonymous authorization", show=True, show_copy_button=False)
+                else: 
+                    info_dialog(None, "Done", "Successfully imported authorization for " + ade_mail, show=True, show_copy_button=False)
+            else: 
+                error_dialog(None, "Import failed", "Import looks like it worked, but the resulting files seem to be corrupted ...", show=True, show_copy_button=False)
+        else: 
+            error_dialog(None, "Import failed", "That didn't work:\n" + msg, show=True, show_copy_button=False)
+
+    def import_activation_from_MAC(self):
+        # This will try to import the activation from Adobe Digital Editions on MacOS ...
+
+        msg = "Trying to import existing activation from Adobe Digital Editions ...\n"
+        msg += "You might get a prompt asking you to unlock your keychain / enter your keychain password.\n"
+        msg += "This is necessary to extract the ADE encryption keys. "
+
+        info_dialog(None, "Importing from ADE", msg, show=True, show_copy_button=False)
+
+        from calibre_plugins.deacsm.libadobeImportAccount import importADEactivationMac
+
+        ret, msg = importADEactivationMac()
+
+        if (ret):
+            # update display
+            info_string, activated, ade_mail = self.get_account_info()
+            self.lblAccInfo.setText(info_string)
+
+            self.button_link_account.setEnabled(not activated)
+            self.button_import_activation.setEnabled(not activated)
+            self.button_export_key.setEnabled(activated)
+            self.button_export_activation.setEnabled(activated)
+            self.button_import_MacADE.setEnabled(activated)
+
+            self.resize(self.sizeHint())
+
+            if (activated):
+                if ade_mail is None: 
+                    info_dialog(None, "Done", "Successfully imported an anonymous authorization", show=True, show_copy_button=False)
+                else: 
+                    info_dialog(None, "Done", "Successfully imported authorization for " + ade_mail, show=True, show_copy_button=False)
+            else: 
+                error_dialog(None, "Import failed", "Import looks like it worked, but the resulting files seem to be corrupted ...", show=True, show_copy_button=False)
+        else: 
+            error_dialog(None, "Import failed", "That didn't work:\n" + msg, show=True, show_copy_button=False)
+
+
+
+    def import_activation_from_ZIP(self):
 
         filters = [("ZIP", ["zip"])]
         filenames = choose_files(self, "Import ADE activation file (ZIP)", _("Import ADE activation file (ZIP)"), 
@@ -236,21 +381,134 @@ class ConfigWidget(QWidget):
         self.button_import_activation.setEnabled(not activated)
         self.button_export_key.setEnabled(activated)
         self.button_export_activation.setEnabled(activated)
+        try: 
+            self.button_import_MacADE.setEnabled(activated)
+        except:
+            pass
+        
+        try: 
+            self.button_import_WinADE.setEnabled(activated)
+        except:
+            pass
 
         self.resize(self.sizeHint())
 
-        info_dialog(None, "Done", "Successfully imported authorization for " + ade_mail, show=True, show_copy_button=False)
+        if ade_mail is None: 
+            info_dialog(None, "Done", "Successfully imported an anonymous authorization.", show=True, show_copy_button=False)
+        else: 
+            info_dialog(None, "Done", "Successfully imported authorization for " + ade_mail, show=True, show_copy_button=False)
 
 
+    def switch_ade_version(self): 
+        try: 
+            from calibre_plugins.deacsm.libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES
+            from calibre_plugins.deacsm.libadobe import VAR_VER_BUILD_IDS, VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO
+            from calibre_plugins.deacsm.libadobeAccount import changeDeviceVersion
+        except: 
+            try: 
+                from libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES
+                from libadobe import VAR_VER_BUILD_IDS, VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO
+                from libadobeAccount import changeDeviceVersion
+            except: 
+                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
+
+
+        device_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml")
+
+        try: 
+            containerdev = etree.parse(device_xml_path)
+        except (FileNotFoundError, OSError) as e:
+            return error_dialog(None, "Failed", "Error while reading file", show=True, show_copy_button=False)
+
+        try: 
+            adeptNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)        
+
+            # Determine the ADE version we're emulating:
+            ver = containerdev.findall("./%s" % (adeptNS("version")))
+
+            # "Default" entry would be for the old 10.0.4 entry. 
+            # As 10.X is in the 3.0 range, assume we're on ADE 3.0.1 with hobbes version 10.0.85385
+            v_idx = VAR_VER_HOBBES_VERSIONS.index("10.0.85385")
+
+            for f in ver:
+                if f.get("name") == "hobbes":
+                    hobbes_version = f.get("value")
+
+            
+            if hobbes_version is not None:
+                ADE_version = "ADE 3.0.X (RMSDK " + hobbes_version + ")"
+                try: 
+                    v_idx = VAR_VER_HOBBES_VERSIONS.index(hobbes_version)
+                    ADE_version = VAR_VER_SUPP_CONFIG_NAMES[v_idx] + " (RMSDK " + hobbes_version + ")"
+                except:
+                    pass
+            else: 
+                ADE_version = "ADE 3.0.X"
+
+
+        except: 
+            err = traceback.format_exc()
+            return error_dialog(None, "Failed", "Error while determining current ADE version.", show=True, det_msg=err, show_copy_button=False)
+
+
+        # Build a list of allowed strings:
+        allowed_strings = []
+        for allowed_id in VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO:
+            try: 
+                idx = VAR_VER_BUILD_IDS.index(allowed_id)
+            except:
+                pass
+        
+            try: 
+                allowed_strings.append(VAR_VER_SUPP_CONFIG_NAMES[idx])
+            except:
+                pass
+        
+        if len(allowed_strings) == 0:
+            return error_dialog(None, "Failed", "Error determining available versions", show=True, show_copy_button=True)
+
+
+        msg = "You are currently using " + ADE_version + "\n"
+        msg += "You can switch to a different ADE version by using the selection box below.\n"
+        msg += "- ADE 1.7.2 is for debugging only. Do not use this setting, it might get your account banned\n"
+        msg += "- ADE 2.0.1 works with most books, and will always get you the old, removable DRM. Select this if you're unsure\n"
+        msg += "- ADE 3.0.1 works with all books, but may give you unremovable DRM for some retailers\n"
+        msg += "- ADE 4.0.3 and ADE 4.5.11 are available, but aren't really needed for anything\n"
+        msg += "Select ADE 2.0.1 if you are unsure\n\n"
+        msg += "Which ADE version do you want to emulate?"
+
+        item, ok = QInputDialog.getItem(self, "Change ADE version", msg, VAR_VER_SUPP_CONFIG_NAMES, 1, False)
+
+        if (not ok):
+            return
+
+        idx = -1
+        try: 
+            idx = VAR_VER_SUPP_CONFIG_NAMES.index(item)
+            ret, msg = changeDeviceVersion(idx)
+            if (ret):
+                # Update info display:
+                info_string, activated, mail = self.get_account_info()
+                self.lblAccInfo.setText(info_string)
+                return info_dialog(None, "Done", "Successfully switched to " + item, show=True, show_copy_button=False)
+            else: 
+                return error_dialog(None, "Failed", "Error while changing ADE version: " + msg, show=True, show_copy_button=False)    
+
+        except: 
+            return error_dialog(None, "Failed", "Error while changing ADE version.", show=True, det_msg=err, show_copy_button=False)
+            
 
     def link_account(self):
 
         try: 
-            from calibre_plugins.deacsm.libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
+            from calibre_plugins.deacsm.libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
+            from calibre_plugins.deacsm.libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
             from calibre_plugins.deacsm.libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
         except: 
             try: 
-                from libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
+                from libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
+                from libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
                 from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
             except: 
                 print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -267,10 +525,41 @@ class ConfigWidget(QWidget):
 
         if (not ok or passwd is None or len(passwd) == 0):
             return
+
+        # Build a list of allowed strings:
+        allowed_strings = []
+
+        for allowed_id in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
+            idx = VAR_VER_BUILD_IDS.index(allowed_id)
+            allowed_strings.append(VAR_VER_SUPP_CONFIG_NAMES[idx])
+
+        
+        if len(allowed_strings) == 0:
+            return error_dialog(None, "ADE activation failed", "Error determining available versions", show=True, show_copy_button=True)
+
+
+        msg = "Which ADE version do you want to emulate?\n"
+        msg += "- ADE 2.0.1 works with most but not all books, but will always give you the old, removable DRM.\n"
+        msg += "- ADE 3.0.1 works with all books, but may give you unremovable DRM for some retailers.\n"
+        msg += "- ADE 4.0.3 and 4.5.11 are only provided for completeness sake, but aren't usually needed.\n"
+        msg += "Select ADE 2.0 if you are unsure."
+        item, ok = QInputDialog.getItem(self, "Authorizing ADE account", msg, allowed_strings, 
+            VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE.index(VAR_VER_DEFAULT_BUILD_ID), False)
+
+        if (not ok):
+            return
+
+        idx = 0
+        try: 
+            idx = VAR_VER_SUPP_CONFIG_NAMES.index(item)
+            print("User selected ({0}) -> {1}".format(idx, VAR_VER_SUPP_CONFIG_NAMES[idx]))
+        except: 
+            resp = traceback.format_exc()
+            return error_dialog(None, "ADE activation failed", "Error determining version", det_msg=str(resp), show=True, show_copy_button=True)
                 
         createDeviceKeyFile()
-        createDeviceFile(VAR_HOBBES_VERSION, False)
-        success, resp = createUser()
+        createDeviceFile(False, idx)
+        success, resp = createUser(idx)
         if (success is False):
             return error_dialog(None, "ADE activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 
@@ -278,7 +567,7 @@ class ConfigWidget(QWidget):
         if (success is False):
             return error_dialog(None, "ADE activation failed", "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
 
-        success, resp = activateDevice()
+        success, resp = activateDevice(idx)
         if (success is False):
             return error_dialog(None, "ADE activation failed", "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
 
@@ -293,6 +582,14 @@ class ConfigWidget(QWidget):
         self.button_import_activation.setEnabled(False)
         self.button_export_key.setEnabled(True)
         self.button_export_activation.setEnabled(True)
+        try: 
+            self.button_import_MacADE.setEnabled(False)
+        except:
+            pass
+        try: 
+            self.button_import_WinADE.setEnabled(False)
+        except:
+            pass
 
         self.resize(self.sizeHint())
 
@@ -345,7 +642,6 @@ class ConfigWidget(QWidget):
 
 
     def save_settings(self):
-        #self.deacsmprefs.set('path_to_account_data', self.txtboxUA.text())
         self.deacsmprefs.set('notify_fulfillment', self.chkNotifyFulfillment.isChecked())
         self.deacsmprefs.writeprefs()
 

@@ -19,9 +19,13 @@
 #          improve PassHash support, include UUID in key export filename, 
 #          fix bug that would block other FileTypePlugins
 # v0.0.12: Fix Calibre Plugin index / updater
+# v0.0.13: Add support for emulating multiple ADE versions (1.7.2, 2.0.1, 3.0.1, 4.0.3, 4.5.11),
+#          add code to import existing activation from ADE (Windows+Mac only), 
+#          fix race condition when importing multiple ACSMs simultaneously, 
+#          fix authorization failing with certain non-ASCII characters in username.
 
 PLUGIN_NAME = "DeACSM"
-PLUGIN_VERSION_TUPLE = (0, 0, 12)
+PLUGIN_VERSION_TUPLE = (0, 0, 13)
 
 from calibre.customize import FileTypePlugin        # type: ignore
 __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
@@ -106,10 +110,10 @@ class DeACSM(FileTypePlugin):
 
             # Account:
             try: 
-                from calibre_plugins.deacsm.libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
+                from calibre_plugins.deacsm.libadobe import createDeviceKeyFile, update_account_path
                 from calibre_plugins.deacsm.libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
             except: 
-                from libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile, update_account_path
+                from libadobe import createDeviceKeyFile, update_account_path
                 from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
 
             # Fulfill:
@@ -119,6 +123,7 @@ class DeACSM(FileTypePlugin):
             except: 
                 from libadobe import sendHTTPRequest
                 from libadobeFulfill import buildRights, fulfill
+
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
             deacsmprefs = prefs.DeACSM_Prefs()
@@ -238,6 +243,7 @@ class DeACSM(FileTypePlugin):
 
         elif filetype == ".pdf":
             adobe_fulfill_response = etree.fromstring(rights_xml_str)
+
             NSMAP = { "adept" : "http://ns.adobe.com/adept" }
             adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
             resource = adobe_fulfill_response.find("./%s/%s" % (adNS("licenseToken"), adNS("resource"))).text
@@ -274,14 +280,18 @@ class DeACSM(FileTypePlugin):
             print("{0} v{1}: ADE auth is missing or broken ".format(PLUGIN_NAME, PLUGIN_VERSION))
             return path_to_ebook
 
-        print("{0} v{1}: Try to fulfill ...".format(PLUGIN_NAME, PLUGIN_VERSION))
-
         try: 
-            from calibre_plugins.deacsm.libadobe import sendHTTPRequest
-            from calibre_plugins.deacsm.libadobeFulfill import buildRights, fulfill
+            from calibre_plugins.deacsm.libadobe import are_ade_version_lists_valid
+            from calibre_plugins.deacsm.libadobeFulfill import fulfill
         except: 
-            from libadobe import sendHTTPRequest
-            from libadobeFulfill import buildRights, fulfill
+            from libadobe import are_ade_version_lists_valid
+            from libadobeFulfill import fulfill
+
+        if not are_ade_version_lists_valid():
+            print("{0} v{1}: ADE version list mismatch, please open a bug report.".format(PLUGIN_NAME, PLUGIN_VERSION))
+            return path_to_ebook
+
+        print("{0} v{1}: Try to fulfill ...".format(PLUGIN_NAME, PLUGIN_VERSION))
 
         import calibre_plugins.deacsm.prefs as prefs     # type: ignore
         deacsmprefs = prefs.DeACSM_Prefs()

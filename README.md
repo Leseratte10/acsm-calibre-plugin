@@ -7,9 +7,9 @@ It is a full Python reimplementation of libgourou by Grégory Soutadé (http://i
 
 1. Download the plugin and import it into Calibre
 2. Open the plugin settings, it should say "Not authorized for any ADE ID"
-3. Click the "Link to ADE account" button
-4. Enter your AdobeID and password, then wait a couple seconds for the success message.
-5. The settings window should now say "Authorized with ADE ID X on device Y".
+3. If you have ADE installed on your machine (Windows+Mac only, no Linux/Wine), there will be a button "Import activation from ADE". Clicking that will automatically copy your account information from ADE over to the Calibre plugin without using up an activation.
+4. If you don't have ADE installed, or you want to authorize a different account, or the automatic retrieval from ADE failed, click the "Link to ADE account" button to make a new clean authorization. You will then be asked to enter your AdobeID and password and to select an ADE version (ADE 2.0.1 recommended). A couple seconds later a success message should be displayed.
+5. The settings window should now say "Authorized with ADE ID X on device Y, emulating ADE version Z".
 6. Click the "Export account activation data" and "Export account encryption key" buttons to export / backup your keys. Do not skip this step. The first file (ZIP) can be used to re-authorize Calibre after a reset / reinstall without using up one of your Adobe authorizations. The second file (DER) can be imported into DeDRM.
 7. If needed (new AdobeID), import the DER file into the DeDRM plugin.
 8. Download an ACSM file from Adobe's test library and see if you can import it into Calibre: https://www.adobe.com/de/solutions/ebook/digital-editions/sample-ebook-library.html 
@@ -18,7 +18,6 @@ IMPORTANT:
 
 - I would suggest creating a new dummy AdobeID to use for Calibre so just in case Adobe detects this and bans you, you don't lose your main AdobeID. 
 - Combined with that I suggest importing the DER file into the DeDRM plugin to make sure that losing your AdobeID doesn't also mean you'll lose access to all your eBooks. 
-- Support for PDFs might be unreliable. You will need to apply pull request #1689 (including my additional bugfix in the comments of that PR) to the DeDRM plugin in order to remove the DRM from PDF files. If you still encounter an issue with a PDF file created by this tool even with these bugfixes, please report a bug (in this repository, not in the DeDRM one) and attach the corrupted PDF.
 - This software is not approved by Adobe. I am not responsible if Adobe detects that you're using nonstandard software and bans your account. Do not complain to me if Adobe bans your main ADE account - you have been warned. 
 
 ## Returning books

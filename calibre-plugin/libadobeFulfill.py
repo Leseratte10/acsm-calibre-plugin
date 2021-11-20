@@ -4,9 +4,11 @@ import base64
 try: 
     from libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
     from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+    from libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
 except: 
     from calibre_plugins.deacsm.libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
     from calibre_plugins.deacsm.libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+    from calibre_plugins.deacsm.libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
 
  
 def buildFulfillRequest(acsm):
@@ -20,9 +22,19 @@ def buildFulfillRequest(acsm):
 
     user_uuid = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
     device_uuid = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("device"))).text
-    device_type = devicexml.find("./%s" % (adNS("deviceType"))).text
-    device_class = devicexml.find("./%s" % (adNS("deviceClass"))).text
-    fingerprint = devicexml.find("./%s" % (adNS("fingerprint"))).text
+    try: 
+        fingerprint = None
+        device_type = None
+        fingerprint = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("fingerprint"))).text
+        fingerprint = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("deviceType"))).text
+    except:
+        pass
+
+    if (fingerprint is None or fingerprint == "" or device_type is None or device_type == ""):
+        # This should usually never happen with a proper activation, but just in case it does,
+        # I'll leave this code in - it loads the fingerprint from the device data instead.
+        fingerprint = devicexml.find("./%s" % (adNS("fingerprint"))).text
+        device_type = devicexml.find("./%s" % (adNS("deviceType"))).text
 
 
 
@@ -41,31 +53,56 @@ def buildFulfillRequest(acsm):
         elif f.get("name") == "clientLocale":
             clientLocale = f.get("value")
 
+    # Find matching client version depending on the Hobbes version. 
+    # This way we don't need to store and re-load it for each fulfillment. 
 
-    request = ""
-    request += "<?xml version=\"1.0\"?>\n"
-    request += "<adept:fulfill xmlns:adept=\"http://ns.adobe.com/adept\">\n"
-    request += "<adept:user>%s</adept:user>\n" % (user_uuid)
-    request += "<adept:device>%s</adept:device>\n" % (device_uuid)
-    request += "<adept:deviceType>%s</adept:deviceType>\n" % (device_type)
-    request += etree.tostring(acsm, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-    request += "<adept:targetDevice>\n"
+    try: 
+        v_idx = VAR_VER_HOBBES_VERSIONS.index(version)
+        clientVersion = VAR_VER_SUPP_VERSIONS[v_idx]
 
-    request += "<adept:softwareVersion>%s</adept:softwareVersion>\n" % (version)
-    request += "<adept:clientOS>%s</adept:clientOS>\n" % (clientOS)
-    request += "<adept:clientLocale>%s</adept:clientLocale>\n" % (clientLocale)
-    request += "<adept:clientVersion>%s</adept:clientVersion>\n" % (device_class)
-    request += "<adept:deviceType>%s</adept:deviceType>\n" % (device_type)
-    request += "<adept:fingerprint>%s</adept:fingerprint>\n" % (fingerprint)
+    except:
+        # Version not present, probably the "old" 10.0.4 entry. 
+        # As 10.X is in the 3.0 range, assume we're on ADE 3.0
+        clientVersion = "3.0.1.91394"
 
-    request += "<adept:activationToken>\n"
-    request += "<adept:user>%s</adept:user>\n" % (user_uuid)
-    request += "<adept:device>%s</adept:device>\n" % (device_uuid)
-    request += "</adept:activationToken>\n"
-    request += "</adept:targetDevice>\n"
-    request += "</adept:fulfill>\n"
+    if clientVersion == "ADE WIN 9,0,1131,27": 
+        # Ancient ADE 1.7.2 does this request differently
+        request = "<fulfill xmlns=\"http://ns.adobe.com/adept\">\n"
+        request += "<user>%s</user>\n" % (user_uuid)
+        request += "<device>%s</device>\n" % (device_uuid)
+        request += "<deviceType>%s</deviceType>\n" % (device_type)
+        request += etree.tostring(acsm, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+        request += "</fulfill>"
+        return request, False
 
-    return request
+    else: 
+        request = ""
+        request += "<?xml version=\"1.0\"?>"
+        request += "<adept:fulfill xmlns:adept=\"http://ns.adobe.com/adept\">"
+        request += "<adept:user>%s</adept:user>" % (user_uuid)
+        request += "<adept:device>%s</adept:device>" % (device_uuid)
+        request += "<adept:deviceType>%s</adept:deviceType>" % (device_type)
+        request += etree.tostring(acsm, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+        request += "<adept:targetDevice>"
+
+        request += "<adept:softwareVersion>%s</adept:softwareVersion>" % (version)
+        request += "<adept:clientOS>%s</adept:clientOS>" % (clientOS)
+        request += "<adept:clientLocale>%s</adept:clientLocale>" % (clientLocale)
+        request += "<adept:clientVersion>%s</adept:clientVersion>" % (clientVersion)
+        request += "<adept:deviceType>%s</adept:deviceType>" % (device_type)
+        request += "<adept:productName>%s</adept:productName>" % ("ADOBE Digitial Editions")
+        # YES, this typo ("Digitial" instead of "Digital") IS present in ADE!!
+        request += "<adept:fingerprint>%s</adept:fingerprint>" % (fingerprint)
+
+        request += "<adept:activationToken>"
+        request += "<adept:user>%s</adept:user>" % (user_uuid)
+        request += "<adept:device>%s</adept:device>" % (device_uuid)
+        request += "</adept:activationToken>"
+        request += "</adept:targetDevice>"
+        request += "</adept:fulfill>"
+        return request, True
+
+    
 
 
 
@@ -286,7 +323,7 @@ def fulfill(acsm_file, do_notify = False):
         print("Continuing anyways ...")
 
 
-    fulfill_request = buildFulfillRequest(acsmxml)
+    fulfill_request, adept_ns = buildFulfillRequest(acsmxml)
 
     #print(fulfill_request)
 
@@ -298,7 +335,13 @@ def fulfill(acsm_file, do_notify = False):
 
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-    etree.SubElement(fulfill_request_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
+    
+    if adept_ns:
+        # "new" ADE
+        etree.SubElement(fulfill_request_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
+    else: 
+        # ADE 1.7.2
+        etree.SubElement(fulfill_request_xml, etree.QName("signature")).text = signature
 
     # Get operator URL: 
     operatorURL = None
@@ -316,8 +359,12 @@ def fulfill(acsm_file, do_notify = False):
     if (ret is not None):
         return False, "operatorAuth error: %s" % ret
 
-
-    fulfill_req_signed = "<?xml version=\"1.0\"?>\n" + etree.tostring(fulfill_request_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+    if adept_ns:
+        # "new" ADE
+        fulfill_req_signed = "<?xml version=\"1.0\"?>\n" + etree.tostring(fulfill_request_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+    else: 
+        # ADE 1.7.2
+        fulfill_req_signed = etree.tostring(fulfill_request_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
 
     #print("will send:\n %s" % fulfill_req_signed)
     #print("Sending fulfill request to %s" % fulfillURL)
@@ -350,11 +397,14 @@ def fulfill(acsm_file, do_notify = False):
 
     licenseURL = adobe_fulfill_response.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("licenseURL"))).text
 
-    if do_notify:
-        print("Notifying server ...")
-        success, response = performFulfillmentNotification(adobe_fulfill_response)
-    else:
-        print("Not notifying any server since that was disabled.")
+    if adept_ns:
+        if do_notify:
+            print("Notifying server ...")
+            success, response = performFulfillmentNotification(adobe_fulfill_response)
+        else:
+            print("Not notifying any server since that was disabled.")
+    else: 
+        print("Skipping notify, not supported properly with ADE 1.7.2")
 
 
     is_returnable = False
@@ -365,9 +415,10 @@ def fulfill(acsm_file, do_notify = False):
     except: 
         pass
 
-    if (is_returnable and do_notify):
+    if (is_returnable and do_notify and adept_ns):
         # Only support loan returning if we also notified ACS. 
         # Otherwise the server gets confused and we don't want that.
+        # Also, only do that for new-ish ADE and not for ADE 1.7.2
         updateLoanReturnData(adobe_fulfill_response)
 
     success, response = fetchLicenseServiceCertificate(licenseURL, operatorURL)

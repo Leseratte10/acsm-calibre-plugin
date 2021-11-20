@@ -17,19 +17,34 @@ try:
     from libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
     from libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key
     from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+    from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
+    from libadobe import VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO, VAR_VER_SUPP_VERSIONS, VAR_ACS_SERVER_HTTP
+    from libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
 except: 
     from calibre_plugins.deacsm.libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
     from calibre_plugins.deacsm.libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key
     from calibre_plugins.deacsm.libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+    from calibre_plugins.deacsm.libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
+    from calibre_plugins.deacsm.libadobe import VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO, VAR_VER_SUPP_VERSIONS, VAR_ACS_SERVER_HTTP
+    from calibre_plugins.deacsm.libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
 
 
-VAR_AUTH_SERVER = "adeactivate.adobe.com"
-VAR_ACS_SERVER = "http://adeactivate.adobe.com/adept"
-VAR_HOBBES_VERSION = "10.0.4"
 
-
-def createDeviceFile(hobbes: str, randomSerial: bool): 
+def createDeviceFile(randomSerial: bool, useVersionIndex: int = 0): 
     # Original implementation: Device::createDeviceFile(const std::string& hobbes, bool randomSerial)
+
+    if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
+        return False
+
+    try: 
+        build_id = VAR_VER_BUILD_IDS.index(useVersionIndex)
+    except:
+        return False
+
+    if build_id not in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
+        # ADE 1.7.2 or another version that authorization is disabled for
+        return False
+
     serial = makeSerial(randomSerial)
     fingerprint = makeFingerprint(serial)
 
@@ -37,27 +52,37 @@ def createDeviceFile(hobbes: str, randomSerial: bool):
     etree.register_namespace("adept", NSMAP["adept"])
 
     root = etree.Element(etree.QName(NSMAP["adept"], "deviceInfo"))
+    etree.SubElement(root, etree.QName(NSMAP["adept"], "deviceType")).text = "standalone"
+
+    # These three elements are not supposed to be sent to Adobe:
     etree.SubElement(root, etree.QName(NSMAP["adept"], "deviceClass")).text = "Desktop"
     etree.SubElement(root, etree.QName(NSMAP["adept"], "deviceSerial")).text = serial
     etree.SubElement(root, etree.QName(NSMAP["adept"], "deviceName")).text = platform.uname()[1]
-    etree.SubElement(root, etree.QName(NSMAP["adept"], "deviceType")).text = "standalone"
+    # ##
 
     atr_ver = etree.SubElement(root, etree.QName(NSMAP["adept"], "version"))
     atr_ver.set("name", "hobbes")
-    atr_ver.set("value", hobbes)
+    atr_ver.set("value", VAR_VER_HOBBES_VERSIONS[useVersionIndex])
 
     atr_ver2 = etree.SubElement(root, etree.QName(NSMAP["adept"], "version"))
     atr_ver2.set("name", "clientOS")
-    atr_ver2.set("value", platform.system() + " " + platform.release())
-    # "Windows Vista"
+
+    # This used to contain code to actually read the user's operating system. 
+    # That's probably not a good idea because then Adobe sees a bunch of requests from "Linux"
+    #atr_ver2.set("value", platform.system() + " " + platform.release())
+    atr_ver2.set("value", VAR_VER_OS_IDENTIFIERS[useVersionIndex])
 
     atr_ver3 = etree.SubElement(root, etree.QName(NSMAP["adept"], "version"))
     atr_ver3.set("name", "clientLocale")
 
-    language = locale.getdefaultlocale()[0]
+    language = None
+    try: 
+        language = locale.getdefaultlocale()[0].split('_')[0]
+    except:
+        pass
     if language is None or language == "": 
         # Can sometimes happen on MacOS with default English language
-        language = "en_US"
+        language = "en"
 
     atr_ver3.set("value", language)
 
@@ -68,8 +93,13 @@ def createDeviceFile(hobbes: str, randomSerial: bool):
     f.write(etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
     f.close()
 
+    return True
 
-def createUser(): 
+
+def createUser(useVersionIndex: int = 0): 
+
+    if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
+        return False, "Invalid Version index"
 
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
 
@@ -80,8 +110,17 @@ def createUser():
 
     activationServiceInfo = etree.SubElement(root, etree.QName(NSMAP["adept"], "activationServiceInfo"))
 
-    
-    activationURL = VAR_ACS_SERVER + "/ActivationServiceInfo"
+    useHTTPS = False
+    if VAR_VER_BUILD_IDS[useVersionIndex] >= VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT:
+        useHTTPS = True
+
+
+    if useHTTPS:
+        # ADE 4.X uses HTTPS
+        activationURL = VAR_ACS_SERVER_HTTPS + "/ActivationServiceInfo"
+    else:
+        activationURL = VAR_ACS_SERVER_HTTP + "/ActivationServiceInfo"
+
     response = sendHTTPRequest(activationURL)
 
     #print("======================================================")
@@ -103,7 +142,11 @@ def createUser():
 
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authURL")).text = authURL
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "userInfoURL")).text = userInfoURL
-    etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "activationURL")).text = VAR_ACS_SERVER
+    if useHTTPS:
+        # ADE 4.X uses HTTPS
+        etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "activationURL")).text = VAR_ACS_SERVER_HTTPS
+    else: 
+        etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "activationURL")).text = VAR_ACS_SERVER_HTTP
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "certificate")).text = certificate
 
 
@@ -265,7 +308,19 @@ def signIn(username: str, passwd: str):
 
 
 
-def buildActivateReq(): 
+def buildActivateReq(useVersionIndex: int = 0): 
+
+    if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
+        return False
+
+    try: 
+        build_id = VAR_VER_BUILD_IDS.index(useVersionIndex)
+    except:
+        return False
+
+    if build_id not in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
+        # ADE 1.7.2 or another version that authorization is disabled for
+        return False
 
     devicexml = etree.parse(get_device_path())
     activationxml = etree.parse(get_activation_xml_path())
@@ -288,7 +343,7 @@ def buildActivateReq():
             clientLocale = f.get("value")
 
     if (version is None or clientOS is None or clientLocale is None):
-        return False, "err"
+        return False, "Required version information missing"
         
     ret = ""
 
@@ -298,15 +353,18 @@ def buildActivateReq():
     ret += "<adept:deviceType>%s</adept:deviceType>" % (devicexml.find("./%s" % (adNS("deviceType"))).text)
     ret += "<adept:clientOS>%s</adept:clientOS>" % (clientOS)
     ret += "<adept:clientLocale>%s</adept:clientLocale>" % (clientLocale)
-    ret += "<adept:clientVersion>%s</adept:clientVersion>" % (devicexml.find("./%s" % (adNS("deviceClass"))).text)
+    ret += "<adept:clientVersion>%s</adept:clientVersion>" % (VAR_VER_SUPP_VERSIONS[useVersionIndex])
     ret += "<adept:targetDevice>"
 
 
     ret += "<adept:softwareVersion>%s</adept:softwareVersion>" % (version)
     ret += "<adept:clientOS>%s</adept:clientOS>" % (clientOS)
     ret += "<adept:clientLocale>%s</adept:clientLocale>" % (clientLocale)
-    ret += "<adept:clientVersion>%s</adept:clientVersion>" % (devicexml.find("./%s" % (adNS("deviceClass"))).text)
+    ret += "<adept:clientVersion>%s</adept:clientVersion>" % (VAR_VER_SUPP_VERSIONS[useVersionIndex])
     ret += "<adept:deviceType>%s</adept:deviceType>" % (devicexml.find("./%s" % (adNS("deviceType"))).text)
+    ret += "<adept:productName>%s</adept:productName>" % ("ADOBE Digitial Editions")
+    # YES, this typo ("Digitial" instead of "Digital") IS present in ADE!!
+
     ret += "<adept:fingerprint>%s</adept:fingerprint>" % (devicexml.find("./%s" % (adNS("fingerprint"))).text)
 
     ret += "</adept:targetDevice>"
@@ -320,9 +378,67 @@ def buildActivateReq():
     return True, ret
 
 
-def activateDevice(): 
+# Call this function to change from ADE2 to ADE3 and vice versa.
+def changeDeviceVersion(useVersionIndex: int = 0):
+    if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
+        return False, "Invalid Version index"
 
-    result, activate_req = buildActivateReq()
+    try: 
+        build_id = VAR_VER_BUILD_IDS.index(useVersionIndex)
+    except:
+        return False, "Unknown build ID"
+
+    if build_id not in VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO:
+        # A version that we no longer want to allow switching to
+        return False, "BuildID not supported"
+
+    try: 
+        devicexml = etree.parse(get_device_path())
+        new_hobbes = VAR_VER_HOBBES_VERSIONS[useVersionIndex]
+        new_os = VAR_VER_OS_IDENTIFIERS[useVersionIndex]
+    except: 
+        return False, "Error preparing version change"
+
+    
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+    ver = devicexml.findall("./%s" % (adNS("version")))
+
+    for f in ver:
+        if f.get("name") == "hobbes":
+            #print("Changing hobbes from {0} to {1}".format(f.attrib["value"], new_hobbes))
+            f.attrib["value"] = new_hobbes
+        if f.get("name") == "clientOS":
+            #print("Changing OS from {0} to {1}".format(f.attrib["value"], new_os))
+            f.attrib["value"] = new_os
+
+    try: 
+        f = open(get_device_path(), "w")
+        f.write("<?xml version=\"1.0\"?>\n")
+        f.write(etree.tostring(devicexml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
+        f.close()
+    except: 
+        return False, "Failed to update device file."
+
+    return True, ""
+        
+
+
+def activateDevice(useVersionIndex: int = 0): 
+
+    if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
+        return False, "Invalid Version index"
+
+    try: 
+        build_id = VAR_VER_BUILD_IDS.index(useVersionIndex)
+    except:
+        return False, "error checking build ID"
+
+    if build_id not in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
+        # ADE 1.7.2 or another version that authorization is disabled for
+        return False, "Authorization not supported for this build ID"
+
+
+    result, activate_req = buildActivateReq(useVersionIndex)
     if (result is False):
         return False, "Building activation request failed: " + activate_req
 
@@ -344,7 +460,15 @@ def activateDevice():
 
     data = "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
 
-    ret = sendRequestDocu(data, VAR_ACS_SERVER + "/Activate")
+    useHTTPS = False
+    if VAR_VER_BUILD_IDS[useVersionIndex] >= VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT:
+        useHTTPS = True
+
+    if useHTTPS:
+        # ADE 4.X uses HTTPS
+        ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTPS + "/Activate")
+    else:
+        ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTP + "/Activate")
 
     try: 
         credentialsXML = etree.fromstring(ret)
@@ -409,3 +533,14 @@ def exportAccountEncryptionKeyDER(output_file: str):
         return True
     except: 
         return False
+
+def exportAccountEncryptionKeyBytes():
+    try: 
+        activationxml = etree.parse(get_activation_xml_path())
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+        privatekey = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("privateLicenseKey"))).text
+        privatekey = base64.b64decode(privatekey)
+        privatekey = privatekey[26:]
+        return privatekey
+    except: 
+        return None

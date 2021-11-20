@@ -11,7 +11,7 @@ if sys.version_info[0] < 3:
     print("This script requires Python 3.")
     exit(1)
 
-from libadobe import VAR_HOBBES_VERSION, createDeviceKeyFile
+from libadobe import createDeviceKeyFile, VAR_VER_SUPP_CONFIG_NAMES
 from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
 
 # These are the only two variables you'll need to change
@@ -21,12 +21,15 @@ from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
 
 VAR_MAIL = ""
 VAR_PASS = ""
+VAR_VER = None # 1 for ADE2.0, 2 for ADE3.0
 #################################################################
 
 def main():
 
     global VAR_MAIL
     global VAR_PASS
+    global VAR_VER
+
 
     if (VAR_MAIL == ""):
         VAR_MAIL = input("Please enter your AdobeID: ")
@@ -34,14 +37,26 @@ def main():
     if (VAR_PASS == ""):
         VAR_PASS = getpass.getpass("Please enter the password for your AdobeID: ")
 
+    if (VAR_VER is None):
+        VAR_VER = int(input("Please enter '1' for ADE 2.0 or '2' for ADE 3.0: "))
+
+    if VAR_VER >= len(VAR_VER_SUPP_CONFIG_NAMES):
+        print("Invalid version")
+        exit(1)
+
     if (VAR_MAIL == "" or VAR_PASS == ""):
         print("Empty credential, aborting")
         exit(1)
 
 
     createDeviceKeyFile()
-    createDeviceFile(VAR_HOBBES_VERSION, False)
-    success, resp = createUser()
+    
+    success = createDeviceFile(True, VAR_VER)
+    if (success is False):
+        print("Error, couldn't create device file.")
+        exit(1)
+
+    success, resp = createUser(VAR_VER)
     if (success is False):
         print("Error, couldn't create user: %s" % resp)
         exit(1)
@@ -51,7 +66,7 @@ def main():
         print("Login unsuccessful: " + resp)
         exit(1)
 
-    success, resp = activateDevice()
+    success, resp = activateDevice(VAR_VER)
     if (success is False):
         print("Couldn't activate device: " + resp)
         exit(1)

@@ -31,13 +31,61 @@ from oscrypto.asymmetric import dump_certificate, dump_private_key, dump_public_
 
 
 
-VAR_AUTH_SERVER = "adeactivate.adobe.com"
-VAR_ACS_SERVER = "http://adeactivate.adobe.com/adept"
-VAR_HOBBES_VERSION = "10.0.4"
+VAR_ACS_SERVER_HTTP = "http://adeactivate.adobe.com/adept"
+VAR_ACS_SERVER_HTTPS = "https://adeactivate.adobe.com/adept"
 
 FILE_DEVICEKEY = "devicesalt"
 FILE_DEVICEXML = "device.xml"
 FILE_ACTIVATIONXML = "activation.xml"
+
+
+# Lists of different ADE "versions" we know about
+VAR_VER_SUPP_CONFIG_NAMES = [ "ADE 1.7.2", "ADE 2.0.1", "ADE 3.0.1", "ADE 4.0.3", "ADE 4.5.10", "ADE 4.5.11" ]
+VAR_VER_SUPP_VERSIONS = [ "ADE WIN 9,0,1131,27", "2.0.1.78765", "3.0.1.91394", "4.0.3.123281", 
+                            "com.adobe.adobedigitaleditions.exe v4.5.10.186048", 
+                            "com.adobe.adobedigitaleditions.exe v4.5.11.187303" ]
+VAR_VER_HOBBES_VERSIONS = [ "9.0.1131.27", "9.3.58046", "10.0.85385", "12.0.123217", "12.5.4.186049", "12.5.4.187298" ]
+VAR_VER_OS_IDENTIFIERS = [ "Windows Vista", "Windows Vista", "Windows 8", "Windows 8", "Windows 8", "Windows 8" ]
+
+# This is a list of ALL versions we know (and can potentially use if present in a config file).
+# Must have the same length / size as the four lists above.
+VAR_VER_BUILD_IDS = [ 1131, 78765, 91394, 123281, 186048, 187303 ]
+
+# This is a list of versions that can be used for new authorizations:
+VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE = [ 78765, 91394, 123281, 187303 ]
+
+# This is a list of versions to be displayed in the version changer.
+VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO = [ 1131, 78765, 91394, 123281, 187303 ]
+
+# Versions >= this one are using HTTPS
+VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT = 123281
+
+# Default build ID to use - ADE 2.0.1
+VAR_VER_DEFAULT_BUILD_ID = 78765
+
+
+
+def are_ade_version_lists_valid():
+    # These five lists MUST all have the same amount of elements. 
+    # Otherwise that will cause all kinds of issues. 
+
+    fail = False
+    if len(VAR_VER_SUPP_CONFIG_NAMES) != len(VAR_VER_SUPP_VERSIONS):
+        fail = True
+    if len(VAR_VER_SUPP_CONFIG_NAMES) != len(VAR_VER_HOBBES_VERSIONS):
+        fail = True
+    if len(VAR_VER_SUPP_CONFIG_NAMES) != len(VAR_VER_OS_IDENTIFIERS):
+        fail = True
+    if len(VAR_VER_SUPP_CONFIG_NAMES) != len(VAR_VER_BUILD_IDS):
+        fail = True
+    
+    if fail:
+        print("Internal error in DeACSM: Mismatched version list lenghts.")
+        print("This should never happen, please open a bug report.")
+        return False
+    
+    return True
+
 
 devkey_bytes = None
 
@@ -93,11 +141,11 @@ def makeSerial(random: bool):
             # Linux
             uid = os.getuid()
             import pwd
-            username = pwd.getpwuid(uid).pw_name
+            username = pwd.getpwuid(uid).pw_name.encode("utf-8").decode("latin-1")
         except: 
             # Windows
             uid = 1000
-            username = os.getlogin()
+            username = os.getlogin().encode("utf-8").decode("latin-1")
 
         mac_address = get_mac_address()
 
