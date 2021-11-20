@@ -7,6 +7,12 @@
 [ ! -f calibre-plugin/pyasn1.zip ] && ./package_modules.sh
 
 pushd calibre-plugin
+pushd key-wine
+
+# Compile: 
+make
+
+popd
 
 zip -r ../calibre-plugin.zip *
 
