@@ -19,6 +19,88 @@ except:
     from calibre_plugins.deacsm.libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS, VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
 
 
+def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
+    # Similar to importADEactivationWindows - extracts the activation data from a Wine prefix
+    try:
+        from calibre.constants import islinux
+        if not islinux:
+            print("This function is for Linux only!")
+            return False, "Linux only!"
+    except:
+        pass
+
+    # Get encryption key
+    try: 
+        from getEncryptionKeyLinux import GetMasterKey
+    except: 
+        from calibre_plugins.deacsm.getEncryptionKeyLinux import GetMasterKey
+
+    master_key = GetMasterKey(wine_prefix_path)
+
+    if master_key is None:
+        err = "Could not access ADE encryption key. If you have just installed ADE in Wine, "
+        err += "please reboot your machine then try again. Also, make sure neither ADE nor any other "
+        err += "software is running in WINE while you're trying to import the authorization. "
+        err += "If it still doesn't work but ADE in that particular WINEPREFIX is working fine, "
+        err += "please open a bug report."
+
+        return False, err
+
+    # Loop through the registry:
+    try: 
+        registry_file = open(os.path.join(wine_prefix_path, "user.reg"), "r")
+        waiting_for_element = False
+        current_parent = None
+        current_name = None
+        current_value = None
+        current_method = None
+        while True: 
+            line = registry_file.readline()
+            if not line:
+                break
+            line = line.strip()
+
+            if waiting_for_element:
+                if (line.lower().startswith("@=")): 
+                    current_name = line.split('=', 1)[1].strip()[1:-1]
+                    continue
+                
+                if (line.lower().startswith('"value"=')): 
+                    current_value = line.split('=', 1)[1].strip()[1:-1]
+                    continue
+            
+                if (line.lower().startswith('"method"=')): 
+                    current_method = line.split('=', 1)[1].strip()[1:-1]
+                    continue
+
+                if (len(line) == 0):
+                    # Empty line - finalize this element
+                    if current_value is None:
+                        current_parent = current_name
+                        current_name = None
+                        current_method = None
+                        current_value = None
+                        waiting_for_element = False
+                        continue
+                    handle_subkey(current_parent, current_name, current_value, master_key, current_method, None)
+                    current_name = None
+                    current_value = None
+                    current_method = None
+
+
+            else: 
+                if (line.startswith("[Software\\\\Adobe\\\\Adept\\\\Activation\\\\")):
+                    waiting_for_element = True
+
+                                
+        registry_file.close()
+        return handle_subkey(None, None, None, master_key, None, buildIDtoEmulate)
+
+    except: 
+        # There was an error hunting through the registry. 
+        raise
+        pass
+
 def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
     # Tries to import the system activation from Adobe Digital Editions on Windows into the plugin
     # This can be used to "clone" the ADE activation so you don't need to waste an additional activation.
@@ -35,14 +117,14 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
 
     # Get encryption key:
     try: 
-        from libadobeEncryptionWindows import GetMasterKey
+        from getEncryptionKeyWindows import GetMasterKey
     except: 
-        from calibre_plugins.deacsm.libadobeEncryptionWindows import GetMasterKey
+        from calibre_plugins.deacsm.getEncryptionKeyWindows import GetMasterKey
 
     master_key = GetMasterKey()
 
     if master_key is None: 
-        return False, "master_key is None ..."
+        return False, "Could not access ADE encryption key"
 
     PRIVATE_LICENCE_KEY_PATH = r'Software\Adobe\Adept\Activation'
 
@@ -185,7 +267,7 @@ def handle_subkey(parent, subkey, value, encryption_key, method, buildID):
         # The first 16 bytes of the fingerprint are used as IV for the privateLicenseKey
         # Older versions of this decryption code, like in the DeDRM plugin, didn't 
         # do that correctly. For DeDRM that doesn't matter as a wrong IV only causes
-        # the first 16 bytes to be corrupted, and these aren't used for decryption anyways.
+        # the first 16 bytes to be corrupted, and these aren't used for eBook decryption anyways.
         # For this plugin I want the exact correct data, so lets use the fingerprint as IV.
         # See jhowell's post: https://www.mobileread.com/forums/showpost.php?p=4173908
 

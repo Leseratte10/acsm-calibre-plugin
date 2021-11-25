@@ -7,7 +7,7 @@ It is a full Python reimplementation of libgourou by Grégory Soutadé (http://i
 
 1. Download the plugin and import it into Calibre
 2. Open the plugin settings, it should say "Not authorized for any ADE ID"
-3. If you have ADE installed on your machine (Windows+Mac only, no Linux/Wine), there will be a button "Import activation from ADE". Clicking that will automatically copy your account information from ADE over to the Calibre plugin without using up an activation.
+3. If you have ADE installed on your machine, there will be a button "Import activation from ADE". Clicking that will automatically copy your account information from ADE over to the Calibre plugin without using up an activation.
 4. If you don't have ADE installed, or you want to authorize a different account, or the automatic retrieval from ADE failed, click the "Link to ADE account" button to make a new clean authorization. You will then be asked to enter your AdobeID and password and to select an ADE version (ADE 2.0.1 recommended). A couple seconds later a success message should be displayed.
 5. The settings window should now say "Authorized with ADE ID X on device Y, emulating ADE version Z".
 6. Click the "Export account activation data" and "Export account encryption key" buttons to export / backup your keys. Do not skip this step. The first file (ZIP) can be used to re-authorize Calibre after a reset / reinstall without using up one of your Adobe authorizations. The second file (DER) can be imported into DeDRM.
@@ -45,4 +45,5 @@ There's a bunch of features that could still be added, but most of them aren't i
 
 - Support for anonymous Adobe IDs
 - Support for un-authorizing a machine
+- Support to copy an authorization from the plugin to an ADE install
 - ...

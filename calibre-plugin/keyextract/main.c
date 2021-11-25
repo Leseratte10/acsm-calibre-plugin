@@ -4,6 +4,8 @@
 #include <windows.h>
 #include <wincrypt.h>
 #include <dpapi.h>
+#include <fileapi.h>
+#include <direct.h>
 
 #ifdef DEBUG
 #undef DEBUG
@@ -45,7 +47,7 @@ void hexDump (
 
     // Output description if given.
 
-    if (desc != NULL) printf ("%s:\n", desc);
+    if (desc != NULL) fprintf (stderr, "%s:\n", desc);
 
     // Length checks.
 
@@ -66,7 +68,7 @@ void hexDump (
         if ((i % perLine) == 0) {
             // Only print previous-line ASCII buffer for lines beyond first.
 
-            if (i != 0) printf ("  %s\n", buff);
+            if (i != 0) fprintf (stderr, "  %s\n", buff);
 
             // Output the offset of current line.
 
@@ -99,6 +101,15 @@ void hexDump (
 }
 #endif
 
+int get_serial() {
+	DWORD serial = 0;
+	int retval = GetVolumeInformation("c:\\\\", NULL, 0, &serial, NULL, NULL, NULL, 0);
+	if (retval == 0) {
+		fprintf(stderr, "Error with GetVolumeInformation: %d\n", GetLastError());
+		return 0;
+	}
+	return serial;
+}
 
 int main() {
 	char * var_data = "X_DECRYPT_DATA";
@@ -164,7 +175,16 @@ if (ret) {
 	exit(0);
 }
 else {
-	printf("PROGOUTPUT:-4:%d", GetLastError());
+
+	// Apparently Wine has issues with the volume serial code sometimes
+	// so the code on the Linux side detects the wrong serial number.
+	// Thus, if the decryption fails, we read the serial number that Wine
+	// (and ADE) sees back to the Linux side for another attempt.
+
+	int err = GetLastError();
+
+	printf("PROGOUTPUT:-4:%d:%08x", err, get_serial());
+
 	exit(-4);
 }
 

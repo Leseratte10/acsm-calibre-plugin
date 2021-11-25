@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 
 
+from re import VERBOSE
+
+
 def unfuck(user):
     # Wine uses a pretty nonstandard encoding in their registry file. 
     # I haven't found any existing Python implementation for that,
@@ -109,7 +112,19 @@ def GetMasterKey(path_to_wine_prefix):
         print("Hey! This is for Linux!")
         return
 
-    import cpuid
+    verbose_logging = False
+    try: 
+        import calibre_plugins.deacsm.prefs as prefs
+        deacsmprefs = prefs.DeACSM_Prefs()
+        verbose_logging = deacsmprefs["detailed_logging"]
+    except:
+        pass
+
+    try:
+        import cpuid
+    except:
+        import calibre_plugins.deacsm.cpuid as cpuid
+    
     import struct
 
     try: 
@@ -119,21 +134,26 @@ def GetMasterKey(path_to_wine_prefix):
         serial_file.close()
         serial = int(serial, 16)
     except:
-        # If this file is not present, Wine will use a default serial number of "0". 
+        # If this file is not present, Wine will usually use a default serial number of "0". 
+        # There are some edge cases where Wine uses a different serial number even when that
+        # .windows-serial file is not present. 
         serial = 0
 
-    print("Serial: " + str(serial))
+    if (verbose_logging):
+        print("Serial: " + str(serial))
     
     cpu = cpuid.CPUID()
     _, b, c, d = cpu(0)
     vendor = struct.pack("III", b, d, c)
 
-    print("Vendor: " + vendor.decode("utf-8"))
+    if (verbose_logging):
+        print("Vendor: " + vendor.decode("utf-8"))
 
     signature, _, _, _ = cpu(1)
     signature = struct.pack('>I', signature)[1:]
 
-    print("Signature: " + str(signature.hex()))
+    if (verbose_logging):
+        print("Signature: " + str(signature.hex()))
 
     # Search for the username in the registry:
     user = None
@@ -174,7 +194,8 @@ def GetMasterKey(path_to_wine_prefix):
         print("Error while determining username ...")
         exit()
 
-    print("Username: " + str(user))
+    if verbose_logging:
+        print("Username: " + str(user))
 
     # Find the value we want to decrypt from the registry. loop through the Wine registry file to find the "key" attribute
     try: 
@@ -213,12 +234,12 @@ def GetMasterKey(path_to_wine_prefix):
         raise
         pass
 
+    if key_line is None:
+        print("No ADE activation found ...")
+        return None
 
-    print("Encrypted key: " + str(key_line))
-
-    import hexdump
-
-    hexdump.hexdump(key_line)
+    if verbose_logging:
+        print("Encrypted key: " + str(key_line))
 
     # These should all be "bytes" or "bytearray"
     #print(type(vendor))
@@ -227,28 +248,46 @@ def GetMasterKey(path_to_wine_prefix):
 
     entropy = struct.pack('>I12s3s13s', serial, vendor, signature, user)
 
-    print("Entropy: " + str(entropy))
+    if verbose_logging:
+        print("Entropy: " + str(entropy))
 
     # We would now call CryptUnprotectData to decrypt the stuff, 
     # but unfortunately there's no working Linux implementation 
-    # for that. This means we have to call a Windows binary through
+    # for that. 
+    # 
+    # The plan was to handle everything in Python so we don't have 
+    # to interact with Wine - that's why we're doing all the registry
+    # handling ourselves.
+    # Unfortunately, that doesn't work for the actual decryption.
+    # 
+    # This means we have to call a Windows binary through
     # Wine just for this one single decryption call ...
 
     success, data = CryptUnprotectDataExecuteWine(path_to_wine_prefix, key_line, entropy)
     if (success):
         keykey = data
-        print(keykey)
+        if verbose_logging:
+            print("Key key: ")
+            print(keykey)
         return keykey
     
     else: 
         print("Error number: " + str(data))
         if data == 13: # WINError ERROR_INVALID_DATA
-            print("Could not decrypt data with the given key. Did the Wine username change?")
+            print("Could not decrypt data with the given key. Did the entropy change?")
         return None
 
 
 def CryptUnprotectDataExecuteWine(wineprefix, data, entropy):
     import subprocess, os, re
+
+    verbose_logging = False
+    try: 
+        import calibre_plugins.deacsm.prefs as prefs
+        deacsmprefs = prefs.DeACSM_Prefs()
+        verbose_logging = deacsmprefs["detailed_logging"]
+    except:
+        pass
 
     print("Asking WINE to decrypt encrypted key for us ...")
         
@@ -282,10 +321,10 @@ def CryptUnprotectDataExecuteWine(wineprefix, data, entropy):
     env_dict = os.environ
     env_dict["PYTHONPATH"] = ""
     env_dict["WINEPREFIX"] = wineprefix
-    env_dict["WINEDEBUG"] = "-all,+crypt"
+    #env_dict["WINEDEBUG"] = "-all,+crypt"
+    env_dict["WINEDEBUG"] = "+err,+fixme"
 
-    import base64
-
+    # Use environment variables to get the input data to the application.
     env_dict["X_DECRYPT_DATA"] = data.hex()
     env_dict["X_DECRYPT_ENTROPY"] = entropy.hex()
 
@@ -296,7 +335,7 @@ def CryptUnprotectDataExecuteWine(wineprefix, data, entropy):
         moddir = os.path.join(maindir,"modules")
     except: 
         import os
-        moddir = os.path.dirname(os.path.abspath(__file__))
+        moddir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "keyextract")
 
     proc = subprocess.Popen(["wine", "decrypt_" + winearch + ".exe" ], shell=False, cwd=moddir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     prog_output, prog_stderr = proc.communicate()
@@ -305,22 +344,34 @@ def CryptUnprotectDataExecuteWine(wineprefix, data, entropy):
 
     if prog_output.decode("utf-8").startswith("PROGOUTPUT:0:"):
         key_string = prog_output.decode("utf-8").split(':')[2]
-        print("Successfully got encryption key from WINE: " + key_string)
+        if verbose_logging:
+            print("Successfully got encryption key from WINE: " + key_string)
+        else:
+            print("Successfully got encryption key from WINE.")
         master_key = bytes.fromhex(key_string)
         return True, master_key
 
         
     else: 
         print("Huh. That didn't work. ")
-        err = int(prog_output.decode("utf-8").split(':')[1])
-        if err == -4:
-            err = int(prog_output.decode("utf-8").split(':')[2])
+        try: 
+            err = int(prog_output.decode("utf-8").split(':')[1])
+            if err == -4:
+                err = int(prog_output.decode("utf-8").split(':')[2])
+                new_serial = int(prog_output.decode("utf-8").split(':')[3])
+                if verbose_logging:
+                    print("New serial: " + str(new_serial))
+        except:
+            pass
 
-        print("Program reported: " + prog_output.decode("utf-8"))
-        print("Debug log: ")
-        print(prog_stderr.decode("utf-8"))
+        if verbose_logging:
+            print("Program reported: " + prog_output.decode("utf-8"))
+            print("Debug log: ")
+            print(prog_stderr.decode("utf-8"))
+            
         return False, err
 
 
-
-GetMasterKey()
+if __name__ == "__main__":
+    print("Do not execute this directly!")
+    exit()

@@ -20,9 +20,11 @@
 #          fix bug that would block other FileTypePlugins
 # v0.0.12: Fix Calibre Plugin index / updater
 # v0.0.13: Add support for emulating multiple ADE versions (1.7.2, 2.0.1, 3.0.1, 4.0.3, 4.5.11),
-#          add code to import existing activation from ADE (Windows+Mac only), 
+#          add code to import existing activation from ADE (Windows, MacOS or Linux/Wine), 
+#          add code to remove an existing activation from the plugin (Ctrl+Shift+D),
 #          fix race condition when importing multiple ACSMs simultaneously, 
-#          fix authorization failing with certain non-ASCII characters in username.
+#          fix authorization failing with certain non-ASCII characters in username, 
+#          add detailed logging toggle setting.
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = (0, 0, 13)
@@ -33,6 +35,7 @@ __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
 
 
 from calibre.utils.config import config_dir         # type: ignore
+from calibre.constants import isosx, iswindows, islinux                 # type: ignore
 
 import os, shutil, traceback, sys, time, io
 import zipfile
@@ -99,6 +102,16 @@ class DeACSM(FileTypePlugin):
                     print("{0} v{1}: Exception when copying needed library files".format(PLUGIN_NAME, PLUGIN_VERSION))
                     traceback.print_exc()
                     pass
+
+            if islinux: 
+                # Also extract EXE files needed for WINE ADE key extraction
+                names = [ "keyextract/decrypt_win32.exe", "keyextract/decrypt_win64.exe" ]
+                lib_dict = self.load_resources(names)
+                for entry, data in lib_dict.items():
+                    file_path = os.path.join(self.moddir, entry.split('/')[1])
+                    f = open(file_path, "wb")
+                    f.write(data)
+                    f.close()
 
             sys.path.insert(0, os.path.join(self.moddir, "cryptography"))
             sys.path.insert(0, os.path.join(self.moddir, "rsa"))

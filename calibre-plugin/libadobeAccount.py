@@ -437,6 +437,14 @@ def activateDevice(useVersionIndex: int = 0):
         # ADE 1.7.2 or another version that authorization is disabled for
         return False, "Authorization not supported for this build ID"
 
+    verbose_logging = False
+    try: 
+        import calibre_plugins.deacsm.prefs as prefs
+        deacsmprefs = prefs.DeACSM_Prefs()
+        verbose_logging = deacsmprefs["detailed_logging"]
+    except:
+        pass
+
 
     result, activate_req = buildActivateReq(useVersionIndex)
     if (result is False):
@@ -455,8 +463,9 @@ def activateDevice(useVersionIndex: int = 0):
 
     etree.SubElement(req_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
 
-    #print ("final request:")
-    #print(etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
+    if verbose_logging:
+        print ("Activation request:")
+        print(etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
 
     data = "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
 
@@ -487,8 +496,9 @@ def activateDevice(useVersionIndex: int = 0):
     except: 
         return False, "Error parsing Adobe /Activate response"
    
-    #print("Response from server: ")
-    #print(ret)
+    if verbose_logging:
+        print("Response from server: ")
+        print(ret)
 
     # Soooo, lets go and append that to the XML: 
     

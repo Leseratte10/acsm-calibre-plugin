@@ -4,6 +4,7 @@
 # pyright: reportUndefinedVariable=false
 
 import os, base64, traceback
+from PyQt5.QtGui import QKeySequence
 
 from lxml import etree
 
@@ -13,6 +14,7 @@ import time, datetime
 from PyQt5.Qt import (Qt, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit,
                       QGroupBox, QPushButton, QListWidget, QListWidgetItem, QInputDialog, 
                       QLineEdit, QAbstractItemView, QIcon, QDialog, QDialogButtonBox, QUrl)
+from PyQt5.QtWidgets import QShortcut
 
 from PyQt5 import QtCore
 
@@ -25,7 +27,7 @@ from calibre.gui2 import (question_dialog, error_dialog, info_dialog, choose_sav
 from calibre_plugins.deacsm.__init__ import PLUGIN_NAME, PLUGIN_VERSION      # type: ignore
 import calibre_plugins.deacsm.prefs as prefs                                 # type: ignore
 from calibre.utils.config import config_dir         # type: ignore
-from calibre.constants import isosx, iswindows                 # type: ignore
+from calibre.constants import isosx, iswindows, islinux                 # type: ignore
 
 
 class ConfigWidget(QWidget):
@@ -42,6 +44,7 @@ class ConfigWidget(QWidget):
         self.tempdeacsmprefs['path_to_account_data'] = self.deacsmprefs['path_to_account_data']
 
         self.tempdeacsmprefs['notify_fulfillment'] = self.deacsmprefs['notify_fulfillment']
+        self.tempdeacsmprefs['detailed_logging'] = self.deacsmprefs['detailed_logging']
 
         self.tempdeacsmprefs['list_of_rented_books'] = self.deacsmprefs['list_of_rented_books']
 
@@ -79,6 +82,12 @@ class ConfigWidget(QWidget):
                 self.button_import_WinADE.setText(_("Import activation from ADE (Windows)"))
                 self.button_import_WinADE.clicked.connect(self.import_activation_from_Win)
                 ua_group_box_layout.addWidget(self.button_import_WinADE)
+
+            if islinux:
+                self.button_import_LinuxWineADE = QtGui.QPushButton(self)
+                self.button_import_LinuxWineADE.setText(_("Import activation from ADE (Wine)"))
+                self.button_import_LinuxWineADE.clicked.connect(self.import_activation_from_LinuxWine)
+                ua_group_box_layout.addWidget(self.button_import_LinuxWineADE)
 
             self.button_import_activation = QtGui.QPushButton(self)
             self.button_import_activation.setText(_("Import existing activation backup (ZIP)"))
@@ -119,6 +128,17 @@ class ConfigWidget(QWidget):
         self.chkNotifyFulfillment.setChecked(self.tempdeacsmprefs["notify_fulfillment"])
         layout.addWidget(self.chkNotifyFulfillment)
 
+        self.chkDetailedLogging = QtGui.QCheckBox("Enable detailed debug logging")
+        self.chkDetailedLogging.setToolTip("Default: False\n\nIf this is enabled, the plugin debug logs will be more verbose which might be helpful in case of errors.\nHowever, it will also mean that private data like encryption keys or account credentials might end up in the logfiles.")
+        self.chkDetailedLogging.setChecked(self.tempdeacsmprefs["detailed_logging"])
+        self.chkDetailedLogging.toggled.connect(self.toggle_logging)
+        layout.addWidget(self.chkDetailedLogging)
+
+        # Key shortcut Ctrl+Shift+D to remove authorization, just like in ADE.
+        self.deauthShortcut = QShortcut(QKeySequence("Ctrl+Shift+D"), self)
+        self.deauthShortcut.activated.connect(self.delete_ade_auth)
+
+
 
         try: 
             from calibre_plugins.deacsm.libadobe import createDeviceKeyFile, update_account_path, are_ade_version_lists_valid
@@ -135,25 +155,104 @@ class ConfigWidget(QWidget):
         update_account_path(self.deacsmprefs["path_to_account_data"])
         self.resize(self.sizeHint())
 
-        if not are_ade_version_lists_valid():
-            # Internal error, this should never happen
-            if not activated:
-                self.button_link_account.setEnabled(False)
-                self.button_import_activation.setEnabled(False)
-                if isosx:
-                    self.button_import_MacADE.setEnabled(activated)
-                if iswindows:
-                    self.button_import_WinADE.setEnabled(activated)
-            else:
-                self.button_switch_ade_version.setEnabled(False)
-            self.button_export_key.setEnabled(False)
-            self.button_export_activation.setEnabled(False)
-            self.button_rented_books.setEnabled(False)
-            self.chkNotifyFulfillment.setEnabled(False)
+        try: 
+            # Someone reported getting this error after upgrading the plugin.
+            # No idea why that happens - put a try/catch around just to be safe.
+            if not are_ade_version_lists_valid():
+                # Internal error, this should never happen
+                if not activated:
+                    self.button_link_account.setEnabled(False)
+                    self.button_import_activation.setEnabled(False)
+                    if isosx:
+                        self.button_import_MacADE.setEnabled(activated)
+                    if iswindows:
+                        self.button_import_WinADE.setEnabled(activated)
+                    if islinux:
+                        self.button_import_LinuxWineADE.setEnabled(activated)
+                else:
+                    self.button_switch_ade_version.setEnabled(False)
+                self.button_export_key.setEnabled(False)
+                self.button_export_activation.setEnabled(False)
+                self.button_rented_books.setEnabled(False)
+                self.chkNotifyFulfillment.setEnabled(False)
 
-            error_dialog(None, "Internal error", "Version list mismatch. Please open a bug report.", show=True, show_copy_button=False)
+                error_dialog(None, "Internal error", "Version list mismatch. Please open a bug report.", show=True, show_copy_button=False)
+        except UnboundLocalError:
+            print("Verify function are_ade_version_lists_valid() not found - why?")
+
+
+    def toggle_logging(self): 
+        if not self.chkDetailedLogging.isChecked():
+            return
+
+        msg = "You have enabled detailed logging.\n"
+        msg += "This will cause various data to be included in the logfiles, like encryption keys, account keys and other confidential data.\n"
+        msg += "With this setting enabled, only share log files privately with the developer and don't make them publicly available."
+
+        info_dialog(None, "Warning", msg, show=True, show_copy_button=False)
 
         
+        
+    def delete_ade_auth(self): 
+        # This function can only be triggered with the key combination Ctrl+Shift+D.
+        # There is no easy-to-access button to trigger that to prevent people from 
+        # accidentally deleting their authorization. 
+
+        info_string, activated, ade_mail = self.get_account_info()
+
+        if not activated:
+            # If there is no authorization, there's nothing to delete
+            return
+
+        msg = "Are you sure you want to remove the ADE authorization?\n"
+
+        if ade_mail is None:
+            msg += "The current authorization is an anonymous login. It will be permanently lost if you proceed.\n\n"
+        else:
+            msg += "You will use up one of your six activations if you want to authorize your account again in the future.\n\n"
+        
+        msg += "Click 'Yes' to delete the authorization or 'No' to cancel."
+
+        ok = question_dialog(None, "Remove ADE account", msg)
+
+        if (not ok): 
+            return
+
+        msg = "Do you want to create a backup of the current authorization?\n"
+        msg += "This backup can be imported again without using up one of your authorizations.\n\n"
+        msg += "Click 'Yes' to create a backup before deleting, click 'No' to delete without backup."
+
+
+        ok = question_dialog(None, "Remove ADE account", msg)
+
+        if (ok): 
+            # Create a backup:
+            backup_success = self.export_activation()
+            if (not backup_success):
+                error_dialog(None, "Export failed", "The backup was unsuccessful - authorization will not be deleted.", show=True, show_copy_button=False)
+                return
+        
+        # Okay, once we are here, we can be pretty sure the user actually wants to delete their authorization.
+        try: 
+            os.remove(os.path.join(self.deacsmprefs["path_to_account_data"], "activation.xml"))
+            os.remove(os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml"))
+            os.remove(os.path.join(self.deacsmprefs["path_to_account_data"], "devicesalt"))
+        except:
+            error_dialog(None, "Remove ADE account", "There was an error while removing the authorization.", show=True, show_copy_button=False)
+
+        
+        # Show success, then close:
+        info_dialog(None, "Remove ADE account", "ADE authorization successfully removed.", show=True, show_copy_button=False)
+            
+
+        try: 
+            self.button_switch_ade_version.setEnabled(False)
+        except:
+            pass
+        self.button_export_activation.setEnabled(False)
+        self.button_export_key.setEnabled(False)
+        self.lblAccInfo.setText("Authorization deleted.\nClose and re-open this window to add a new authorization.")
+
 
     def get_account_info(self): 
 
@@ -236,6 +335,7 @@ class ConfigWidget(QWidget):
             except: 
                 print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
                 traceback.print_exc()
+                return False
 
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
@@ -253,7 +353,7 @@ class ConfigWidget(QWidget):
                 filters, all_files=False, initial_filename=export_filename)
 
         if (filename is None):
-            return
+            return False
 
         print("{0} v{1}: Exporting activation data to {2}".format(PLUGIN_NAME, PLUGIN_VERSION, filename))
 
@@ -262,8 +362,97 @@ class ConfigWidget(QWidget):
                 zipfile.write(os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml"), "device.xml")
                 zipfile.write(os.path.join(self.deacsmprefs["path_to_account_data"], "activation.xml"), "activation.xml")
                 zipfile.write(os.path.join(self.deacsmprefs["path_to_account_data"], "devicesalt"), "devicesalt")
+            
+            return True
         except: 
-            return error_dialog(None, "Export failed", "Export failed.", show=True, show_copy_button=False)
+            error_dialog(None, "Export failed", "Export failed.", show=True, show_copy_button=False)
+            return False
+
+    def check_ADE_registry(self, wineprefix):
+        # Gets a path to a WINEPREFIX and returns True if this is useable. 
+        # Checks if the Wine registry contains an ADE activation.
+
+        try: 
+            registry_file = open(os.path.join(wineprefix, "user.reg"))
+            while True: 
+                line = registry_file.readline()
+                if not line:
+                    break
+
+                if line.strip().startswith("[Software\\\\Adobe\\\\Adept\\\\Activation\\\\0000"):
+                    return True
+        
+        except:
+            print("Exception while validating WINEPREFIX:")
+            print(traceback.format_exc())
+
+        return False
+
+    def import_activation_from_LinuxWine(self):
+        # This will try to import the activation from Adobe Digital Editions on Linux / Wine ...
+
+        msg = "Trying to import existing activation from Adobe Digital Editions in WINE ...\n"
+        msg += "Note: Importing the activation can take up to 30 seconds, and Calibre will appear to be \"stuck\" during that time.\n\n"
+        msg += "Please enter the full, absolute path to your WINEPREFIX."
+        msg += "If there's already a path in the input box, it is usually (but not always) the correct one."
+
+        default_path = ""
+
+        if (default_path == ""):
+            # Check WINEPREFIX env variable
+            env_wineprefix = os.getenv("WINEPREFIX", None)
+            if (env_wineprefix is not None and os.path.isdir(env_wineprefix)):
+                if self.check_ADE_registry(env_wineprefix):
+                    default_path = env_wineprefix
+
+        if (default_path == ""):
+            # Use default path ".wine" in HOME dir
+            home_wineprefix = os.path.join(os.path.expanduser("~"), ".wine")
+            if (os.path.isdir(home_wineprefix)):
+                if self.check_ADE_registry(home_wineprefix):
+                    default_path = home_wineprefix
+
+        
+        text, ok = QInputDialog.getText(self, "Importing authorization", msg, text=default_path)
+
+        if (not ok):
+            return
+
+        if (not os.path.isdir(text)):
+            return error_dialog(None, "Import failed", "The WINEPREFIX path you entered doesn't seem to exist.", show=True, show_copy_button=False)
+
+        if (not self.check_ADE_registry(text)):
+            return error_dialog(None, "Import failed", "The WINEPREFIX you entered doesn't seem to contain an authorized ADE.", show=True, show_copy_button=False)
+
+
+        from calibre_plugins.deacsm.libadobeImportAccount import importADEactivationLinuxWine
+
+        ret, msg = importADEactivationLinuxWine(text)
+
+        if (ret):
+            # update display
+            info_string, activated, ade_mail = self.get_account_info()
+            self.lblAccInfo.setText(info_string)
+
+            self.button_link_account.setEnabled(not activated)
+            self.button_import_activation.setEnabled(not activated)
+            self.button_import_LinuxWineADE.setEnabled(not activated)
+            self.button_export_key.setEnabled(activated)
+            self.button_export_activation.setEnabled(activated)
+            
+
+            self.resize(self.sizeHint())
+
+            if (activated):
+                if ade_mail is None: 
+                    info_dialog(None, "Done", "Successfully imported an anonymous authorization", show=True, show_copy_button=False)
+                else: 
+                    info_dialog(None, "Done", "Successfully imported authorization for " + ade_mail, show=True, show_copy_button=False)
+            else: 
+                error_dialog(None, "Import failed", "Import looks like it worked, but the resulting files seem to be corrupted ...", show=True, show_copy_button=False)
+        else: 
+            error_dialog(None, "Import failed", "That didn't work:\n" + msg, show=True, show_copy_button=False)
+
 
     def import_activation_from_Win(self):
         # This will try to import the activation from Adobe Digital Editions on Windows ...
@@ -382,16 +571,14 @@ class ConfigWidget(QWidget):
         self.button_import_activation.setEnabled(not activated)
         self.button_export_key.setEnabled(activated)
         self.button_export_activation.setEnabled(activated)
-        try: 
-            self.button_import_MacADE.setEnabled(activated)
-        except:
-            pass
+        if isosx:
+            self.button_import_MacADE.setEnabled(not activated)
+        if iswindows:
+            self.button_import_WinADE.setEnabled(not activated)
+        if islinux:
+            self.button_import_LinuxWineADE.setEnabled(not activated)
         
-        try: 
-            self.button_import_WinADE.setEnabled(activated)
-        except:
-            pass
-
+        
         self.resize(self.sizeHint())
 
         if ade_mail is None: 
@@ -497,7 +684,7 @@ class ConfigWidget(QWidget):
                 return error_dialog(None, "Failed", "Error while changing ADE version: " + msg, show=True, show_copy_button=False)    
 
         except: 
-            return error_dialog(None, "Failed", "Error while changing ADE version.", show=True, det_msg=err, show_copy_button=False)
+            return error_dialog(None, "Failed", "Error while changing ADE version.", show=True, det_msg=traceback.format_exc(), show_copy_button=False)
             
 
     def link_account(self):
@@ -583,14 +770,12 @@ class ConfigWidget(QWidget):
         self.button_import_activation.setEnabled(False)
         self.button_export_key.setEnabled(True)
         self.button_export_activation.setEnabled(True)
-        try: 
+        if isosx:
             self.button_import_MacADE.setEnabled(False)
-        except:
-            pass
-        try: 
+        if iswindows:
             self.button_import_WinADE.setEnabled(False)
-        except:
-            pass
+        if islinux:
+            self.button_import_LinuxWineADE.setEnabled(False)
 
         self.resize(self.sizeHint())
 
@@ -644,6 +829,7 @@ class ConfigWidget(QWidget):
 
     def save_settings(self):
         self.deacsmprefs.set('notify_fulfillment', self.chkNotifyFulfillment.isChecked())
+        self.deacsmprefs.set('detailed_logging', self.chkDetailedLogging.isChecked())
         self.deacsmprefs.writeprefs()
 
     def load_resource(self, name):

@@ -25,14 +25,13 @@ def GetSystemDirectory():
     GetSystemDirectoryW = kernel32.GetSystemDirectoryW
     GetSystemDirectoryW.argtypes = [c_wchar_p, c_uint]
     GetSystemDirectoryW.restype = c_uint
-    def GetSystemDirectory():
-        buffer = create_unicode_buffer(MAX_PATH + 1)
-        GetSystemDirectoryW(buffer, len(buffer))
-        return buffer.value
-    return GetSystemDirectory
-GetSystemDirectory = GetSystemDirectory()
 
-def GetVolumeSerialNumber():
+    buffer = create_unicode_buffer(MAX_PATH + 1)
+    GetSystemDirectoryW(buffer, len(buffer))
+    return buffer.value
+
+
+def GetVolumeSerialNumber(path):
     from ctypes import windll, c_wchar_p, c_uint, POINTER, byref
 
     kernel32 = windll.kernel32
@@ -41,13 +40,11 @@ def GetVolumeSerialNumber():
                                         POINTER(c_uint), POINTER(c_uint),
                                         POINTER(c_uint), c_wchar_p, c_uint]
     GetVolumeInformationW.restype = c_uint
-    def GetVolumeSerialNumber(path):
-        vsn = c_uint(0)
-        GetVolumeInformationW(
-            path, None, 0, byref(vsn), None, None, None, 0)
-        return vsn.value
-    return GetVolumeSerialNumber
-GetVolumeSerialNumber = GetVolumeSerialNumber()
+    vsn = c_uint(0)
+    GetVolumeInformationW(
+        path, None, 0, byref(vsn), None, None, None, 0)
+    return vsn.value
+
 
 
 def GetUserNameWINAPI():
@@ -113,23 +110,40 @@ def GetMasterKey():
     if os.name != 'nt':
         print("This script is for Windows!")
 
+    verbose_logging = False
+    try: 
+        import calibre_plugins.deacsm.prefs as prefs
+        deacsmprefs = prefs.DeACSM_Prefs()
+        verbose_logging = deacsmprefs["detailed_logging"]
+    except:
+        pass
+
     # Get serial number of root drive
     root = GetSystemDirectory().split('\\')[0] + '\\'
     serial = GetVolumeSerialNumber(root)
-    print("Serial: " + str(serial))
+    if verbose_logging:
+        print("Serial: " + str(serial))
 
     
     # Get CPU vendor:
-    import cpuid, struct
+    try:
+        import cpuid
+    except:
+        import calibre_plugins.deacsm.cpuid as cpuid
+
+    import struct
     cpu = cpuid.CPUID()
     _, b, c, d = cpu(0)
     vendor = struct.pack("III", b, d, c)
-    print("Vendor: " + vendor.decode("utf-8"))
+
+    if verbose_logging:
+        print("Vendor: " + vendor.decode("utf-8"))
 
     signature, _, _, _ = cpu(1)
     signature = struct.pack('>I', signature)[1:]
 
-    print("Signature: " + str(signature.hex()))
+    if verbose_logging:
+        print("Signature: " + str(signature.hex()))
 
     # Search for the username in the registry:
     user = None
@@ -143,12 +157,13 @@ def GetMasterKey():
     else:
         user = current_user_name
 
-    if (user_from_registry is not None and user_from_registry != current_user_name):
-        print("Username: {0}/{1} mismatch, using {0}".format(str(user_from_registry), str(current_user_name)))
-    elif (user_from_registry is not None):
-        print("Username: {0} (Registry)".format(str(user_from_registry)))
-    else:
-        print("Username: {0} (WinAPI)".format(str(current_user_name)))
+    if verbose_logging:
+        if (user_from_registry is not None and user_from_registry != current_user_name):
+            print("Username: {0}/{1} mismatch, using {0}".format(str(user_from_registry), str(current_user_name)))
+        elif (user_from_registry is not None):
+            print("Username: {0} (Registry)".format(str(user_from_registry)))
+        else:
+            print("Username: {0} (WinAPI)".format(str(current_user_name)))
 
 
 
@@ -164,9 +179,10 @@ def GetMasterKey():
         device = winreg.QueryValueEx(regkey, 'key')[0]
     except: 
         print("Can't find encrypted device key.")
+        return None
 
-    
-    print("Encrypted key: " + str(device))
+    if verbose_logging:
+        print("Encrypted key: " + str(device))
 
     # These three must all be bytes.
     #print(type(vendor))
@@ -175,16 +191,19 @@ def GetMasterKey():
 
     entropy = struct.pack('>I12s3s13s', serial, vendor, signature, user)
 
-
-    print("Entropy: " + str(entropy))
+    if verbose_logging:
+        print("Entropy: " + str(entropy))
 
     keykey = CryptUnprotectData(device, entropy)
     if (keykey is None):
         print("Couldn't decrypt key!")
         return None
 
-    print("Decrypted key: " + str(keykey))
+    if verbose_logging:
+        print("Decrypted key: " + str(keykey))
         
     return keykey
 
-GetMasterKey()
+
+if __name__ == "__main__":
+    GetMasterKey()

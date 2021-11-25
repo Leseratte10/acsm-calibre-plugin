@@ -26,7 +26,7 @@ def buildFulfillRequest(acsm):
         fingerprint = None
         device_type = None
         fingerprint = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("fingerprint"))).text
-        fingerprint = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("deviceType"))).text
+        device_type = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("deviceType"))).text
     except:
         pass
 
@@ -286,6 +286,15 @@ def buildRights(license_token_node):
 
 
 def fulfill(acsm_file, do_notify = False):
+
+    verbose_logging = False
+    try: 
+        import calibre_plugins.deacsm.prefs as prefs
+        deacsmprefs = prefs.DeACSM_Prefs()
+        verbose_logging = deacsmprefs["detailed_logging"]
+    except:
+        pass
+
     # Get pkcs12: 
 
     pkcs12 = None
@@ -325,7 +334,9 @@ def fulfill(acsm_file, do_notify = False):
 
     fulfill_request, adept_ns = buildFulfillRequest(acsmxml)
 
-    #print(fulfill_request)
+    if verbose_logging:
+        print("Fulfill request:")
+        print(fulfill_request)
 
     fulfill_request_xml = etree.fromstring(fulfill_request)
     # Sign the request:
@@ -388,8 +399,9 @@ def fulfill(acsm_file, do_notify = False):
         else: 
             return False, "Looks like there's been an error during Fulfillment: %s" % replyData
 
-    # Print fulfillmentResult
-    #print(replyData)
+    if verbose_logging:
+        print("fulfillmentResult:")
+        print(replyData)
 
     adobe_fulfill_response = etree.fromstring(replyData)
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
