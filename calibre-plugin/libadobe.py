@@ -140,6 +140,9 @@ def get_mac_address():
 def makeSerial(random: bool):
     # Original implementation: std::string Device::makeSerial(bool random)
 
+    # It doesn't look like this implementation results in the same fingerprint Adobe is using in ADE.
+    # Given that Adobe only ever sees the SHA1 hash of this value, that probably doesn't matter.
+
     sha_out = None
 
     if not random: 
@@ -358,6 +361,9 @@ def addNonce():
     Ntime += 62167219200000
 
     final = bytearray(Ntime.to_bytes(8, 'little'))
+
+    # Something is fishy with this tmp value. It usually is 0 in ADE, but not always. 
+    # I haven't yet figured out what it means ...
     tmp = 0
     final.extend(tmp.to_bytes(4, 'little'))
 
