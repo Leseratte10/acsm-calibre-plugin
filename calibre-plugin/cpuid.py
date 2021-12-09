@@ -137,9 +137,12 @@ class CPUID(object):
         elif self.libc:
             # Seems to throw exception when the program ends and
             # libc is cleaned up before the object?
-            self.libc.free.restype = None
-            self.libc.free.argtypes = [c_void_p]
-            self.libc.free(self.addr)
+            try: 
+                self.libc.free.restype = None
+                self.libc.free.argtypes = [c_void_p]
+                self.libc.free(self.addr)
+            except:
+                pass
 
 if __name__ == "__main__":
     def valid_inputs():
