@@ -90,7 +90,7 @@ class DeACSM(FileTypePlugin):
             names = ["cryptography.zip", "rsa.zip", "oscrypto.zip", "asn1crypto.zip", "pyasn1.zip"]
                 
             lib_dict = self.load_resources(names)
-            print("{0} v{1}: Copying needed library files from plugin zip".format(PLUGIN_NAME, PLUGIN_VERSION))
+            # print("{0} v{1}: Copying needed library files from plugin zip".format(PLUGIN_NAME, PLUGIN_VERSION))
 
             for entry, data in lib_dict.items():
                 file_path = os.path.join(self.moddir, entry)

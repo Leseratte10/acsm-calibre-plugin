@@ -128,13 +128,13 @@ class ConfigWidget(QWidget):
         self.chkNotifyFulfillment.setChecked(self.tempdeacsmprefs["notify_fulfillment"])
         layout.addWidget(self.chkNotifyFulfillment)
 
-        self.chkDetailedLogging = QtGui.QCheckBox("Enable detailed debug logging")
+        self.chkDetailedLogging = QtGui.QCheckBox("Enable verbose debug logging")
         self.chkDetailedLogging.setToolTip("Default: False\n\nIf this is enabled, the plugin debug logs will be more verbose which might be helpful in case of errors.\nHowever, it will also mean that private data like encryption keys or account credentials might end up in the logfiles.")
         self.chkDetailedLogging.setChecked(self.tempdeacsmprefs["detailed_logging"])
         self.chkDetailedLogging.toggled.connect(self.toggle_logging)
         layout.addWidget(self.chkDetailedLogging)
 
-        # Key shortcut Ctrl+Shift+D to remove authorization, just like in ADE.
+        # Key shortcut Ctrl+Shift+D / Cmd+Shift+D to remove authorization, just like in ADE.
         self.deauthShortcut = QShortcut(QKeySequence("Ctrl+Shift+D"), self)
         self.deauthShortcut.activated.connect(self.delete_ade_auth)
 

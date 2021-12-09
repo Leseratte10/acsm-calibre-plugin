@@ -49,7 +49,9 @@ def unfuck(user):
                 if char not in hex_char_list:
                     user_new.append(ord('x'))
                     # This seems to be fallback code. 
-                    # Probably a bug in wine: We should also add "char" - but Wine doesn't either ...
+                    # Subtract 1 so the next char (the one that's not a hex char)
+                    # is handled normally.
+                    i -= 1 
                 else: 
                     ival = "" + chr(char)
                     
@@ -346,6 +348,8 @@ def CryptUnprotectDataExecuteWine(wineprefix, data, entropy):
         key_string = prog_output.decode("utf-8").split(':')[2]
         if verbose_logging:
             print("Successfully got encryption key from WINE: " + key_string)
+            #print("Debug log:")
+            #print(prog_stderr.decode("utf-8"))
         else:
             print("Successfully got encryption key from WINE.")
         master_key = bytes.fromhex(key_string)
