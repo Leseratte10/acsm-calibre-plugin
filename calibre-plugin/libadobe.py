@@ -47,9 +47,14 @@ VAR_VER_SUPP_VERSIONS = [ "ADE WIN 9,0,1131,27", "2.0.1.78765", "3.0.1.91394", "
 VAR_VER_HOBBES_VERSIONS = [ "9.0.1131.27", "9.3.58046", "10.0.85385", "12.0.123217", "12.5.4.186049", "12.5.4.187298" ]
 VAR_VER_OS_IDENTIFIERS = [ "Windows Vista", "Windows Vista", "Windows 8", "Windows 8", "Windows 8", "Windows 8" ]
 
+
+# "Missing" versions:
+# 1.7.1, 2.0, 3.0, 4.0, 4.0.1, 4.0.2, 4.5 to 4.5.9
+
 # This is a list of ALL versions we know (and can potentially use if present in a config file).
 # Must have the same length / size as the four lists above.
 VAR_VER_BUILD_IDS = [ 1131, 78765, 91394, 123281, 186048, 187303 ]
+# Build ID 185749 also exists, that's a different (older) variant of 4.5.10. 
 
 # This is a list of versions that can be used for new authorizations:
 VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE = [ 78765, 91394, 123281, 187303 ]
@@ -58,6 +63,7 @@ VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE = [ 78765, 91394, 123281, 187303 ]
 VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO = [ 1131, 78765, 91394, 123281, 187303 ]
 
 # Versions >= this one are using HTTPS
+# According to changelogs, this is implemented as of ADE 4.0.1 - no idea what build ID that is.
 VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT = 123281
 
 # Default build ID to use - ADE 2.0.1
@@ -181,6 +187,7 @@ def sendHTTPRequest_DL2FILE(URL: str, outputfile: str):
     headers = {
         "Accept": "*/*",
         "User-Agent": "book2png",
+        # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
     }
     req = urllib.request.Request(url=URL, headers=headers)
     handler = urllib.request.urlopen(req)
@@ -216,6 +223,7 @@ def sendHTTPRequest_getSimple(URL: str):
     headers = {
         "Accept": "*/*",
         "User-Agent": "book2png",
+        # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
     }
 
     # Ignore SSL:
@@ -247,6 +255,7 @@ def sendPOSTHTTPRequest(URL: str, document: bytes, type: str, returnRC = False):
     headers = {
         "Accept": "*/*",
         "User-Agent": "book2png",
+        # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
         "Content-Type": type
     }
 
@@ -434,11 +443,19 @@ def hash_node_ctx(node, hash_ctx):
 
     qtag = etree.QName(node.tag)
 
-    if (qtag.localname == "hmac"):
-        return
+    if (qtag.localname == "hmac" or qtag.localname == "signature"):
+        if (qtag.namespace == "http://ns.adobe.com/adept"):
+            # Adobe HMAC and signature are not hashed
+            return
+        else: 
+            print("Warning: Found hmac or signature node in unexpected namespace " + qtag.namespace)
 
     hash_do_append_tag(hash_ctx, ASN_NS_TAG)
-    hash_do_append_string(hash_ctx, qtag.namespace)
+
+    if qtag.namespace is None: 
+        hash_do_append_string(hash_ctx, "")
+    else:
+        hash_do_append_string(hash_ctx, qtag.namespace)
     hash_do_append_string(hash_ctx, qtag.localname)
 
 
@@ -454,10 +471,17 @@ def hash_node_ctx(node, hash_ctx):
     for attribute in attrKeys: 
         # Hash all the attributes
         hash_do_append_tag(hash_ctx, ASN_ATTRIBUTE)
-        hash_do_append_string(hash_ctx, "")     # TODO: "Element namespace"? Whatever that means...
-        hash_do_append_string(hash_ctx, attribute)
-        hash_do_append_string(hash_ctx, node.get(attribute))
 
+        # Check for element namespace and hash that, if present:
+        q_attribute = etree.QName(attribute)
+
+        # Hash element namespace (usually "")
+        # If namespace is none, use "". Else, use namespace.
+        hash_do_append_string(hash_ctx, "" if q_attribute.namespace is None else q_attribute.namespace)
+
+        # Hash (local) name and value
+        hash_do_append_string(hash_ctx, q_attribute.localname)
+        hash_do_append_string(hash_ctx, node.get(attribute))
 
     hash_do_append_tag(hash_ctx, ASN_CHILD)
 
@@ -480,6 +504,9 @@ def hash_node_ctx(node, hash_ctx):
             while True: 
                 remaining = textlen - done
                 if remaining > 0x7fff:
+                    print("Warning: Hashing text node larger than 32k.")
+                    print("This usually doesn't happen, and I'm not sure if this is implemented correctly.")
+                    print("If you run into issues, please open a bug report.")
                     remaining = 0x7fff
 
                 hash_do_append_tag(hash_ctx, ASN_TEXT)
