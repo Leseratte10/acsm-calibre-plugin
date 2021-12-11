@@ -46,4 +46,5 @@ There's a bunch of features that could still be added, but most of them aren't i
 - Support for anonymous Adobe IDs
 - Support for un-authorizing a machine
 - Support to copy an authorization from the plugin to an ADE install
+- Support for Adobe's "auth" download method instead of the "simple" method.
 - ...

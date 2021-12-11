@@ -45,6 +45,7 @@ class ConfigWidget(QWidget):
 
         self.tempdeacsmprefs['notify_fulfillment'] = self.deacsmprefs['notify_fulfillment']
         self.tempdeacsmprefs['detailed_logging'] = self.deacsmprefs['detailed_logging']
+        self.tempdeacsmprefs['delete_acsm_after_fulfill'] = self.deacsmprefs['delete_acsm_after_fulfill']
 
         self.tempdeacsmprefs['list_of_rented_books'] = self.deacsmprefs['list_of_rented_books']
 
@@ -134,6 +135,12 @@ class ConfigWidget(QWidget):
         self.chkDetailedLogging.toggled.connect(self.toggle_logging)
         layout.addWidget(self.chkDetailedLogging)
 
+        self.chkDeleteAfterFulfill = QtGui.QCheckBox("Delete ACSM file after successful import")
+        self.chkDeleteAfterFulfill.setToolTip("Default: False\n\nIf this is enabled, imported ACSM files will be automatically deleted after they've been converted into an EPUB or PDF. \nNote: This is experimental. It is possible that the ACSM will also be deleted if there's errors during import. \nIf you have an important ACSM file that you can't re-download if needed, do not enable this option.")
+        self.chkDeleteAfterFulfill.setChecked(self.tempdeacsmprefs["delete_acsm_after_fulfill"])
+        self.chkDeleteAfterFulfill.toggled.connect(self.toggle_acsm_delete)
+        layout.addWidget(self.chkDeleteAfterFulfill)
+
         # Key shortcut Ctrl+Shift+D / Cmd+Shift+D to remove authorization, just like in ADE.
         self.deauthShortcut = QShortcut(QKeySequence("Ctrl+Shift+D"), self)
         self.deauthShortcut.activated.connect(self.delete_ade_auth)
@@ -185,9 +192,20 @@ class ConfigWidget(QWidget):
         if not self.chkDetailedLogging.isChecked():
             return
 
-        msg = "You have enabled detailed logging.\n"
+        msg = "You have enabled verbose logging.\n"
         msg += "This will cause various data to be included in the logfiles, like encryption keys, account keys and other confidential data.\n"
         msg += "With this setting enabled, only share log files privately with the developer and don't make them publicly available."
+
+        info_dialog(None, "Warning", msg, show=True, show_copy_button=False)
+
+    def toggle_acsm_delete(self): 
+        if not self.chkDeleteAfterFulfill.isChecked():
+            return
+
+        msg = "You have enabled ACSM auto-deletion.\n"
+        msg += "This means that your source ACSM file will be deleted after import - not just from Calibre, but from the source filesystem, too. "
+        msg += "As this feature is experimental, it's possible that ACSMs will also sometimes get deleted even when the import failed.\n\n"
+        msg += "If you're importing an ACSM that you cannot re-download in case of issues, do not enable this option!"
 
         info_dialog(None, "Warning", msg, show=True, show_copy_button=False)
 
@@ -830,6 +848,7 @@ class ConfigWidget(QWidget):
     def save_settings(self):
         self.deacsmprefs.set('notify_fulfillment', self.chkNotifyFulfillment.isChecked())
         self.deacsmprefs.set('detailed_logging', self.chkDetailedLogging.isChecked())
+        self.deacsmprefs.set('delete_acsm_after_fulfill', self.chkDeleteAfterFulfill.isChecked())
         self.deacsmprefs.writeprefs()
 
     def load_resource(self, name):

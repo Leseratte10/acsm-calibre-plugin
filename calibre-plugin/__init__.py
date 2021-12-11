@@ -19,15 +19,19 @@
 #          improve PassHash support, include UUID in key export filename, 
 #          fix bug that would block other FileTypePlugins
 # v0.0.12: Fix Calibre Plugin index / updater
-# v0.0.13: Add support for emulating multiple ADE versions (1.7.2, 2.0.1, 3.0.1, 4.0.3, 4.5.11),
+# v0.0.13: v0.0.13 was a development / beta version with lots of different published test 
+#          versions. To make support easier there's no "final" v0.0.13 version. Instead, 
+#          all the changes from the various v0.0.13 beta versions are released with v0.0.14. 
+# v0.0.14: Add support for emulating multiple ADE versions (1.7.2, 2.0.1, 3.0.1, 4.0.3, 4.5.11),
 #          add code to import existing activation from ADE (Windows, MacOS or Linux/Wine), 
 #          add code to remove an existing activation from the plugin (Ctrl+Shift+D),
 #          fix race condition when importing multiple ACSMs simultaneously, 
 #          fix authorization failing with certain non-ASCII characters in username, 
-#          add detailed logging toggle setting.
+#          add detailed logging toggle setting, add auto-delete ACSM setting, 
+#          add useful error message for ACSMs with nonstandard download type.
 
 PLUGIN_NAME = "DeACSM"
-PLUGIN_VERSION_TUPLE = (0, 0, 13)
+PLUGIN_VERSION_TUPLE = (0, 0, 14)
 
 from calibre.customize import FileTypePlugin        # type: ignore
 __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
@@ -202,7 +206,14 @@ class DeACSM(FileTypePlugin):
         NSMAP = { "adept" : "http://ns.adobe.com/adept" }
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-        download_url = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("src"))).text
+        
+        try: 
+            download_url = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("src"))).text
+        except: 
+            print("{0} v{1}: FulfillmentResult does not contain the <src> tag. This may be an ACSM with download type 'auth'?".format(PLUGIN_NAME, PLUGIN_VERSION))
+            print("{0} v{1}: Please open a bug report and attach the ACSM file if you see this message.".format(PLUGIN_NAME, PLUGIN_VERSION))
+            return None
+
         license_token_node = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken")))
 
         rights_xml_str = buildRights(license_token_node)
@@ -325,6 +336,12 @@ class DeACSM(FileTypePlugin):
                 # Loop through all plugins (the list is already sorted by priority), 
                 # then execute all of them that can handle EPUB / PDF.
 
+                # if the source file is supposed to be deleted after successful fulfillment,
+                # this is set to True
+                # If there's any errors whatsoever during export / plugin execution,
+                # this will be set back to False to prevent deletion.
+                delete_src_file = deacsmprefs["delete_acsm_after_fulfill"]
+
                 try: 
                     from calibre.customize.ui import _initialized_plugins, is_disabled
                     from calibre.customize import FileTypePlugin
@@ -376,6 +393,7 @@ class DeACSM(FileTypePlugin):
                             plugin_ret = None
                             plugin_ret = plugin.run(rpl)
                         except: 
+                            delete_src_file = False
                             print("{0} v{1}: Running file type plugin failed with traceback:".format(PLUGIN_NAME, PLUGIN_VERSION))
                             traceback.print_exc(file=oe)
 
@@ -393,10 +411,21 @@ class DeACSM(FileTypePlugin):
                             
 
                 except: 
+                    delete_src_file = False
                     print("{0} v{1}: Error while executing other plugins".format(PLUGIN_NAME, PLUGIN_VERSION))
                     traceback.print_exc()
                     pass
 
+                # If enabled, and if we didn't encounter any errors, delete the source ACSM file.
+                if delete_src_file:
+                    try: 
+                        if os.path.exists(path_to_ebook):
+                            print("{0} v{1}: Deleting existing ACSM file {2} ...".format(PLUGIN_NAME, PLUGIN_VERSION, path_to_ebook))
+                            os.remove(path_to_ebook)
+                    except: 
+                        print("{0} v{1}: Failed to delete source ACSM after fulfillment.".format(PLUGIN_NAME, PLUGIN_VERSION))
+                
+                
                 # Return path - either the original one or the one modified by the other plugins.
                 return rpl
 

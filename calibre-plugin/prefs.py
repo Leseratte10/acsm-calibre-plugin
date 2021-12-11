@@ -20,6 +20,7 @@ class DeACSM_Prefs():
 
         self.deacsmprefs.defaults['notify_fulfillment'] = True
         self.deacsmprefs.defaults['detailed_logging'] = False
+        self.deacsmprefs.defaults['delete_acsm_after_fulfill'] = False
 
         self.deacsmprefs.defaults['list_of_rented_books'] = []
 

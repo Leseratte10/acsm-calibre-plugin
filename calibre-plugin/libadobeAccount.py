@@ -450,9 +450,6 @@ def activateDevice(useVersionIndex: int = 0):
     if (result is False):
         return False, "Building activation request failed: " + activate_req
 
-    #print("======================================================")
-    #print("activate")
-    #print(activate_req)
 
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     etree.register_namespace("adept", NSMAP["adept"])

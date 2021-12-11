@@ -632,12 +632,9 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
                 device = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("device"))).text
             except:
                 # B&N Adobe PassHash fulfillment without device ID. 
-                # Not sure what to do in this case. 
                 # PassHash books aren't linked to a particular device, so there's no ID to send to Adobe.
-                # If I leave this out, I get E_ADEPT_MISSING_ELEMENT
-                # If I use the one from the ADE activation, I get E_LIC_USER_UNKNOWN
-                # Adobe documentation seems to imply that PassHash books don't support notifications, 
-                # so lets just skip if that's the case. 
+                # If I understand Adobe's documentation correctly, PassHash books do not support notifications
+                # and are not supposed to contain notify tags, so lets just skip if that's the case. 
                 print("Skipping notify due to passHash")
                 continue
 
