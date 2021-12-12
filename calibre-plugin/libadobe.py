@@ -350,6 +350,11 @@ def decrypt_with_device_key(data):
 
 def addNonce(): 
 
+    # TODO: Update nonce calculation
+    # Currently, the plugin always uses the current time, and the counter (tmp) is always 0. 
+    # What Adobe does instead is save the current time on program start, then increase tmp
+    # every time a Nonce is needed. 
+
     dt = datetime.utcnow()
     usec = dt.microsecond
     sec = (dt - datetime(1970,1,1)).total_seconds()

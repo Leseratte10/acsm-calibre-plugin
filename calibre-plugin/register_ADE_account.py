@@ -56,12 +56,12 @@ def main():
         print("Error, couldn't create device file.")
         exit(1)
 
-    success, resp = createUser(VAR_VER)
+    success, resp = createUser(VAR_VER, None)
     if (success is False):
         print("Error, couldn't create user: %s" % resp)
         exit(1)
 
-    success, resp = signIn(VAR_MAIL, VAR_PASS)
+    success, resp = signIn("AdobeID", VAR_MAIL, VAR_PASS)
     if (success is False):
         print("Login unsuccessful: " + resp)
         exit(1)

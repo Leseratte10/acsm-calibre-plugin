@@ -22,7 +22,8 @@ from PyQt5 import Qt as QtGui
 from zipfile import ZipFile
 
 # calibre modules and constants.
-from calibre.gui2 import (question_dialog, error_dialog, info_dialog, choose_save_file, choose_files)                     # type: ignore
+from calibre.gui2 import (question_dialog, error_dialog, info_dialog,        # type: ignore
+                        warning_dialog, choose_save_file, choose_files)
 # modules from this plugin's zipfile.
 from calibre_plugins.deacsm.__init__ import PLUGIN_NAME, PLUGIN_VERSION      # type: ignore
 import calibre_plugins.deacsm.prefs as prefs                                 # type: ignore
@@ -71,6 +72,11 @@ class ConfigWidget(QWidget):
             self.button_link_account.setText(_("Link to ADE account"))
             self.button_link_account.clicked.connect(self.link_account)
             ua_group_box_layout.addWidget(self.button_link_account)
+
+            self.button_anon_auth = QtGui.QPushButton(self)
+            self.button_anon_auth.setText(_("Create anonymous authorization"))
+            self.button_anon_auth.clicked.connect(self.create_anon_auth)
+            ua_group_box_layout.addWidget(self.button_anon_auth)
 
             if isosx:
                 self.button_import_MacADE = QtGui.QPushButton(self)
@@ -169,6 +175,7 @@ class ConfigWidget(QWidget):
                 # Internal error, this should never happen
                 if not activated:
                     self.button_link_account.setEnabled(False)
+                    self.button_anon_auth.setEnabled(False)
                     self.button_import_activation.setEnabled(False)
                     if isosx:
                         self.button_import_MacADE.setEnabled(activated)
@@ -196,7 +203,7 @@ class ConfigWidget(QWidget):
         msg += "This will cause various data to be included in the logfiles, like encryption keys, account keys and other confidential data.\n"
         msg += "With this setting enabled, only share log files privately with the developer and don't make them publicly available."
 
-        info_dialog(None, "Warning", msg, show=True, show_copy_button=False)
+        warning_dialog(None, "Warning", msg, show=True, show_copy_button=False)
 
     def toggle_acsm_delete(self): 
         if not self.chkDeleteAfterFulfill.isChecked():
@@ -207,7 +214,7 @@ class ConfigWidget(QWidget):
         msg += "As this feature is experimental, it's possible that ACSMs will also sometimes get deleted even when the import failed.\n\n"
         msg += "If you're importing an ACSM that you cannot re-download in case of issues, do not enable this option!"
 
-        info_dialog(None, "Warning", msg, show=True, show_copy_button=False)
+        warning_dialog(None, "Warning", msg, show=True, show_copy_button=False)
 
         
         
@@ -453,6 +460,7 @@ class ConfigWidget(QWidget):
             self.lblAccInfo.setText(info_string)
 
             self.button_link_account.setEnabled(not activated)
+            self.button_anon_auth.setEnabled(not activated)
             self.button_import_activation.setEnabled(not activated)
             self.button_import_LinuxWineADE.setEnabled(not activated)
             self.button_export_key.setEnabled(activated)
@@ -485,6 +493,7 @@ class ConfigWidget(QWidget):
             self.lblAccInfo.setText(info_string)
 
             self.button_link_account.setEnabled(not activated)
+            self.button_anon_auth.setEnabled(not activated)
             self.button_import_activation.setEnabled(not activated)
             self.button_import_WinADE.setEnabled(not activated)
             self.button_export_key.setEnabled(activated)
@@ -522,6 +531,7 @@ class ConfigWidget(QWidget):
             self.lblAccInfo.setText(info_string)
 
             self.button_link_account.setEnabled(not activated)
+            self.button_anon_auth.setEnabled(not activated)
             self.button_import_activation.setEnabled(not activated)
             self.button_import_MacADE.setEnabled(not activated)
             self.button_export_key.setEnabled(activated)
@@ -586,6 +596,7 @@ class ConfigWidget(QWidget):
         self.lblAccInfo.setText(info_string)
 
         self.button_link_account.setEnabled(not activated)
+        self.button_anon_auth.setEnabled(not activated)
         self.button_import_activation.setEnabled(not activated)
         self.button_export_key.setEnabled(activated)
         self.button_export_activation.setEnabled(activated)
@@ -705,8 +716,7 @@ class ConfigWidget(QWidget):
             return error_dialog(None, "Failed", "Error while changing ADE version.", show=True, det_msg=traceback.format_exc(), show_copy_button=False)
             
 
-    def link_account(self):
-
+    def create_anon_auth(self): 
         try: 
             from calibre_plugins.deacsm.libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
             from calibre_plugins.deacsm.libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
@@ -721,6 +731,116 @@ class ConfigWidget(QWidget):
                 traceback.print_exc()
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
+
+        msg = "You are about to create an anonymous authorization.\n"
+        msg += "If you lose access to this authorization, all books linked to it will be lost / inaccessible. "
+        msg += "Make sure to create backups of the authorization data! "
+        msg += "Also, if you do end up emulating ADE3 or newer, and you receive an eBook with the new DRM, "
+        msg += "you might not be able to read / access that book at all."
+        
+        warning_dialog(None, "Warning", msg, show=True, show_copy_button=False)
+        
+        # Build a list of allowed strings:
+        allowed_strings = []
+
+        for allowed_id in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
+            idx = VAR_VER_BUILD_IDS.index(allowed_id)
+            allowed_strings.append(VAR_VER_SUPP_CONFIG_NAMES[idx])
+
+        
+        if len(allowed_strings) == 0:
+            return error_dialog(None, "ADE activation failed", "Error determining available versions", show=True, show_copy_button=True)
+
+
+        msg = "Which ADE version do you want to emulate?\n"
+        msg += "- ADE 2.0.1 works with most but not all books, but will always give you the old, removable DRM.\n"
+        msg += "- ADE 3.0.1 works with all books, but may give you unremovable DRM for some retailers.\n"
+        msg += "- ADE 4.0.3 and 4.5.11 are only provided for completeness sake, but aren't usually needed.\n"
+        msg += "Select ADE 2.0 if you are unsure."
+        item, ok = QInputDialog.getItem(self, "Authorizing ADE account", msg, allowed_strings, 
+            VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE.index(VAR_VER_DEFAULT_BUILD_ID), False)
+
+        if (not ok):
+            return
+
+        idx = 0
+        try: 
+            idx = VAR_VER_SUPP_CONFIG_NAMES.index(item)
+            print("User selected ({0}) -> {1}".format(idx, VAR_VER_SUPP_CONFIG_NAMES[idx]))
+        except: 
+            resp = traceback.format_exc()
+            return error_dialog(None, "ADE activation failed", "Error determining version", det_msg=str(resp), show=True, show_copy_button=True)
+                
+        createDeviceKeyFile()
+        createDeviceFile(False, idx)
+        success, resp = createUser(idx, None)
+        if (success is False):
+            return error_dialog(None, "ADE activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
+
+        success, resp = signIn("anonymous", "", "")
+        if (success is False):
+            return error_dialog(None, "ADE activation failed", "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
+
+        success, resp = activateDevice(idx)
+        if (success is False):
+            return error_dialog(None, "ADE activation failed", "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
+
+        print("Authorized to anonymous account")
+
+
+        # update display
+        info_string, activated, mail = self.get_account_info()
+        self.lblAccInfo.setText(info_string)
+
+        self.button_link_account.setEnabled(not activated)
+        self.button_anon_auth.setEnabled(not activated)
+        self.button_import_activation.setEnabled(not activated)
+        self.button_export_key.setEnabled(activated)
+        self.button_export_activation.setEnabled(activated)
+        if isosx:
+            self.button_import_MacADE.setEnabled(not activated)
+        if iswindows:
+            self.button_import_WinADE.setEnabled(not activated)
+        if islinux:
+            self.button_import_LinuxWineADE.setEnabled(not activated)
+
+        self.resize(self.sizeHint())
+
+        info_dialog(None, "Done", "Authorized to anonymous account.", show=True, show_copy_button=False)
+
+    def link_account(self):
+
+        try: 
+            from calibre_plugins.deacsm.libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
+            from calibre_plugins.deacsm.libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
+            from calibre_plugins.deacsm.libadobeAccount import createDeviceFile, getAuthMethodsAndCert, createUser, signIn, activateDevice
+        except: 
+            try: 
+                from libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
+                from libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
+                from libadobeAccount import createDeviceFile, getAuthMethodsAndCert, createUser, signIn, activateDevice
+            except: 
+                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
+
+        update_account_path(self.deacsmprefs["path_to_account_data"])
+
+
+        # Get account types
+        types, authCert = getAuthMethodsAndCert()
+        
+        msg = "Please select your AdobeID provider. Usually, \"Adobe ID\" is the correct choice."
+
+        acc_item, ok = QInputDialog.getItem(self, "Authorizing ADE account", msg, types[1], 0, False)
+        acc_type = "AdobeID"
+        try: 
+            acc_idx = types[1].index(acc_item)
+            acc_type = types[0][acc_idx]
+            print("User has selected account type " + acc_type)
+        except ValueError:
+            return error_dialog(None, "ADE activation failed", "Invalid provider", show=True, show_copy_button=True)
+
+
         
         mail, ok = QInputDialog.getText(self, "Authorizing ADE account", "Please enter mail address")
 
@@ -755,49 +875,50 @@ class ConfigWidget(QWidget):
         if (not ok):
             return
 
-        idx = 0
+        vers_idx = 0
         try: 
-            idx = VAR_VER_SUPP_CONFIG_NAMES.index(item)
-            print("User selected ({0}) -> {1}".format(idx, VAR_VER_SUPP_CONFIG_NAMES[idx]))
+            vers_idx = VAR_VER_SUPP_CONFIG_NAMES.index(item)
+            print("User selected ({0}) -> {1}".format(vers_idx, VAR_VER_SUPP_CONFIG_NAMES[vers_idx]))
         except: 
             resp = traceback.format_exc()
             return error_dialog(None, "ADE activation failed", "Error determining version", det_msg=str(resp), show=True, show_copy_button=True)
                 
         createDeviceKeyFile()
-        createDeviceFile(False, idx)
-        success, resp = createUser(idx)
+        createDeviceFile(False, vers_idx)
+        success, resp = createUser(vers_idx, authCert)
         if (success is False):
             return error_dialog(None, "ADE activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 
-        success, resp = signIn(mail, passwd)
+        success, resp = signIn(acc_type, mail, passwd)
         if (success is False):
             return error_dialog(None, "ADE activation failed", "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
 
-        success, resp = activateDevice(idx)
+        success, resp = activateDevice(vers_idx)
         if (success is False):
             return error_dialog(None, "ADE activation failed", "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
 
-        print("Authorized to account " + mail)
+        print("Authorized to '" + acc_type + "' account " + mail)
 
 
         # update display
         info_string, activated, mail = self.get_account_info()
         self.lblAccInfo.setText(info_string)
 
-        self.button_link_account.setEnabled(False)
-        self.button_import_activation.setEnabled(False)
-        self.button_export_key.setEnabled(True)
-        self.button_export_activation.setEnabled(True)
+        self.button_link_account.setEnabled(not activated)
+        self.button_anon_auth.setEnabled(not activated)
+        self.button_import_activation.setEnabled(not activated)
+        self.button_export_key.setEnabled(activated)
+        self.button_export_activation.setEnabled(activated)
         if isosx:
-            self.button_import_MacADE.setEnabled(False)
+            self.button_import_MacADE.setEnabled(not activated)
         if iswindows:
-            self.button_import_WinADE.setEnabled(False)
+            self.button_import_WinADE.setEnabled(not activated)
         if islinux:
-            self.button_import_LinuxWineADE.setEnabled(False)
+            self.button_import_LinuxWineADE.setEnabled(not activated)
 
         self.resize(self.sizeHint())
 
-        info_dialog(None, "Done", "Authorized to account " + mail, show=True, show_copy_button=False)
+        info_dialog(None, "Done", "Authorized to '" + acc_item + "' account " + mail, show=True, show_copy_button=False)
 
 
 

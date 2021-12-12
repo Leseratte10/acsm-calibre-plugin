@@ -5,19 +5,25 @@ It is a full Python reimplementation of libgourou by Grégory Soutadé (http://i
 
 ## Setup
 
-1. Download the plugin and import it into Calibre
-2. Open the plugin settings, it should say "Not authorized for any ADE ID"
-3. If you have ADE installed on your machine, there will be a button "Import activation from ADE". Clicking that will automatically copy your account information from ADE over to the Calibre plugin without using up an activation.
-4. If you don't have ADE installed, or you want to authorize a different account, or the automatic retrieval from ADE failed, click the "Link to ADE account" button to make a new clean authorization. You will then be asked to enter your AdobeID and password and to select an ADE version (ADE 2.0.1 recommended). A couple seconds later a success message should be displayed.
-5. The settings window should now say "Authorized with ADE ID X on device Y, emulating ADE version Z".
-6. Click the "Export account activation data" and "Export account encryption key" buttons to export / backup your keys. Do not skip this step. The first file (ZIP) can be used to re-authorize Calibre after a reset / reinstall without using up one of your Adobe authorizations. The second file (DER) can be imported into DeDRM.
-7. If needed (new AdobeID), import the DER file into the DeDRM plugin.
-8. Download an ACSM file from Adobe's test library and see if you can import it into Calibre: https://www.adobe.com/de/solutions/ebook/digital-editions/sample-ebook-library.html 
+Download the plugin and import it into Calibre, then open the plugin settings. The plugin should display "Not authorized for any ADE ID". You now have multiple options to authorize the plugin: 
+
+- You can click on "Link to ADE account" and enter your AdobeID credentials to link your Calibre installation to your AdobeID account. This uses up one of your available activations. 
+- You can click on "Create anonymous authorization" to create an anonymous authorization. Make sure to create backups of that authorization. Also, if you do end up emulating ADE3+ and you receive a file with the new Adobe DRM, you might not be able to access it ...
+- If you have ADE installed and activated on your machine, you can click "Import activation from ADE" to clone the existing activation from your ADE installation. 
+- If you have used this plugin before, you can click on "Import existing activation backup" to import a previously created activation backup (ZIP) file to restore an activation. This functionality can also be used to clone one activation to multiple computers. 
+
+During authorization, the plugin may ask you for the ADE version to emulate. Usually you can leave this setting as it is (ADE 2.0.1).
+
+After you've activated the plugin, make a backup of the activation using the "Export account activation data". Then click "Export account encryption key" and import the resulting file into the DeDRM plugin for DRM removal. If you're using noDRM's fork of the DeDRM plugin, this step will happen automatically. 
+
+Once that's done, download an ACSM file from Adobe's test library and see if you can import it into Calibre: https://www.adobe.com/de/solutions/ebook/digital-editions/sample-ebook-library.html 
 
 IMPORTANT: 
 
 - I would suggest creating a new dummy AdobeID to use for Calibre so just in case Adobe detects this and bans you, you don't lose your main AdobeID. 
 - Combined with that I suggest importing the DER file into the DeDRM plugin to make sure that losing your AdobeID doesn't also mean you'll lose access to all your eBooks. 
+- If you use an anonymous authorization, make sure you make backups of the activation data. 
+- If you use an anonymous authorization and you end up getting an eBook with the new Adobe DRM (version 3 or higher), there might be no way for you to access that book at all, as right now there's no way to export an existing authorization from the plugin into ADE.
 - This software is not approved by Adobe. I am not responsible if Adobe detects that you're using nonstandard software and bans your account. Do not complain to me if Adobe bans your main ADE account - you have been warned. 
 
 ## Returning books
@@ -41,10 +47,6 @@ Though, generally it's recommended to use the Calibre plugin instead of these st
 
 ## To-Do list for the future?
 
-There's a bunch of features that could still be added, but most of them aren't implemented in libgourou either, so I don't know if or when I'll be able to add these: 
-
-- Support for anonymous Adobe IDs
-- Support for un-authorizing a machine
 - Support to copy an authorization from the plugin to an ADE install
 - Support for Adobe's "auth" download method instead of the "simple" method.
 - ...

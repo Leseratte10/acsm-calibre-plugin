@@ -95,11 +95,57 @@ def createDeviceFile(randomSerial: bool, useVersionIndex: int = 0):
 
     return True
 
+def getAuthMethodsAndCert():
+    # Queries the /AuthenticationServiceInfo endpoint to get a list
+    # of available ID providers. 
+    # Returns a list of providers, and the login certificate. 
 
-def createUser(useVersionIndex: int = 0): 
+    # The login certificate stuff would usually be handled elsewhere,
+    # but that would require another request to Adobe's servers
+    # which is not what we want (as ADE only performs one request, too),
+    # so we need to store this cert.
+
+    # If you DO call this method before calling createUser, 
+    # it is your responsibility to pass the authCert returned by this function
+    # to the createUser function call. 
+    # Otherwise the plugin will not look 100% like ADE to Adobe.
+
+    authenticationURL = VAR_ACS_SERVER_HTTP + "/AuthenticationServiceInfo"
+    response2 = sendHTTPRequest(authenticationURL)
+
+    adobe_response_xml2 = etree.fromstring(response2)
+
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    try: 
+        authCert = None
+        authCert = adobe_response_xml2.find("./%s" % (adNS("certificate"))).text
+    except:
+        pass
+
+    # Get sign-in methods.
+    sign_in_methods = adobe_response_xml2.findall("./%s/%s" % (adNS("signInMethods"), adNS("signInMethod")))
+
+    aid_ids = []
+    aid_names = []
+
+    for method in sign_in_methods:
+        mid = method.get("method", None)
+        txt = method.text
+
+        if mid != "anonymous":
+            aid_ids.append(mid)
+            aid_names.append(txt)
+
+    return [aid_ids, aid_names], authCert
+
+
+
+
+def createUser(useVersionIndex: int = 0, authCert = None): 
 
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
-        return False, "Invalid Version index"
+        return False, "Invalid Version index", [[], []]
 
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
 
@@ -138,7 +184,7 @@ def createUser(useVersionIndex: int = 0):
     certificate = adobe_response_xml.find("./%s" % (adNS("certificate"))).text
 
     if (authURL is None or userInfoURL is None or certificate is None):
-        return False, "Error: Unexpected reply from Adobe."
+        return False, "Error: Unexpected reply from Adobe.", [[], []]
 
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authURL")).text = authURL
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "userInfoURL")).text = userInfoURL
@@ -150,17 +196,15 @@ def createUser(useVersionIndex: int = 0):
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "certificate")).text = certificate
 
 
-    authenticationURL = authURL + "/AuthenticationServiceInfo"
-    response2 = sendHTTPRequest(authenticationURL)
+    if authCert is None: 
+        # This is not supposed to happen, but if it does, then just query it again from Adobe.
+        authenticationURL = authURL + "/AuthenticationServiceInfo"
+        response2 = sendHTTPRequest(authenticationURL)
 
-    #print("======================================================")
-    #print("Sending request to " + authenticationURL)
-    #print("got response:")
-    #print(response2)
-    #print("======================================================")
+        adobe_response_xml2 = etree.fromstring(response2)
+        authCert = adobe_response_xml2.find("./%s" % (adNS("certificate"))).text
 
-    adobe_response_xml2 = etree.fromstring(response2)
-    authCert = adobe_response_xml2.find("./%s" % (adNS("certificate"))).text
+
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authenticationCertificate")).text = authCert
 
 
@@ -168,17 +212,16 @@ def createUser(useVersionIndex: int = 0):
     f.write("<?xml version=\"1.0\"?>\n")
     f.write(etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
     f.close()
+
     return True, "Done"
 
 
-
-
-def buildSignInRequest(adobeID: str, adobePassword: str, authenticationCertificate: str):
+def buildSignInRequest(type: str, username: str, password: str, authenticationCertificate: str):
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     etree.register_namespace("adept", NSMAP["adept"])
 
     root = etree.Element(etree.QName(NSMAP["adept"], "signIn"))
-    root.set("method", "AdobeID")
+    root.set("method", type)
 
     f = open(get_devkey_path(), "rb")
     devkey_bytes = f.read()
@@ -189,10 +232,10 @@ def buildSignInRequest(adobeID: str, adobePassword: str, authenticationCertifica
     # Build buffer <devkey_bytes> <len username> <username> <len password> <password>
 
     ar = bytearray(devkey_bytes)
-    ar.extend(bytearray(len(adobeID).to_bytes(1, 'big')))
-    ar.extend(bytearray(adobeID.encode("latin-1")))
-    ar.extend(bytearray(len(adobePassword).to_bytes(1, 'big')))
-    ar.extend(bytearray(adobePassword.encode("latin-1")))
+    ar.extend(bytearray(len(username).to_bytes(1, 'big')))
+    ar.extend(bytearray(username.encode("latin-1")))
+    ar.extend(bytearray(len(password).to_bytes(1, 'big')))
+    ar.extend(bytearray(password.encode("latin-1")))
 
     # Crypt code from https://stackoverflow.com/a/12921889/4991648
     cert = DerSequence()
@@ -230,7 +273,7 @@ def buildSignInRequest(adobeID: str, adobePassword: str, authenticationCertifica
     
 
 
-def signIn(username: str, passwd: str):
+def signIn(account_type: str, username: str, passwd: str):
 
 
     # Get authenticationCertificate
@@ -238,7 +281,9 @@ def signIn(username: str, passwd: str):
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     authenticationCertificate = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
 
-    signInRequest = buildSignInRequest(username, passwd, authenticationCertificate)
+    
+    # Type = "AdobeID" or "anonymous". For "anonymous", username and passwd need to be the empty string.
+    signInRequest = buildSignInRequest(account_type, username, passwd, authenticationCertificate)
 
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/SignInDirect"
 
@@ -294,7 +339,8 @@ def signIn(username: str, passwd: str):
 
     f.write("<adept:credentials xmlns:adept=\"http://ns.adobe.com/adept\">\n")
     f.write("<adept:user>%s</adept:user>\n" % (credentialsXML.find("./%s" % (adNS("user"))).text))
-    f.write("<adept:username method=\"%s\">%s</adept:username>\n" % (credentialsXML.find("./%s" % (adNS("username"))).get("method", "AdobeID"), credentialsXML.find("./%s" % (adNS("username"))).text))
+    if account_type != "anonymous": 
+        f.write("<adept:username method=\"%s\">%s</adept:username>\n" % (credentialsXML.find("./%s" % (adNS("username"))).get("method", account_type), credentialsXML.find("./%s" % (adNS("username"))).text))
     f.write("<adept:pkcs12>%s</adept:pkcs12>\n" % (credentialsXML.find("./%s" % (adNS("pkcs12"))).text))
     f.write("<adept:licenseCertificate>%s</adept:licenseCertificate>\n" % (credentialsXML.find("./%s" % (adNS("licenseCertificate"))).text))
     f.write("<adept:privateLicenseKey>%s</adept:privateLicenseKey>\n" % (base64.b64encode(private_key_data).decode("latin-1")))

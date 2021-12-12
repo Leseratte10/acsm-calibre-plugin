@@ -29,6 +29,9 @@
 #          fix authorization failing with certain non-ASCII characters in username, 
 #          add detailed logging toggle setting, add auto-delete ACSM setting, 
 #          add useful error message for ACSMs with nonstandard download type.
+# Currently in development: 
+#          Add support for anonymous authorizations, add support for other ID providers, 
+#          fix ACSM files from Google Play books (no metadata node).
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = (0, 0, 14)
