@@ -319,17 +319,22 @@ def fulfill(acsm_file, do_notify = False):
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     dcNS = lambda tag: '{%s}%s' % ('http://purl.org/dc/elements/1.1/', tag)
 
-    mimetype = acsmxml.find("./%s/%s/%s" % (adNS("resourceItemInfo"), adNS("metadata"), dcNS("format"))).text
+    try: 
+        mimetype = acsmxml.find("./%s/%s/%s" % (adNS("resourceItemInfo"), adNS("metadata"), dcNS("format"))).text
 
-    if (mimetype == "application/pdf"):
-        #print("You're trying to fulfill a PDF file.")
+        if (mimetype == "application/pdf"):
+            #print("You're trying to fulfill a PDF file.")
+            pass
+        elif (mimetype == "application/epub+zip"):
+            #print("Trying to fulfill an EPUB file ...")
+            pass
+        else: 
+            print("Weird mimetype: %s" % (mimetype))
+            print("Continuing anyways ...")
+        
+    except: 
+        # Some books, like from Google Play books, use a different format and don't have that metadata tag.
         pass
-    elif (mimetype == "application/epub+zip"):
-        #print("Trying to fulfill an EPUB file ...")
-        pass
-    else: 
-        print("Weird mimetype: %s" % (mimetype))
-        print("Continuing anyways ...")
 
 
     fulfill_request, adept_ns = buildFulfillRequest(acsmxml)
