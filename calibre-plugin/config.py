@@ -102,6 +102,15 @@ class ConfigWidget(QWidget):
             ua_group_box_layout.addWidget(self.button_import_activation)
 
         else:
+
+            if mail is None: 
+                # Current auth is anon auth. Offer to link to account.
+
+                self.button_convert_anon_to_account = QtGui.QPushButton(self)
+                self.button_convert_anon_to_account.setText(_("Connect anonymous auth to ADE account"))
+                self.button_convert_anon_to_account.clicked.connect(self.convert_anon_to_account)
+                ua_group_box_layout.addWidget(self.button_convert_anon_to_account)                
+
             self.button_switch_ade_version = QtGui.QPushButton(self)
             self.button_switch_ade_version.setText(_("Change ADE version"))
             self.button_switch_ade_version.clicked.connect(self.switch_ade_version)
@@ -185,6 +194,10 @@ class ConfigWidget(QWidget):
                         self.button_import_LinuxWineADE.setEnabled(activated)
                 else:
                     self.button_switch_ade_version.setEnabled(False)
+                    try: 
+                        self.button_convert_anon_to_account.setEnabled(False)
+                    except: 
+                        pass
                 self.button_export_key.setEnabled(False)
                 self.button_export_activation.setEnabled(False)
                 self.button_rented_books.setEnabled(False)
@@ -274,6 +287,8 @@ class ConfigWidget(QWidget):
             self.button_switch_ade_version.setEnabled(False)
         except:
             pass
+        if ade_mail is None: 
+            self.button_convert_anon_to_account.setEnabled(False)
         self.button_export_activation.setEnabled(False)
         self.button_export_key.setEnabled(False)
         self.lblAccInfo.setText("Authorization deleted.\nClose and re-open this window to add a new authorization.")
@@ -461,6 +476,10 @@ class ConfigWidget(QWidget):
 
             self.button_link_account.setEnabled(not activated)
             self.button_anon_auth.setEnabled(not activated)
+            try: 
+                self.button_convert_anon_to_account.setEnabled(ade_mail is None)
+            except:
+                pass
             self.button_import_activation.setEnabled(not activated)
             self.button_import_LinuxWineADE.setEnabled(not activated)
             self.button_export_key.setEnabled(activated)
@@ -494,6 +513,10 @@ class ConfigWidget(QWidget):
 
             self.button_link_account.setEnabled(not activated)
             self.button_anon_auth.setEnabled(not activated)
+            try: 
+                self.button_convert_anon_to_account.setEnabled(ade_mail is None)
+            except:
+                pass
             self.button_import_activation.setEnabled(not activated)
             self.button_import_WinADE.setEnabled(not activated)
             self.button_export_key.setEnabled(activated)
@@ -532,6 +555,10 @@ class ConfigWidget(QWidget):
 
             self.button_link_account.setEnabled(not activated)
             self.button_anon_auth.setEnabled(not activated)
+            try: 
+                self.button_convert_anon_to_account.setEnabled(ade_mail is None)
+            except:
+                pass
             self.button_import_activation.setEnabled(not activated)
             self.button_import_MacADE.setEnabled(not activated)
             self.button_export_key.setEnabled(activated)
@@ -597,6 +624,10 @@ class ConfigWidget(QWidget):
 
         self.button_link_account.setEnabled(not activated)
         self.button_anon_auth.setEnabled(not activated)
+        try: 
+            self.button_convert_anon_to_account.setEnabled(ade_mail is None)
+        except:
+            pass
         self.button_import_activation.setEnabled(not activated)
         self.button_export_key.setEnabled(activated)
         self.button_export_activation.setEnabled(activated)
@@ -794,6 +825,10 @@ class ConfigWidget(QWidget):
 
         self.button_link_account.setEnabled(not activated)
         self.button_anon_auth.setEnabled(not activated)
+        try: 
+            self.button_convert_anon_to_account.setEnabled(mail is None)
+        except:
+            pass
         self.button_import_activation.setEnabled(not activated)
         self.button_export_key.setEnabled(activated)
         self.button_export_activation.setEnabled(activated)
@@ -808,6 +843,75 @@ class ConfigWidget(QWidget):
 
         info_dialog(None, "Done", "Authorized to anonymous account.", show=True, show_copy_button=False)
 
+    
+    def convert_anon_to_account(self): 
+        try: 
+            from calibre_plugins.deacsm.libadobe import createDeviceKeyFile, update_account_path
+            from calibre_plugins.deacsm.libadobeAccount import convertAnonAuthToAccount
+        except: 
+            try: 
+                from libadobe import createDeviceKeyFile, update_account_path
+                from libadobeAccount import convertAnonAuthToAccount
+            except: 
+                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
+
+        update_account_path(self.deacsmprefs["path_to_account_data"])
+
+        # This MUST only be called on anonymous accounts. 
+        # The button should be disabled if that's not the case, but just to make sure ...
+        info_string, activated, mail = self.get_account_info()
+        if (not activated):
+            return
+
+        if (mail is not None):
+            return 
+
+        msg = "You are about to link your anonymous authorization to an AdobeID. "
+        msg += "This only works ONCE for each AdobeID. The anonymous authorization will then "
+        msg += "permanently be connected to your AdobeID. This is intended for cases where the user "
+        msg += "has started with an anonymous authorization, and then creates a fresh AdobeID later "
+        msg += "and doesn't want to lose his books.\n\n"
+        msg += "Only continue if you fully understand this."
+
+
+        warning_dialog(None, "Warning", msg, show=True, show_copy_button=False)
+
+       
+        mail, ok = QInputDialog.getText(self, "Authorizing ADE account", "Please enter mail address")
+
+        if (not ok or mail is None or len(mail) == 0):
+            return
+
+        passwd, ok = QInputDialog.getText(self, "Authorizing ADE account", "Please enter password", QLineEdit.Password)
+
+        if (not ok or passwd is None or len(passwd) == 0):
+            return
+
+        success, message = convertAnonAuthToAccount(mail, passwd)
+
+        if (success):
+            # update display
+            info_string, activated, mail = self.get_account_info()
+            self.lblAccInfo.setText(info_string)
+
+            try: 
+                self.button_convert_anon_to_account.setEnabled(mail is None)
+            except:
+                pass
+
+            self.resize(self.sizeHint())
+
+            return info_dialog(None, "Done", "Successfully converted anonynmous authentication to AdobeID", show=True, show_copy_button=False)
+
+        else: 
+            err_msg = "Could not link anonymous authentication to AdobeID.\n"
+            err_msg += "This only works with a fresh AdobeID that has never been linked to any ADE install."
+
+            return error_dialog(None, "ADE activation failed", err_msg, det_msg=str(message), show=True, show_copy_button=True)
+
+
+    
     def link_account(self):
 
         try: 
@@ -906,6 +1010,10 @@ class ConfigWidget(QWidget):
 
         self.button_link_account.setEnabled(not activated)
         self.button_anon_auth.setEnabled(not activated)
+        try: 
+            self.button_convert_anon_to_account.setEnabled(mail is None)
+        except:
+            pass
         self.button_import_activation.setEnabled(not activated)
         self.button_export_key.setEnabled(activated)
         self.button_export_activation.setEnabled(activated)

@@ -215,14 +215,7 @@ def createUser(useVersionIndex: int = 0, authCert = None):
 
     return True, "Done"
 
-
-def buildSignInRequest(type: str, username: str, password: str, authenticationCertificate: str):
-    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
-    etree.register_namespace("adept", NSMAP["adept"])
-
-    root = etree.Element(etree.QName(NSMAP["adept"], "signIn"))
-    root.set("method", type)
-
+def encryptLoginCredentials(username: str, password: str, authenticationCertificate: str): 
     f = open(get_devkey_path(), "rb")
     devkey_bytes = f.read()
     f.close()
@@ -248,6 +241,43 @@ def buildSignInRequest(type: str, username: str, password: str, authenticationCe
     cipherAC = PKCS1_v1_5.new(rsakey)
     crypted_msg = cipherAC.encrypt(bytes(ar))
 
+    return crypted_msg
+
+
+def buildSignInRequestForAnonAuthConvert(username: str, password: str, authenticationCertificate: str):
+    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
+    etree.register_namespace("adept", NSMAP["adept"])
+
+    root = etree.Element(etree.QName(NSMAP["adept"], "signIn"))
+    root.set("method", "AdobeID")
+
+    crypted_msg = encryptLoginCredentials(username, password, authenticationCertificate)
+
+    etree.SubElement(root, etree.QName(NSMAP["adept"], "signInData")).text = base64.b64encode(crypted_msg)
+
+    try: 
+        activationxml = etree.parse(get_activation_xml_path())
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+        user_uuid = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
+    except: 
+        return None
+
+    etree.SubElement(root, etree.QName(NSMAP["adept"], "user")).text = user_uuid
+    signature = sign_node(root)
+    etree.SubElement(root, etree.QName(NSMAP["adept"], "signature")).text = signature
+
+    return "<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
+
+
+def buildSignInRequest(type: str, username: str, password: str, authenticationCertificate: str):
+    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
+    etree.register_namespace("adept", NSMAP["adept"])
+
+    root = etree.Element(etree.QName(NSMAP["adept"], "signIn"))
+    root.set("method", type)
+
+    crypted_msg = encryptLoginCredentials(username, password, authenticationCertificate)
+
     etree.SubElement(root, etree.QName(NSMAP["adept"], "signInData")).text = base64.b64encode(crypted_msg)
 
     # Generate Auth key and License Key
@@ -271,6 +301,74 @@ def buildSignInRequest(type: str, username: str, password: str, authenticationCe
 
     return "<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
     
+
+def convertAnonAuthToAccount(username: str, passwd: str):
+    # If you have an anonymous authorization, you can convert that to an AdobeID. 
+    # Important: You can only do this ONCE for each AdobeID. 
+    # The AdobeID you are using for this must not be connected to any ADE install.
+
+    # This is intended for cases where people install ADE, use an anonymous auth, 
+    # buy a couple books, and then decide to get a fresh AdobeID.
+
+    # Get authenticationCertificate
+    try: 
+        activationxml = etree.parse(get_activation_xml_path())
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+        authenticationCertificate = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
+    except: 
+        return False, "Missing authenticationCertificate"
+
+    if authenticationCertificate == "":
+        return False, "Empty authenticationCertificate"
+
+    linkRequest = buildSignInRequestForAnonAuthConvert(username, passwd, authenticationCertificate)
+    signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/AddSignInDirect"
+    linkResponse = sendRequestDocu(linkRequest, signInURL)
+
+    try: 
+        credentialsXML = etree.fromstring(linkResponse)
+        
+        if (credentialsXML.tag == adNS("error")): 
+            err = credentialsXML.get("data")
+            err_parts = err.split(' ')
+            if err_parts[0] == "E_AUTH_USER_ALREADY_REGISTERED": 
+                try: 
+                    return False, "Can't link anon auth " + err_parts[2] + " to account, account already has user ID " + err_parts[3]
+                except: 
+                    pass
+            
+            return False, "Can't link anon auth to account: " + err
+
+        elif (credentialsXML.tag != adNS("success")):
+            return False, "Invalid main tag " + credentialsXML.tag
+    except: 
+        return False, "Invalid response to login request"
+
+
+    # If we end up here, the account linking was successful. Now we just need to update the activation.xml accordingly.
+
+    activationxml = etree.parse(get_activation_xml_path())
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+    cred_node = activationxml.find("./%s" % (adNS("credentials")))
+
+
+    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
+    tmp_node = etree.SubElement(cred_node, etree.QName(NSMAP["adept"], "username"))
+
+    # Adobe / ADE only supports this account linking for AdobeID accounts, not for any Vendor IDs.
+    tmp_node.set("method", "AdobeID")
+    tmp_node.text = username
+
+    # Write to file
+    f = open(get_activation_xml_path(), "w")
+    f.write("<?xml version=\"1.0\"?>\n")
+    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
+    f.close()
+
+    
+    return True, "Account linking successful"
+
+
 
 
 def signIn(account_type: str, username: str, passwd: str):

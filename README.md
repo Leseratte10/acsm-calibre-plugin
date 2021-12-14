@@ -21,9 +21,9 @@ Once that's done, download an ACSM file from Adobe's test library and see if you
 IMPORTANT: 
 
 - I would suggest creating a new dummy AdobeID to use for Calibre so just in case Adobe detects this and bans you, you don't lose your main AdobeID. 
-- Combined with that I suggest importing the DER file into the DeDRM plugin to make sure that losing your AdobeID doesn't also mean you'll lose access to all your eBooks. 
+- Combined with that I suggest using the DeDRM plugin to make sure that losing your AdobeID doesn't also mean you'll lose access to all your eBooks. 
 - If you use an anonymous authorization, make sure you make backups of the activation data. 
-- If you use an anonymous authorization and you end up getting an eBook with the new Adobe DRM (version 3 or higher), there might be no way for you to access that book at all, as right now there's no way to export an existing authorization from the plugin into ADE.
+- If you use an anonymous authorization, you have the ability to copy that authorization into an AdobeID account at a later time (by clicking "Connect anonymous auth to ADE account"). This is useful if you have books linked to your authorization that you want to read elsewhere. Same restrictions as with ADE apply - you can only do this ONCE per AdobeID, and only if the AdobeID hasn't been in use elsewhere yet.
 - This software is not approved by Adobe. I am not responsible if Adobe detects that you're using nonstandard software and bans your account. Do not complain to me if Adobe bans your main ADE account - you have been warned. 
 
 ## Returning books

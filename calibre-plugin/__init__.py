@@ -31,7 +31,8 @@
 #          add useful error message for ACSMs with nonstandard download type.
 # Currently in development: 
 #          Add support for anonymous authorizations, add support for other ID providers, 
-#          fix ACSM files from Google Play books (no metadata node).
+#          fix ACSM files from Google Play books (no metadata node), 
+#          allow converting an anonymous auth to an AdobeID auth.
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = (0, 0, 14)
