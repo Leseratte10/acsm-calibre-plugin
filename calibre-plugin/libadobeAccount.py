@@ -332,9 +332,26 @@ def convertAnonAuthToAccount(username: str, passwd: str):
             err = credentialsXML.get("data")
             err_parts = err.split(' ')
             if err_parts[0] == "E_AUTH_USER_ALREADY_REGISTERED": 
+                # This error happens when you're not using a "fresh" AdobeID. 
+                # The AdobeID already has an UUID and authentication data, thus
+                # it cannot be set up using the data from the anonymous authorization.
                 try: 
                     return False, "Can't link anon auth " + err_parts[2] + " to account, account already has user ID " + err_parts[3]
                 except: 
+                    pass
+            
+            elif err_parts[0] == "E_AUTH_USERID_INUSE":
+                # This error happens when the UUID of the anonymous auth is already 
+                # in use by a given AdobeID. 
+                # This can happen if you have one anonymous auth, export that, 
+                # then convert it to AdobeID A, then re-import the backed-up anonymous auth
+                # (or use another computer that has the identical cloned anonymous auth)
+                # and then try to link that auth to another AdobeID B. 
+                # Adobe then notices that the anonymous authorization you're trying to link
+                # has already been linked to an Adobe account. 
+                try: 
+                    return False, "Can't link anon auth: Anon auth " + err_parts[3] + " has already been linked to another AdobeID"
+                except:
                     pass
             
             return False, "Can't link anon auth to account: " + err
