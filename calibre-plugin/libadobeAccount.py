@@ -262,6 +262,11 @@ def buildSignInRequestForAnonAuthConvert(username: str, password: str, authentic
     except: 
         return None
 
+    # Note: I tried replacing the user_uuid with the UUID of another (anonymous) authorization
+    # to see if it was possible to take over another account, but that didn't work. That's the reason
+    # why this request has the signature node, the payload needs to be signed with the user certificate
+    # that matches the UUID in the <adept:user> tag.
+
     etree.SubElement(root, etree.QName(NSMAP["adept"], "user")).text = user_uuid
     signature = sign_node(root)
     etree.SubElement(root, etree.QName(NSMAP["adept"], "signature")).text = signature

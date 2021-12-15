@@ -29,13 +29,13 @@
 #          fix authorization failing with certain non-ASCII characters in username, 
 #          add detailed logging toggle setting, add auto-delete ACSM setting, 
 #          add useful error message for ACSMs with nonstandard download type.
-# Currently in development: 
-#          Add support for anonymous authorizations, add support for other ID providers, 
+# v0.0.15: Add support for anonymous authorizations, add support for other ID providers, 
 #          fix ACSM files from Google Play books (no metadata node), 
-#          allow converting an anonymous auth to an AdobeID auth.
+#          allow converting an anonymous auth to an AdobeID auth, 
+#          update python-cryptography from 3.4.8 to 36.0.1, update python-rsa from 4.7.2 to 4.8.
 
 PLUGIN_NAME = "DeACSM"
-PLUGIN_VERSION_TUPLE = (0, 0, 14)
+PLUGIN_VERSION_TUPLE = (0, 0, 15)
 
 from calibre.customize import FileTypePlugin        # type: ignore
 __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
