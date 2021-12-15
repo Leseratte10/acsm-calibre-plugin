@@ -1176,7 +1176,7 @@ class RentedBooksDialog(QDialog):
                 timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%SZ")
                 currenttime = datetime.datetime.utcnow()
             except: 
-                print("Invalid book timestamp")
+                # Invalid book timestano
                 continue
 
 
@@ -1228,8 +1228,7 @@ class RentedBooksDialog(QDialog):
         ret, msg = tryReturnBook(Ret_book)
 
         if (ret):
-            print("Book successfully returned:")
-            print(msg)
+            print("Book successfully returned.")
             self.delete_book_entry(nomsg=True)
             self.populate_list()
             return info_dialog(None, "Done", "Book successfully returned", show=True, show_copy_button=False)

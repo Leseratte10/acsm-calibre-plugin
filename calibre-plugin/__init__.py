@@ -45,7 +45,7 @@ __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
 from calibre.utils.config import config_dir         # type: ignore
 from calibre.constants import isosx, iswindows, islinux                 # type: ignore
 
-import os, shutil, traceback, sys, time, io
+import os, shutil, traceback, sys, time, io, random
 import zipfile
 from lxml import etree
 
@@ -95,31 +95,81 @@ class DeACSM(FileTypePlugin):
             if not os.path.exists(self.moddir):
                 os.mkdir(self.moddir)
 
-            names = ["cryptography.zip", "rsa.zip", "oscrypto.zip", "asn1crypto.zip", "pyasn1.zip"]
-                
-            lib_dict = self.load_resources(names)
-            # print("{0} v{1}: Copying needed library files from plugin zip".format(PLUGIN_NAME, PLUGIN_VERSION))
+            # Check if we have a module id:
+            # Modules will only be extracted if this has changed. 
+            # This A) saves time because we don't extract every time, 
+            # and B) prevents a race condition.
+            # The compiling scripts need to be adapted to modify 
+            # the module_id.txt in the plugin ZIP every time the 
+            # modules change
 
-            for entry, data in lib_dict.items():
-                file_path = os.path.join(self.moddir, entry)
-                try:
-                    with zipfile.ZipFile(io.BytesIO(data), 'r') as ref:
-                        ref.extractall(self.moddir)
+            try: 
+                ts_file = os.path.join(self.moddir, "module_id.txt")
+                f = open(ts_file, "r")
+                id = f.readline().strip()
+                f.close()
+            except: 
+                # No timestamp found, probably upgrading from an older version.
+                id = None
 
-                except:
-                    print("{0} v{1}: Exception when copying needed library files".format(PLUGIN_NAME, PLUGIN_VERSION))
-                    traceback.print_exc()
-                    pass
+            # Check ID file in the plugin ZIP
+            try: 
+                ts_dict = self.load_resources( ["module_id.txt"] )
+                id_plugin = ts_dict["module_id.txt"].decode("latin-1").split('\n')[0].strip()
+            except: 
+                # No timestamp found in the plugin ZIP?
+                # Assume that I made a mistake bundling the plugin, extract anyways.
+                id_plugin = None
 
-            if islinux: 
-                # Also extract EXE files needed for WINE ADE key extraction
-                names = [ "keyextract/decrypt_win32.exe", "keyextract/decrypt_win64.exe" ]
+            if id is None or id_plugin is None or id != id_plugin:
+                print("Module update from \"{0}\" to \"{1}\", extracting ...".format(id, id_plugin))
+                # Something changed, extract modules.
+
+
+                if os.path.exists(self.moddir):
+                    shutil.rmtree(self.moddir, ignore_errors=True)
+
+                rand_path = self.moddir + str(random.randint(0, 1000000000))
+                # Generate random name so we don't get conflicts with multiple instances of the plugin running at once. 
+                # Hack-y solution, but it should work.
+
+                os.mkdir(rand_path)
+
+                names = ["cryptography.zip", "rsa.zip", "oscrypto.zip", "asn1crypto.zip", "pyasn1.zip"]
+                    
                 lib_dict = self.load_resources(names)
+
                 for entry, data in lib_dict.items():
-                    file_path = os.path.join(self.moddir, entry.split('/')[1])
-                    f = open(file_path, "wb")
-                    f.write(data)
+                    try:
+                        with zipfile.ZipFile(io.BytesIO(data), 'r') as ref:
+                            ref.extractall(rand_path)
+
+                    except:
+                        print("{0} v{1}: Exception when copying needed library files".format(PLUGIN_NAME, PLUGIN_VERSION))
+                        traceback.print_exc()
+                        pass
+
+                if islinux: 
+                    # Also extract EXE files needed for WINE ADE key extraction
+                    names = [ "keyextract/decrypt_win32.exe", "keyextract/decrypt_win64.exe" ]
+                    lib_dict = self.load_resources(names)
+                    for entry, data in lib_dict.items():
+                        file_path = os.path.join(rand_path, entry.split('/')[1])
+                        f = open(file_path, "wb")
+                        f.write(data)
+                        f.close()
+
+                
+                # Write module ID
+                if id_plugin is not None: 
+                    mod_file = os.path.join(rand_path, "module_id.txt")
+                    f = open(mod_file, "w")
+                    f.write(id_plugin)
                     f.close()
+
+                
+                # Rename temporary path to actual module path so this will be used next time.
+                os.rename(rand_path, self.moddir)
 
             sys.path.insert(0, os.path.join(self.moddir, "cryptography"))
             sys.path.insert(0, os.path.join(self.moddir, "rsa"))

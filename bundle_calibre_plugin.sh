@@ -14,6 +14,8 @@ make
 
 popd
 
+echo -n "2021-12-15-01" > module_id.txt
+
 zip -r ../calibre-plugin.zip *
 
 popd
