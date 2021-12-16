@@ -33,6 +33,8 @@
 #          fix ACSM files from Google Play books (no metadata node), 
 #          allow converting an anonymous auth to an AdobeID auth, 
 #          update python-cryptography from 3.4.8 to 36.0.1, update python-rsa from 4.7.2 to 4.8.
+# Currently in development: 
+#          Ignore fatal HTTP errors during optional fulfillment notifications.
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = (0, 0, 15)

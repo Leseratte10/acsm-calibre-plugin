@@ -271,7 +271,13 @@ def sendPOSTHTTPRequest(URL: str, document: bytes, type: str, returnRC = False):
     ctx.verify_mode = ssl.CERT_NONE
 
     req = urllib.request.Request(url=URL, headers=headers, data=document)
-    handler = urllib.request.urlopen(req, context=ctx)
+    try: 
+        handler = urllib.request.urlopen(req, context=ctx)
+    except urllib.error.HTTPError as err: 
+        # This happens with HTTP 500 and related errors.
+        print("Post request caused HTTPError %d" % (err.code))
+        return err.code, "Post request caused HTTPException"
+
 
     ret_code = handler.getcode()
     if (ret_code == 204 and returnRC):
