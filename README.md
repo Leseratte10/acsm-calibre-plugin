@@ -49,4 +49,5 @@ Though, generally it's recommended to use the Calibre plugin instead of these st
 
 - Support to copy an authorization from the plugin to an ADE install
 - Support for Adobe's "auth" download method instead of the "simple" method.
+- Support to authorize an eReader that's connected over USB
 - ...

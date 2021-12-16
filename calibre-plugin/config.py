@@ -13,6 +13,7 @@ import time, datetime
 
 from PyQt5.Qt import (Qt, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit,
                       QGroupBox, QPushButton, QListWidget, QListWidgetItem, QInputDialog, 
+                      QFileDialog, 
                       QLineEdit, QAbstractItemView, QIcon, QDialog, QDialogButtonBox, QUrl)
 from PyQt5.QtWidgets import QShortcut
 
@@ -105,11 +106,18 @@ class ConfigWidget(QWidget):
 
             if mail is None: 
                 # Current auth is anon auth. Offer to link to account.
-
                 self.button_convert_anon_to_account = QtGui.QPushButton(self)
                 self.button_convert_anon_to_account.setText(_("Connect anonymous auth to ADE account"))
                 self.button_convert_anon_to_account.clicked.connect(self.convert_anon_to_account)
-                ua_group_box_layout.addWidget(self.button_convert_anon_to_account)                
+                ua_group_box_layout.addWidget(self.button_convert_anon_to_account)  
+
+            #if mail is not None: 
+                # We do have an email. Offer to manage devices / eReaders
+                # Button commented out as this isn't fully implemented yet.
+                #self.button_manage_ext_device = QtGui.QPushButton(self)
+                #self.button_manage_ext_device.setText(_("Manage connected eReaders"))
+                #self.button_manage_ext_device.clicked.connect(self.manage_ext_device)
+                #ua_group_box_layout.addWidget(self.button_manage_ext_device)
 
             self.button_switch_ade_version = QtGui.QPushButton(self)
             self.button_switch_ade_version.setText(_("Change ADE version"))
@@ -228,6 +236,107 @@ class ConfigWidget(QWidget):
         msg += "If you're importing an ACSM that you cannot re-download in case of issues, do not enable this option!"
 
         warning_dialog(None, "Warning", msg, show=True, show_copy_button=False)
+
+    def manage_ext_device(self): 
+        # Unfortunately, I didn't find a nice cross-platform API to query for USB mass storage devices.
+        # So just open up a folder picker dialog and have the user select the eReader's root folder. 
+
+        info_string, activated, mail = self.get_account_info()
+
+        if not activated:
+            return
+        
+        if mail is None: 
+            return
+
+        info_dialog(None, "Manage eReader", "Please select the eBook reader you want to manage", show=True, show_copy_button=False)
+
+        dialog = QFileDialog()
+        dialog.setFileMode(QFileDialog.Directory)
+        opts = dialog.options()
+        opts |= QFileDialog.ShowDirsOnly
+        dialog.setOptions(opts)
+
+        if dialog.exec_():
+            x = dialog.selectedFiles()[0]
+            if not os.path.isdir(x):
+                # This is not supposed to happen.
+                error_dialog(None, "Manage eReader", "Device not found", show=True, show_copy_button=False)
+                return
+
+            idx = 0
+            while True: 
+                idx = idx + 1
+                if idx > 15: 
+                    # Failsafe, max. 15 folder levels.
+                    break
+                adobe_path = os.path.join(x, ".adobe-digital-editions")
+                print("Checking " + adobe_path)
+                if os.path.isdir(adobe_path):
+                    print("Found Adobe path at " + adobe_path)
+                    break
+                
+                x_old = x
+                x = os.path.dirname(x)
+
+                if x_old == x:
+                    # We're at the drive root and still didn't find an activation
+                    error_dialog(None, "Manage eReader", "Didn't find an ADE-compatible eReader in that location. (No Folder)", show=True, show_copy_button=False)
+                    return
+
+            if not os.path.isfile(os.path.join(adobe_path, "device.xml")):
+                error_dialog(None, "Manage eReader", "Didn't find an ADE-compatible eReader in that location. (No File)", show=True, show_copy_button=False)
+                return
+
+            dev_xml_path = os.path.join(adobe_path, "device.xml")
+            act_xml_path = os.path.join(adobe_path, "activation.xml")
+
+            dev_xml_tree = etree.parse(dev_xml_path)
+            adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+            try: 
+                devClass = dev_xml_tree.find("./%s" % (adNS("deviceClass"))).text
+                devName = dev_xml_tree.find("./%s" % (adNS("deviceName"))).text
+            except: 
+                error_dialog(None, "Manage eReader", "Reader data is invalid.", show=True, show_copy_button=False)
+                return
+            
+            try: 
+                devSerial = None
+                devSerial = dev_xml_tree.find("./%s" % (adNS("deviceSerial"))).text
+            except:
+                pass
+            
+
+            print("Found Reader with Class " + devClass + " and Name " + devName)
+
+            if os.path.isfile(act_xml_path):
+                print("Already activated.")
+                msg = "The given device (Type \""+devClass+"\", Name \""+devName+"\") is already connected to an AdobeID.\n"
+                msg += "Currently, this plugin does not support un-authorizing an eReader."
+
+                error_dialog(None, "Manage eReader", msg, show=True, show_copy_button=False)
+                return
+            
+
+            msg = "Found an unactivated eReader:\n\n"
+            msg += "Path: " + os.path.dirname(adobe_path) + "\n"
+            msg += "Type: " + devClass + "\n"
+            msg += "Name: " + devName + "\n"
+            if devSerial is not None: 
+                msg += "Serial: " + devSerial + "\n"
+            msg += "\nDo you want to authorize this device with your AdobeID?"
+
+            ok = question_dialog(None, "Manage eReader", msg)
+            if not ok: 
+                return
+
+
+            # Okay, if we end up here, the user wants to authorize his eReader to his current AdobeID. 
+            # Rest still needs to be implemented. 
+            # 
+
+            error_dialog(None, "Manage eReader", "Not yet implemented.", show=True, show_copy_button=False)       
+
 
         
         
