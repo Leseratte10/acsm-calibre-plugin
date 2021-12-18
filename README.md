@@ -35,6 +35,14 @@ This makes the book available for someone else again, but it does not automatica
 
 Note: You can only return books that you downloaded with version 0.0.9 (or newer) of this plugin. You cannot return books downloaded with ADE or with earlier versions of this plugin.
 
+## Authorizing eReaders
+
+As of v0.0.16, the plugin can also authorize an eReader connected to the Computer through USB. For now, this only works with devices that export their `.adobe-digital-editions` folder through USB. In order to authorize such an eReader, just open the plugin settings and click "Authorize eReader over USB" (only available if the plugin is authorized with an AdobeID). Then select the eReader in the folder selection dialog. This process does not work with eReaders relying on a specific USB driver for the ADE connection such as the Sony PRS-T2 (and probably some other older Sony devices). 
+
+Right now, this process is fairly experimental as I do not own a physical eReader that supports this functionality, so I've only been able to test this with a fake, emulated eReader and not with a real device.
+
+Note that this process will use up one of your six mobile/tethered eReader authorizations on your AdobeID. While it is possible to clone a computer activation by exporting it on one computer and importing it on another, this is not possible with eReader authorizations. 
+
 ## Standalone version
 
 In the folder "calibre-plugin" in this repo (or inside the Calibre plugin ZIP file) there's some scripts that can also be used standalone without Calibre. If you want to use these, you need to extract the whole ZIP file. 
@@ -49,5 +57,4 @@ Though, generally it's recommended to use the Calibre plugin instead of these st
 
 - Support to copy an authorization from the plugin to an ADE install
 - Support for Adobe's "auth" download method instead of the "simple" method.
-- Support to authorize an eReader that's connected over USB
 - ...

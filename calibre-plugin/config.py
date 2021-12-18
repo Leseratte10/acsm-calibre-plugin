@@ -111,13 +111,13 @@ class ConfigWidget(QWidget):
                 self.button_convert_anon_to_account.clicked.connect(self.convert_anon_to_account)
                 ua_group_box_layout.addWidget(self.button_convert_anon_to_account)  
 
-            #if mail is not None: 
+            if mail is not None: 
                 # We do have an email. Offer to manage devices / eReaders
-                # Button commented out as this isn't fully implemented yet.
-                #self.button_manage_ext_device = QtGui.QPushButton(self)
-                #self.button_manage_ext_device.setText(_("Manage connected eReaders"))
-                #self.button_manage_ext_device.clicked.connect(self.manage_ext_device)
-                #ua_group_box_layout.addWidget(self.button_manage_ext_device)
+                # This isn't really tested a lot ...
+                self.button_manage_ext_device = QtGui.QPushButton(self)
+                self.button_manage_ext_device.setText(_("Authorize eReader over USB"))
+                self.button_manage_ext_device.clicked.connect(self.manage_ext_device)
+                ua_group_box_layout.addWidget(self.button_manage_ext_device)
 
             self.button_switch_ade_version = QtGui.QPushButton(self)
             self.button_switch_ade_version.setText(_("Change ADE version"))
@@ -241,6 +241,20 @@ class ConfigWidget(QWidget):
         # Unfortunately, I didn't find a nice cross-platform API to query for USB mass storage devices.
         # So just open up a folder picker dialog and have the user select the eReader's root folder. 
 
+        try: 
+            from calibre_plugins.deacsm.libadobe import update_account_path, VAR_VER_HOBBES_VERSIONS
+            from calibre_plugins.deacsm.libadobeAccount import activateDevice, exportProxyAuth
+        except: 
+            try: 
+                from libadobe import update_account_path, VAR_VER_HOBBES_VERSIONS
+                from libadobeAccount import activateDevice, exportProxyAuth
+            except: 
+                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
+
+
+        update_account_path(self.deacsmprefs["path_to_account_data"])
+
         info_string, activated, mail = self.get_account_info()
 
         if not activated:
@@ -249,7 +263,12 @@ class ConfigWidget(QWidget):
         if mail is None: 
             return
 
-        info_dialog(None, "Manage eReader", "Please select the eBook reader you want to manage", show=True, show_copy_button=False)
+        msg = "Please select the eBook reader you want to link to your account.\n"
+        msg += "Either select the root drive / mountpoint, or any folder on the eReader.\n"
+        msg += "Note that this feature is experimental and only works with eReaders that "
+        msg += "export their .adobe-digital-editions folder."
+
+        info_dialog(None, "Authorize eReader", msg, show=True, show_copy_button=False)
 
         dialog = QFileDialog()
         dialog.setFileMode(QFileDialog.Directory)
@@ -261,7 +280,7 @@ class ConfigWidget(QWidget):
             x = dialog.selectedFiles()[0]
             if not os.path.isdir(x):
                 # This is not supposed to happen.
-                error_dialog(None, "Manage eReader", "Device not found", show=True, show_copy_button=False)
+                error_dialog(None, "Authorize eReader", "Device not found", show=True, show_copy_button=False)
                 return
 
             idx = 0
@@ -269,7 +288,9 @@ class ConfigWidget(QWidget):
                 idx = idx + 1
                 if idx > 15: 
                     # Failsafe, max. 15 folder levels.
-                    break
+                    error_dialog(None, "Authorize eReader", "Didn't find an ADE-compatible eReader in that location. (Too many levels)", show=True, show_copy_button=False)
+                    return
+
                 adobe_path = os.path.join(x, ".adobe-digital-editions")
                 print("Checking " + adobe_path)
                 if os.path.isdir(adobe_path):
@@ -281,11 +302,11 @@ class ConfigWidget(QWidget):
 
                 if x_old == x:
                     # We're at the drive root and still didn't find an activation
-                    error_dialog(None, "Manage eReader", "Didn't find an ADE-compatible eReader in that location. (No Folder)", show=True, show_copy_button=False)
+                    error_dialog(None, "Authorize eReader", "Didn't find an ADE-compatible eReader in that location. (No Folder)", show=True, show_copy_button=False)
                     return
 
             if not os.path.isfile(os.path.join(adobe_path, "device.xml")):
-                error_dialog(None, "Manage eReader", "Didn't find an ADE-compatible eReader in that location. (No File)", show=True, show_copy_button=False)
+                error_dialog(None, "Authorize eReader", "Didn't find an ADE-compatible eReader in that location. (No File)", show=True, show_copy_button=False)
                 return
 
             dev_xml_path = os.path.join(adobe_path, "device.xml")
@@ -297,7 +318,7 @@ class ConfigWidget(QWidget):
                 devClass = dev_xml_tree.find("./%s" % (adNS("deviceClass"))).text
                 devName = dev_xml_tree.find("./%s" % (adNS("deviceName"))).text
             except: 
-                error_dialog(None, "Manage eReader", "Reader data is invalid.", show=True, show_copy_button=False)
+                error_dialog(None, "Authorize eReader", "Reader data is invalid.", show=True, show_copy_button=False)
                 return
             
             try: 
@@ -310,14 +331,57 @@ class ConfigWidget(QWidget):
             print("Found Reader with Class " + devClass + " and Name " + devName)
 
             if os.path.isfile(act_xml_path):
-                print("Already activated.")
-                msg = "The given device (Type \""+devClass+"\", Name \""+devName+"\") is already connected to an AdobeID.\n"
-                msg += "Currently, this plugin does not support un-authorizing an eReader."
 
-                error_dialog(None, "Manage eReader", msg, show=True, show_copy_button=False)
-                return
+                active_device_act = etree.parse(act_xml_path)
+                adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+                act_uuid = active_device_act.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
+                act_username_name = None
+                try: 
+                    act_username = active_device_act.find("./%s/%s" % (adNS("credentials"), adNS("username")))
+                    act_username_name = act_username.text
+                    act_username_method = act_username.get("method", "AdobeID")
+                except:
+                    pass
             
+                try: 
+                    act_dev_uuid = None
+                    act_dev_uuid = active_device_act.find("./%s/%s" % (adNS("activationToken"), adNS("device"))).text
+                except:
+                    pass
 
+                msg = "The following device:\n\n"
+                msg += "Path: " + os.path.dirname(adobe_path) + "\n"
+                msg += "Type: " + devClass + "\n"
+                msg += "Name: " + devName + "\n"
+                if devSerial is not None: 
+                    msg += "Serial: " + devSerial + "\n"
+                if act_dev_uuid is not None: 
+                    msg += "UUID: " + act_dev_uuid + "\n"
+
+                
+                msg += "\nis already connected to the following AdobeID:\n\n"
+                msg += "UUID: " + act_uuid + "\n"
+                if (act_username_name is not None):
+                    msg += "Username: " + act_username_name + "\n"
+                    msg += "Type: " + act_username_method + "\n"
+                else: 
+                    msg += "Type: anonymous authorization\n"
+
+                msg += "\nDo you want to remove this authorization and link this device to your AdobeID?\n\n"
+                msg += "Click \"No\" to cancel, or \"Yes\" to remove the existing authorization from the device and authorize it with your AdobeID."
+
+                ok = question_dialog(None, "Authorize eReader", msg)
+
+                if (not ok): 
+                    return
+
+                try: 
+                    os.remove(act_xml_path)
+                except: 
+                    error_dialog(None, "Authorize eReader", "Failed to remove existing authorization.", show=True, show_copy_button=False)
+                    return
+
+  
             msg = "Found an unactivated eReader:\n\n"
             msg += "Path: " + os.path.dirname(adobe_path) + "\n"
             msg += "Type: " + devClass + "\n"
@@ -326,18 +390,55 @@ class ConfigWidget(QWidget):
                 msg += "Serial: " + devSerial + "\n"
             msg += "\nDo you want to authorize this device with your AdobeID?"
 
-            ok = question_dialog(None, "Manage eReader", msg)
+            ok = question_dialog(None, "Authorize eReader", msg)
             if not ok: 
                 return
 
 
             # Okay, if we end up here, the user wants to authorize his eReader to his current AdobeID. 
-            # Rest still needs to be implemented. 
-            # 
+            # Figure out what ADE version we're currently emulating: 
 
-            error_dialog(None, "Manage eReader", "Not yet implemented.", show=True, show_copy_button=False)       
+            device_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml")
+
+            try: 
+                containerdev = etree.parse(device_xml_path)
+            except (FileNotFoundError, OSError) as e:
+                return error_dialog(None, "Failed", "Error while reading device.xml", show=True, show_copy_button=False)
+
+            try: 
+                adeptNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)        
+
+                # Determine the ADE version we're emulating:
+                ver = containerdev.findall("./%s" % (adeptNS("version")))
+
+                # "Default" entry would be for the old 10.0.4 entry. 
+                # As 10.X is in the 3.0 range, assume we're on ADE 3.0.1 with hobbes version 10.0.85385
+                v_idx = VAR_VER_HOBBES_VERSIONS.index("10.0.85385")
+
+                for f in ver:
+                    if f.get("name") == "hobbes":
+                        hobbes_version = f.get("value")
+
+                if hobbes_version is not None:
+                    v_idx = VAR_VER_HOBBES_VERSIONS.index(hobbes_version)
+            except:
+                return error_dialog(None, "Authorize eReader", "Error while determining ADE version", show=True, show_copy_button=False)
 
 
+            # Activate the target device with that version.
+            ret, data = activateDevice(v_idx, dev_xml_tree)
+
+            if not ret: 
+                return error_dialog(None, "Authorize eReader", "Couldn't activate device, server returned error.", show=True, det_msg=data, show_copy_button=False)
+
+            ret, data = exportProxyAuth(act_xml_path, data)
+
+            if not ret: 
+                return error_dialog(None, "Authorize eReader", "Error while writing activation to device.", show=True, det_msg=data, show_copy_button=False)
+
+
+            return info_dialog(None, "Authorize eReader", "Reader authorized successfully.", show=True, show_copy_button=False)
+            
         
         
     def delete_ade_auth(self): 
@@ -921,7 +1022,7 @@ class ConfigWidget(QWidget):
         if (success is False):
             return error_dialog(None, "ADE activation failed", "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
 
-        success, resp = activateDevice(idx)
+        success, resp = activateDevice(idx, None)
         if (success is False):
             return error_dialog(None, "ADE activation failed", "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
 
@@ -1106,7 +1207,7 @@ class ConfigWidget(QWidget):
         if (success is False):
             return error_dialog(None, "ADE activation failed", "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
 
-        success, resp = activateDevice(vers_idx)
+        success, resp = activateDevice(vers_idx, None)
         if (success is False):
             return error_dialog(None, "ADE activation failed", "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
 

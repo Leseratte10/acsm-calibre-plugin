@@ -472,6 +472,175 @@ def signIn(account_type: str, username: str, passwd: str):
 
     return True, "Done"
 
+def exportProxyAuth(act_xml_path, activationToken):
+    # This authorizes a tethered device. 
+    # ret, data = exportProxyAuth(act_xml_path, data)
+
+    activationxml = etree.parse(get_activation_xml_path())
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    # At some point I should probably rewrite this, but I want to be sure the format is
+    # correct so I'm recreating the whole XML myself.
+
+    rt_si_authURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text
+    rt_si_userInfoURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("userInfoURL"))).text
+    rt_si_activationURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("activationURL"))).text
+    rt_si_certificate = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("certificate"))).text
+
+    rt_c_user = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
+    rt_c_licenseCertificate = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("licenseCertificate"))).text
+    rt_c_privateLicenseKey = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("privateLicenseKey"))).text
+    rt_c_authenticationCertificate = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("authenticationCertificate"))).text
+
+    rt_c_username = None
+    rt_c_usernameMethod = None
+
+    try: 
+        rt_c_username = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("username"))).text
+        rt_c_usernameMethod = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("username"))).get("method", "AdobeID")
+    except:
+        pass
+
+    
+    ret = "<?xml version=\"1.0\"?>"
+    ret += "<activationInfo xmlns=\"http://ns.adobe.com/adept\">"
+    ret += "<adept:activationServiceInfo xmlns:adept=\"http://ns.adobe.com/adept\">"
+    ret += "<adept:authURL>%s</adept:authURL>" % (rt_si_authURL)
+    ret += "<adept:userInfoURL>%s</adept:userInfoURL>" % (rt_si_userInfoURL)
+    ret += "<adept:activationURL>%s</adept:activationURL>" % (rt_si_activationURL)
+    ret += "<adept:certificate>%s</adept:certificate>" % (rt_si_certificate)
+    ret += "</adept:activationServiceInfo>"
+
+    ret += "<adept:credentials xmlns:adept=\"http://ns.adobe.com/adept\">"
+    ret += "<adept:user>%s</adept:user>" % (rt_c_user)
+    ret += "<adept:licenseCertificate>%s</adept:licenseCertificate>" % (rt_c_licenseCertificate)
+    ret += "<adept:privateLicenseKey>%s</adept:privateLicenseKey>" % (rt_c_privateLicenseKey)
+    ret += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (rt_c_authenticationCertificate)
+
+    if rt_c_username is not None: 
+        ret += "<adept:username method=\"%s\">%s</adept:username>" % (rt_c_usernameMethod, rt_c_username)
+
+    ret += "</adept:credentials>"
+
+    activationToken = activationToken.decode("latin-1")
+    # Yeah, terrible hack, but Adobe sends the token with namespace but exports it without.
+    activationToken = activationToken.replace(' xmlns="http://ns.adobe.com/adept"', '')
+
+    ret += activationToken
+
+    ret += "</activationInfo>"
+
+    # Okay, now we can finally write this to the device. 
+
+    try: 
+        f = open(act_xml_path, "w")
+        f.write(ret)
+        f.close()
+    except: 
+        return False, "Can't write file"
+
+    return True, "Done"
+    
+
+
+
+
+
+
+def buildActivateReqProxy(useVersionIndex: int = 0, proxyData = None):
+
+    if proxyData is None: 
+        return False
+
+    if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
+        return False
+
+    try: 
+        build_id = VAR_VER_BUILD_IDS[useVersionIndex]
+    except:
+        return False
+
+    if build_id not in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
+        # ADE 1.7.2 or another version that authorization is disabled for
+        return False
+
+    local_device_xml = etree.parse(get_device_path())
+    local_activation_xml = etree.parse(get_activation_xml_path())
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    version = None
+    clientOS = None
+    clientLocale = None
+
+    ver = local_device_xml.findall("./%s" % (adNS("version")))
+
+
+    for f in ver:
+        if f.get("name") == "hobbes":
+            version = f.get("value")
+        elif f.get("name") == "clientOS":
+            clientOS = f.get("value")
+        elif f.get("name") == "clientLocale":
+            clientLocale = f.get("value")
+
+    if (version is None or clientOS is None or clientLocale is None):
+        return False, "Required version information missing"
+        
+
+    ret = ""
+
+    ret += "<?xml version=\"1.0\"?>"
+    ret += "<adept:activate xmlns:adept=\"http://ns.adobe.com/adept\" requestType=\"initial\">"
+    ret += "<adept:fingerprint>%s</adept:fingerprint>" % (proxyData.find("./%s" % (adNS("fingerprint"))).text)
+    ret += "<adept:deviceType>%s</adept:deviceType>" % (proxyData.find("./%s" % (adNS("deviceType"))).text)
+    ret += "<adept:clientOS>%s</adept:clientOS>" % (clientOS)
+    ret += "<adept:clientLocale>%s</adept:clientLocale>" % (clientLocale)
+    ret += "<adept:clientVersion>%s</adept:clientVersion>" % (VAR_VER_SUPP_VERSIONS[useVersionIndex])
+
+    ret += "<adept:proxyDevice>"
+    ret += "<adept:softwareVersion>%s</adept:softwareVersion>" % (version)
+    ret += "<adept:clientOS>%s</adept:clientOS>" % (clientOS)
+    ret += "<adept:clientLocale>%s</adept:clientLocale>" % (clientLocale)
+    ret += "<adept:clientVersion>%s</adept:clientVersion>" % (VAR_VER_SUPP_VERSIONS[useVersionIndex])
+    ret += "<adept:deviceType>%s</adept:deviceType>" % (local_device_xml.find("./%s" % (adNS("deviceType"))).text)
+    ret += "<adept:productName>%s</adept:productName>" % ("ADOBE Digitial Editions")
+    # YES, this typo ("Digitial" instead of "Digital") IS present in ADE!!
+
+    ret += "<adept:fingerprint>%s</adept:fingerprint>" % (local_device_xml.find("./%s" % (adNS("fingerprint"))).text)
+
+    ret += "<adept:activationToken>"
+    ret += "<adept:user>%s</adept:user>" % (local_activation_xml.find("./%s/%s" % (adNS("activationToken"), adNS("user"))).text)
+    ret += "<adept:device>%s</adept:device>" % (local_activation_xml.find("./%s/%s" % (adNS("activationToken"), adNS("device"))).text)
+    ret += "</adept:activationToken>"
+    ret += "</adept:proxyDevice>"
+
+    ret += "<adept:targetDevice>"
+
+    target_hobbes_vers = proxyData.findall("./%s" % (adNS("version")))
+    hobbes_version = None
+    for f in target_hobbes_vers:
+        if f.get("name") == "hobbes":
+            hobbes_version = f.get("value")
+            break
+
+    if hobbes_version is not None:
+        ret += "<adept:softwareVersion>%s</adept:softwareVersion>" % (hobbes_version)
+    
+    ret += "<adept:clientVersion>%s</adept:clientVersion>" % (proxyData.find("./%s" % (adNS("deviceClass"))).text)
+    ret += "<adept:deviceType>%s</adept:deviceType>" % (proxyData.find("./%s" % (adNS("deviceType"))).text)
+    ret += "<adept:productName>%s</adept:productName>" % ("ADOBE Digitial Editions")
+    ret += "<adept:fingerprint>%s</adept:fingerprint>" % (proxyData.find("./%s" % (adNS("fingerprint"))).text)
+
+
+    ret += "</adept:targetDevice>"
+
+    ret += addNonce()
+
+    ret += "<adept:user>%s</adept:user>" % (local_activation_xml.find("./%s/%s" % (adNS("activationToken"), adNS("user"))).text)
+
+    ret += "</adept:activate>"
+
+    return True, ret
 
 
 def buildActivateReq(useVersionIndex: int = 0): 
@@ -589,7 +758,7 @@ def changeDeviceVersion(useVersionIndex: int = 0):
         
 
 
-def activateDevice(useVersionIndex: int = 0): 
+def activateDevice(useVersionIndex: int = 0, proxyData = None): 
 
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
         return False, "Invalid Version index"
@@ -611,8 +780,10 @@ def activateDevice(useVersionIndex: int = 0):
     except:
         pass
 
-
-    result, activate_req = buildActivateReq(useVersionIndex)
+    if proxyData is not None:
+        result, activate_req = buildActivateReqProxy(useVersionIndex, proxyData)
+    else:
+        result, activate_req = buildActivateReq(useVersionIndex)
     if (result is False):
         return False, "Building activation request failed: " + activate_req
 
@@ -662,6 +833,11 @@ def activateDevice(useVersionIndex: int = 0):
     if verbose_logging:
         print("Response from server: ")
         print(ret)
+
+    if proxyData is not None: 
+        # If we have a proxy device, this function doesn't know where to store the activation.
+        # Just return the data and have the caller figure that out.
+        return True, ret
 
     # Soooo, lets go and append that to the XML: 
     
