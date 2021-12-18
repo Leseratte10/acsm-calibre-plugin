@@ -145,9 +145,18 @@ def buildAuthRequest():
     user_pkcs12 = base64.b64decode(activationxml.find("./%s/%s" % (adNS("credentials"), adNS("pkcs12"))).text)
 
 
-    f = open(get_devkey_path(), "rb")
-    devkey_bytes = f.read()
-    f.close()
+    try: 
+        from calibre_plugins.deacsm.libadobe import devkey_bytes as devkey_adobe
+    except: 
+        from libadobe import devkey_bytes as devkey_adobe
+
+    if devkey_adobe is not None: 
+        devkey_bytes = devkey_adobe
+    else: 
+        f = open(get_devkey_path(), "rb")
+        devkey_bytes = f.read()
+        f.close()
+        
 
     my_cert = get_cert_from_pkcs12(user_pkcs12, base64.b64encode(devkey_bytes))
 

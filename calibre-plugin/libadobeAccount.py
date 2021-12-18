@@ -216,9 +216,18 @@ def createUser(useVersionIndex: int = 0, authCert = None):
     return True, "Done"
 
 def encryptLoginCredentials(username: str, password: str, authenticationCertificate: str): 
-    f = open(get_devkey_path(), "rb")
-    devkey_bytes = f.read()
-    f.close()
+
+    try: 
+        from calibre_plugins.deacsm.libadobe import devkey_bytes as devkey_adobe
+    except: 
+        from libadobe import devkey_bytes as devkey_adobe
+
+    if devkey_adobe is not None: 
+        devkey_bytes = devkey_adobe
+    else: 
+        f = open(get_devkey_path(), "rb")
+        devkey_bytes = f.read()
+        f.close()
 
     _authenticationCertificate = base64.b64decode(authenticationCertificate)
 

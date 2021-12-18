@@ -25,3 +25,16 @@ jobs:
           path: |
             calibre-plugin.zip
     
+  test-linux:
+    runs-on: ubuntu-latest
+    steps: 
+      - uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          pip3 install freezegun lxml pycryptodome rsa oscrypto
+
+      - name: Run tests
+        run: |
+          cd tests && ./main.py
+
