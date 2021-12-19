@@ -22,6 +22,7 @@ import libadobe             # type: ignore
 import libadobeAccount      # type: ignore
 from getEncryptionKeyLinux import unfuck as fix_wine_username # type: ignore
 from libpdf import trim_encrypt_string, cleanup_encrypt_element, deflate_and_base64_encode  # type: ignore
+from customRSA import CustomRSA # type: ignore
 
 
 class TestAdobe(unittest.TestCase): 
@@ -144,6 +145,55 @@ class TestAdobe(unittest.TestCase):
 
         self.assertEqual(sha_hash, "3452e3d11cdd70eb90323f291c06afafe10e098a", "Invalid SHA hash after node signing")
 
+
+    def test_sign_node_old(self):
+
+        '''Tests the "old" signing method with the external RSA library. '''
+
+        # This is no longer in use by the plugin, but I still want to leave this test in,
+        # in case we need to go back to the old method.
+
+        mock_signing_key = "MIICdAIBADANBgkqhkiG9w0BAQEFAASCAl4wggJaAgEAAoGBALluuPvdDpr4L0j3eIGy3VxhgRcEKU3++qwbdvLXI99/izW9kfELFFJtq5d4ktIIUIvHsWkW0jblGi+bQ4sQXCeIvtOgqVHMSvRpW78lnGEkdD4Y1qhbcVGw7OGpWlhp8qCJKVCGbrkML7BSwFvQqqvg4vMU8O1uALfJvicKN3YfAgMBAAECf3uEg+Hr+DrstHhZF40zJPHKG3FkFd3HerXbOawMH5Q6CKTuKDGmOYQD+StFIlMArQJh8fxTVM3gSqgPkyyiesw0OuECU985FaLbUWxuCQzBcitnhl+VSv19oEPHTJWu0nYabasfT4oPjf8eiWR/ymJ9DZrjMWWy4Xf/S+/nFYUCQQDIZ1pc9nZsCB4QiBl5agTXoMcKavxFHPKxI/mHfRCHYjNyirziBJ+Dc/N40zKvldNBjO43KjLhUZs/BxdAJo09AkEA7OAdsg6SmviVV8xk0vuTmgLxhD7aZ9vpV4KF5+TH2DbximFoOP3YRObXV862wAjCpa84v43ok7Imtsu3NKQ+iwJAc0mx3GUU/1U0JoKFVSm+m2Ws27tsYT4kB/AQLvetuJSv0CcsPkI2meLsoAev0v84Ry+SIz4tgx31V672mzsSaQJBAJET1rw2Vq5Zr8Y9ZkceVFGQmfGAOW5A71Jsm6zin0+anyc874NwXaQdqiiab61/8A9gGSahOKA1DacJcCTqr28CQGm4mn3rOQFf+nniajIobATjNHaZJ76Xnc6rtoreK6+ZjO9wYF+797X/bhiV11Fpakvyrz6+t7bAd0PPQ2taTDg="
+        payload_bytes = bytes([0x34, 0x52, 0xe3, 0xd1, 0x1c, 0xdd, 0x70, 0xeb, 0x90, 0x32, 0x3f, 0x29, 0x1c, 0x06, 0xaf, 0xaf, 0xe1, 0x0e, 0x09, 0x8a])
+        
+        import rsa
+        # Current signing method
+        key = rsa.PrivateKey.load_pkcs1(RSA.importKey(base64.b64decode(mock_signing_key)).exportKey())
+        keylen = rsa.pkcs1.common.byte_size(key.n)
+        padded = rsa.pkcs1._pad_for_signing(payload_bytes, keylen)
+        payload = rsa.pkcs1.transform.bytes2int(padded)
+        encrypted = key.blinded_encrypt(payload)
+        block = rsa.pkcs1.transform.int2bytes(encrypted, keylen)
+        signature = base64.b64encode(block).decode()
+
+        expected_signature = "RO/JmWrustzT50GB9bSb4VdRZCP77y0ZuFFmn8gk/p0E6EbQnqP10QkB5HM8JSV9lKaKJuZpDBJ8cp+FxZmMSPe6odTUiL134Y6tXOCllBtKwVamQjsYbIFLv/HOX68rUadSHpr4QKMle2jeQinIT0viS5kwO7XofKHaSLM2XjE="
+
+        self.assertEqual(signature, expected_signature, "Old (external RSA) signing method broken")
+
+
+
+    def test_sign_node_new(self):
+
+        '''Tests the "new" signing method with CustomRSA. '''
+
+        mock_signing_key = "MIICdAIBADANBgkqhkiG9w0BAQEFAASCAl4wggJaAgEAAoGBALluuPvdDpr4L0j3eIGy3VxhgRcEKU3++qwbdvLXI99/izW9kfELFFJtq5d4ktIIUIvHsWkW0jblGi+bQ4sQXCeIvtOgqVHMSvRpW78lnGEkdD4Y1qhbcVGw7OGpWlhp8qCJKVCGbrkML7BSwFvQqqvg4vMU8O1uALfJvicKN3YfAgMBAAECf3uEg+Hr+DrstHhZF40zJPHKG3FkFd3HerXbOawMH5Q6CKTuKDGmOYQD+StFIlMArQJh8fxTVM3gSqgPkyyiesw0OuECU985FaLbUWxuCQzBcitnhl+VSv19oEPHTJWu0nYabasfT4oPjf8eiWR/ymJ9DZrjMWWy4Xf/S+/nFYUCQQDIZ1pc9nZsCB4QiBl5agTXoMcKavxFHPKxI/mHfRCHYjNyirziBJ+Dc/N40zKvldNBjO43KjLhUZs/BxdAJo09AkEA7OAdsg6SmviVV8xk0vuTmgLxhD7aZ9vpV4KF5+TH2DbximFoOP3YRObXV862wAjCpa84v43ok7Imtsu3NKQ+iwJAc0mx3GUU/1U0JoKFVSm+m2Ws27tsYT4kB/AQLvetuJSv0CcsPkI2meLsoAev0v84Ry+SIz4tgx31V672mzsSaQJBAJET1rw2Vq5Zr8Y9ZkceVFGQmfGAOW5A71Jsm6zin0+anyc874NwXaQdqiiab61/8A9gGSahOKA1DacJcCTqr28CQGm4mn3rOQFf+nniajIobATjNHaZJ76Xnc6rtoreK6+ZjO9wYF+797X/bhiV11Fpakvyrz6+t7bAd0PPQ2taTDg="
+        payload_bytes = bytes([0x34, 0x52, 0xe3, 0xd1, 0x1c, 0xdd, 0x70, 0xeb, 0x90, 0x32, 0x3f, 0x29, 0x1c, 0x06, 0xaf, 0xaf, 0xe1, 0x0e, 0x09, 0x8a])
+        
+        key = RSA.importKey(base64.b64decode(mock_signing_key))
+
+        keylen = CustomRSA.byte_size(key.n)
+        padded = CustomRSA.pad_message(payload_bytes, keylen)
+        payload = CustomRSA.transform_bytes2int(padded)
+        encrypted = CustomRSA.normal_encrypt(key, payload)
+        block = CustomRSA.transform_int2bytes(encrypted, keylen)
+        signature = base64.b64encode(block).decode()
+
+        expected_signature = "RO/JmWrustzT50GB9bSb4VdRZCP77y0ZuFFmn8gk/p0E6EbQnqP10QkB5HM8JSV9lKaKJuZpDBJ8cp+FxZmMSPe6odTUiL134Y6tXOCllBtKwVamQjsYbIFLv/HOX68rUadSHpr4QKMle2jeQinIT0viS5kwO7XofKHaSLM2XjE="
+
+        self.assertEqual(signature, expected_signature, "CustomRSA encryption is broken")
+
+
+
     
     def test_Account_loginCredentialEncryption(self):
         '''Check if we can properly encrypt login credentials.'''
@@ -174,9 +224,6 @@ class TestAdobe(unittest.TestCase):
         expected_msg.extend(bytearray(passwd.encode("latin-1")))
 
         self.assertEqual(msg.hex(), expected_msg.hex(), "devkey encryption returned invalid result")
-
-
-
 
 
 
