@@ -66,7 +66,7 @@ def main():
         print("Login unsuccessful: " + resp)
         exit(1)
 
-    success, resp = activateDevice(VAR_VER)
+    success, resp = activateDevice(VAR_VER, None)
     if (success is False):
         print("Couldn't activate device: " + resp)
         exit(1)

@@ -8,7 +8,22 @@ The original code used blinding and this one doesn't,
 but we don't really care about side-channel attacks ...
 '''
 
+try:
+    from Cryptodome.PublicKey import RSA
+except ImportError:
+    # Some distros still ship this as Crypto
+    from Crypto.PublicKey import RSA
+
 class CustomRSA: 
+
+    def encrypt_for_adobe_signature(signing_key, message):
+        key = RSA.importKey(signing_key)
+        keylen = CustomRSA.byte_size(key.n)
+        padded = CustomRSA.pad_message(message, keylen)
+        payload = CustomRSA.transform_bytes2int(padded)
+        encrypted = CustomRSA.normal_encrypt(key, payload)
+        block = CustomRSA.transform_int2bytes(encrypted, keylen)
+        return block
 
     def byte_size(number: int):
         return (number.bit_length() + 7) // 8

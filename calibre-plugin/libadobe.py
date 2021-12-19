@@ -13,17 +13,15 @@ from datetime import datetime, timedelta
 from lxml import etree
 
 try:
-    from Crypto import Random
-    from Crypto.Cipher import AES
-    from Crypto.PublicKey import RSA
-    from Crypto.Hash import SHA
-except ImportError:
-    # Debian (and Ubuntu) ship pycryptodome, but not in its compatible mode with pycrypto
-    # If `Crypto` can't be found, try under pycryptodome's own namespace
     from Cryptodome import Random
     from Cryptodome.Cipher import AES
-    from Cryptodome.PublicKey import RSA
     from Cryptodome.Hash import SHA
+
+except ImportError:
+    # Some distros still ship Crypto
+    from Crypto import Random
+    from Crypto.Cipher import AES
+    from Crypto.Hash import SHA
 
 try: 
     from customRSA import CustomRSA
@@ -176,9 +174,11 @@ def makeFingerprint(serial: str):
     # base64(sha1(serial + privateKey))
     # Fingerprint must be 20 bytes or less.
 
-    f = open(FILE_DEVICEKEY, "rb")
-    devkey_bytes = f.read()
-    f.close()
+    global devkey_bytes
+    if devkey_bytes is None: 
+        f = open(FILE_DEVICEKEY, "rb")
+        devkey_bytes = f.read()
+        f.close()
 
     str_to_hash = serial + devkey_bytes.decode('latin-1')
     hashed_str = hashlib.sha1(str_to_hash.encode('latin-1')).digest()
@@ -416,6 +416,8 @@ def sign_node(node):
         devkey_bytes = f.read()
         f.close()
 
+    # Get private key
+
     try: 
         activationxml = etree.parse(FILE_ACTIVATIONXML)
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
@@ -424,17 +426,12 @@ def sign_node(node):
         return None
 
     my_pkcs12 = base64.b64decode(pkcs12)
-
     my_priv_key, _, _ = keys.parse_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))
     my_priv_key = dump_private_key(my_priv_key, None, "der")
 
+    # textbook RSA with that private key
 
-    key = RSA.importKey(my_priv_key)
-    keylen = CustomRSA.byte_size(key.n)
-    padded = CustomRSA.pad_message(sha_hash, keylen)
-    payload = CustomRSA.transform_bytes2int(padded)
-    encrypted = CustomRSA.normal_encrypt(key, payload)
-    block = CustomRSA.transform_int2bytes(encrypted, keylen)
+    block = CustomRSA.encrypt_for_adobe_signature(my_priv_key, sha_hash)
     signature = base64.b64encode(block).decode()
 
     # Debug
