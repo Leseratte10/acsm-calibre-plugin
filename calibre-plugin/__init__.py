@@ -138,7 +138,10 @@ class DeACSM(FileTypePlugin):
 
                 os.mkdir(rand_path)
 
-                names = ["cryptography.zip", "rsa.zip", "oscrypto.zip", "asn1crypto.zip", "pyasn1.zip"]
+                names = ["oscrypto.zip", "asn1crypto.zip"]
+
+                # oscrypto is needed to parse the pkcs12 data from Adobe.
+                # asn1crypto is a dependency of oscrypto.
                     
                 lib_dict = self.load_resources(names)
 
@@ -174,11 +177,8 @@ class DeACSM(FileTypePlugin):
                 # Rename temporary path to actual module path so this will be used next time.
                 os.rename(rand_path, self.moddir)
 
-            sys.path.insert(0, os.path.join(self.moddir, "cryptography"))
-            sys.path.insert(0, os.path.join(self.moddir, "rsa"))
             sys.path.insert(0, os.path.join(self.moddir, "oscrypto"))
             sys.path.insert(0, os.path.join(self.moddir, "asn1crypto"))
-            sys.path.insert(0, os.path.join(self.moddir, "pyasn1"))
             
             # Okay, now all the modules are available, import the Adobe modules.
 

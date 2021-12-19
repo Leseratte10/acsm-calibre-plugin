@@ -2,7 +2,12 @@ from lxml import etree
 import base64
 import os, locale, platform
 
-from Crypto.Cipher import AES as _AES
+try: 
+    from Crypto.Cipher import AES as _AES
+except ImportError:
+    # Debian (and Ubuntu) ship pycryptodome, but not in its compatible mode with pycrypto
+    # If `Crypto` can't be found, try under pycryptodome's own namespace
+    from Cryptodome.Cipher import AES as _AES
 
 class AES(object):
     def __init__(self, key, iv):

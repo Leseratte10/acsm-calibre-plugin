@@ -1,6 +1,6 @@
 from lxml import etree
 import base64
-import os, locale, platform
+import locale, platform
 
 try:
     from Crypto.PublicKey import RSA

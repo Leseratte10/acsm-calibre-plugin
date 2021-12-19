@@ -11,7 +11,6 @@ import urllib.request, ssl
 from datetime import datetime, timedelta
 
 from lxml import etree
-import rsa
 
 try:
     from Crypto import Random
@@ -26,9 +25,13 @@ except ImportError:
     from Cryptodome.PublicKey import RSA
     from Cryptodome.Hash import SHA
 
-from oscrypto import keys
-from oscrypto.asymmetric import dump_certificate, dump_private_key, dump_public_key
+try: 
+    from customRSA import CustomRSA
+except: 
+    from calibre_plugins.deacsm.customRSA import CustomRSA
 
+from oscrypto import keys
+from oscrypto.asymmetric import dump_certificate, dump_private_key
 
 
 VAR_ACS_SERVER_HTTP = "http://adeactivate.adobe.com/adept"
@@ -393,9 +396,9 @@ def addNonce():
 def get_cert_from_pkcs12(_pkcs12, _key):
 
     _, cert, _ = keys.parse_pkcs12(_pkcs12, _key)
-    cert = dump_certificate(cert, encoding="der")
+    return dump_certificate(cert, encoding="der")
 
-    return cert
+
 
 
 def sign_node(node):
@@ -421,17 +424,20 @@ def sign_node(node):
         return None
 
     my_pkcs12 = base64.b64decode(pkcs12)
+
     my_priv_key, _, _ = keys.parse_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))
     my_priv_key = dump_private_key(my_priv_key, None, "der")
 
-    key = rsa.PrivateKey.load_pkcs1(RSA.importKey(my_priv_key).exportKey())
-    keylen = rsa.pkcs1.common.byte_size(key.n)
-    padded = rsa.pkcs1._pad_for_signing(sha_hash, keylen)
-    payload = rsa.pkcs1.transform.bytes2int(padded)
-    encrypted = key.blinded_encrypt(payload)
-    block = rsa.pkcs1.transform.int2bytes(encrypted, keylen)
+
+    key = RSA.importKey(my_priv_key)
+    keylen = CustomRSA.byte_size(key.n)
+    padded = CustomRSA.pad_message(sha_hash, keylen)
+    payload = CustomRSA.transform_bytes2int(padded)
+    encrypted = CustomRSA.normal_encrypt(key, payload)
+    block = CustomRSA.transform_int2bytes(encrypted, keylen)
     signature = base64.b64encode(block).decode()
 
+    # Debug
     # print("sig is %s\n" % block.hex())
 
     return signature
