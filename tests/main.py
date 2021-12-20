@@ -57,12 +57,13 @@ class TestAdobe(unittest.TestCase):
         for version in libadobe.VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO:
             self.assertIn(version, libadobe.VAR_VER_BUILD_IDS, "Invalid buildID for switching")
 
-    def test_checkSystemIdentifiers(self):
-        '''Check if we can figure out necessary system IDs'''
+    def test_serialGeneration(self):
+        '''Check if serial generation works'''
         self.assertEqual((len(libadobe.get_mac_address())), 6,  "MAC address invalid")
         self.assertEqual(libadobe.get_mac_address(), libadobe.get_mac_address(), "MAC address not constant")
         self.assertEqual((len(libadobe.makeSerial(False))), 40, "SHA1 hash for device serial invalid (device-based)")
         self.assertEqual((len(libadobe.makeSerial(True))), 40,  "SHA1 hash for device serial invalid (random)")
+        self.assertEqual(libadobe.makeSerial(False), libadobe.makeSerial(False), "Two non-random serials not identical")
 
     def test_fingerprintGeneration(self): 
         '''Check if fingerprint generation works'''
@@ -176,8 +177,11 @@ class TestAdobe(unittest.TestCase):
         mock_signing_key = "MIICdAIBADANBgkqhkiG9w0BAQEFAASCAl4wggJaAgEAAoGBALluuPvdDpr4L0j3eIGy3VxhgRcEKU3++qwbdvLXI99/izW9kfELFFJtq5d4ktIIUIvHsWkW0jblGi+bQ4sQXCeIvtOgqVHMSvRpW78lnGEkdD4Y1qhbcVGw7OGpWlhp8qCJKVCGbrkML7BSwFvQqqvg4vMU8O1uALfJvicKN3YfAgMBAAECf3uEg+Hr+DrstHhZF40zJPHKG3FkFd3HerXbOawMH5Q6CKTuKDGmOYQD+StFIlMArQJh8fxTVM3gSqgPkyyiesw0OuECU985FaLbUWxuCQzBcitnhl+VSv19oEPHTJWu0nYabasfT4oPjf8eiWR/ymJ9DZrjMWWy4Xf/S+/nFYUCQQDIZ1pc9nZsCB4QiBl5agTXoMcKavxFHPKxI/mHfRCHYjNyirziBJ+Dc/N40zKvldNBjO43KjLhUZs/BxdAJo09AkEA7OAdsg6SmviVV8xk0vuTmgLxhD7aZ9vpV4KF5+TH2DbximFoOP3YRObXV862wAjCpa84v43ok7Imtsu3NKQ+iwJAc0mx3GUU/1U0JoKFVSm+m2Ws27tsYT4kB/AQLvetuJSv0CcsPkI2meLsoAev0v84Ry+SIz4tgx31V672mzsSaQJBAJET1rw2Vq5Zr8Y9ZkceVFGQmfGAOW5A71Jsm6zin0+anyc874NwXaQdqiiab61/8A9gGSahOKA1DacJcCTqr28CQGm4mn3rOQFf+nniajIobATjNHaZJ76Xnc6rtoreK6+ZjO9wYF+797X/bhiV11Fpakvyrz6+t7bAd0PPQ2taTDg="
         payload_bytes = bytes([0x34, 0x52, 0xe3, 0xd1, 0x1c, 0xdd, 0x70, 0xeb, 0x90, 0x32, 0x3f, 0x29, 0x1c, 0x06, 0xaf, 0xaf, 0xe1, 0x0e, 0x09, 0x8a])
         
-        import rsa
-        # Current signing method
+        try: 
+            import rsa
+        except: 
+            return self.skipTest("rsa not installed")
+
         key = rsa.PrivateKey.load_pkcs1(RSA.importKey(base64.b64decode(mock_signing_key)).exportKey())
         keylen = rsa.pkcs1.common.byte_size(key.n)
         padded = rsa.pkcs1._pad_for_signing(payload_bytes, keylen)

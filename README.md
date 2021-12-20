@@ -56,5 +56,9 @@ Though, generally it's recommended to use the Calibre plugin instead of these st
 ## To-Do list for the future?
 
 - Support to copy an authorization from the plugin to an ADE install
-- Support for Adobe's "auth" download method instead of the "simple" method.
+- Import a JoinedAccount authorization from ADE
+- Import multiple account authorizations from ADE
+- Support for Adobe's "auth" download method instead of the "simple" method (ADE2.0+)
+- Support the JoinAccounts, ActivateLinkedAccounts and GetCredentialList functions to allow for merged AdobeIDs (ADE2.0+)
+- Support the SyncToDevice function to auto-download new books from ADE into Calibre (ADE4.0+)
 - ...
