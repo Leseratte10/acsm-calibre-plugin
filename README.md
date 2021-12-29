@@ -14,7 +14,7 @@ Download the plugin and import it into Calibre, then open the plugin settings. T
 
 During authorization, the plugin may ask you for the ADE version to emulate. Usually you can leave this setting as it is (ADE 2.0.1).
 
-After you've activated the plugin, make a backup of the activation using the "Export account activation data". Then click "Export account encryption key" and import the resulting file into the DeDRM plugin for DRM removal. If you're using noDRM's fork of the DeDRM plugin, this step will happen automatically. 
+After you've activated the plugin, make a backup of the activation using the "Export account activation data". Then click "Export account encryption key" and import the resulting file into the DeDRM plugin for DRM removal. If you're using noDRM's fork of the DeDRM plugin, this step will happen automatically. If you don't have the DeDRM plugin set up (or you're not using noDRM's fork and didn't import the key file) you will not be able to read the downloaded books in Calibre due to the DRM.
 
 Once that's done, download an ACSM file from Adobe's test library and see if you can import it into Calibre: https://www.adobe.com/de/solutions/ebook/digital-editions/sample-ebook-library.html 
 
@@ -39,7 +39,7 @@ Note: You can only return books that you downloaded with version 0.0.9 (or newer
 
 As of v0.0.16, the plugin can also authorize an eReader connected to the Computer through USB. For now, this only works with devices that export their `.adobe-digital-editions` folder through USB. In order to authorize such an eReader, just open the plugin settings and click "Authorize eReader over USB" (only available if the plugin is authorized with an AdobeID). Then select the eReader in the folder selection dialog. This process does not work with eReaders relying on a specific USB driver for the ADE connection such as the Sony PRS-T2 (and probably some other older Sony devices). 
 
-Right now, this process is fairly experimental as I do not own a physical eReader that supports this functionality, so I've only been able to test this with a fake, emulated eReader and not with a real device.
+Right now, this process is fairly experimental, and I've only tested this with a Pocketbook reader so far.
 
 Note that this process will use up one of your six mobile/tethered eReader authorizations on your AdobeID. While it is possible to clone a computer activation by exporting it on one computer and importing it on another, this is not possible with eReader authorizations. 
 
@@ -56,9 +56,11 @@ Though, generally it's recommended to use the Calibre plugin instead of these st
 ## To-Do list for the future?
 
 - Support to copy an authorization from the plugin to an ADE install
-- Import a JoinedAccount authorization from ADE
-- Import multiple account authorizations from ADE
+- Support for multiple independant authorizations (with an easy way to switch between them)
+- Import a JoinedAccount authorization from ADE (ADE2.0+)
+- Import multiple account authorizations from ADE (ADE2.0+)
 - Support for Adobe's "auth" download method instead of the "simple" method (ADE2.0+)
 - Support the JoinAccounts, ActivateLinkedAccounts and GetCredentialList functions to allow for merged AdobeIDs (ADE2.0+)
 - Support the SyncToDevice function to auto-download new books from ADE into Calibre (ADE4.0+)
+- Add small link in settings window that will open a popup with all the expert stuff like de-auth and account joining.
 - ...
