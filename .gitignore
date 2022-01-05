@@ -1,3 +1,4 @@
 /calibre-plugin/*.zip
 /calibre-plugin/keyextract/*.exe
 /calibre-plugin/module_id.txt
+/calibre-plugin/__pycache__

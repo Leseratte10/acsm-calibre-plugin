@@ -19,7 +19,7 @@ int char2int(char input) {
 	if (input >= 'a' && input <= 'f')
 		return input - 'a' + 10;
 	
-	printf("PROGOUTPUT:-3");
+	fputs("PROGOUTPUT:-3", stdout);
 	exit(-3);
 }
 
@@ -119,7 +119,7 @@ int main() {
 	char * entropy_hex = getenv(var_entropy);
 
 	if (data_hex == NULL || entropy_hex == NULL) {
-		printf("PROGOUTPUT:-1");
+		fputs("PROGOUTPUT:-1", stdout);
 		exit(-1);
 	}
 
@@ -127,7 +127,7 @@ int main() {
 	char * entropy_bytes = malloc((strlen(entropy_hex) / 2));
 
 	if (data_bytes == NULL || entropy_bytes == NULL) {
-		printf("PROGOUTPUT:-2");
+		fputs("PROGOUTPUT:-2", stdout);
 		exit(-2);
 	}
 
@@ -153,6 +153,7 @@ input_data.cbData = strlen(data_hex)/2;
 entropy_data.pbData = entropy_bytes;
 entropy_data.cbData = strlen(entropy_hex)/2;
 
+
 int ret = CryptUnprotectData(
 	&input_data, 
 	NULL, 
@@ -162,13 +163,15 @@ int ret = CryptUnprotectData(
 	0, 
 	&output_data);
 
+
+
 if (ret) {
 	if (output_data.cbData != 16) {
 		printf("PROGOUTPUT:-5:%d", output_data.cbData);	
 		exit(-5);
 	}
 	// Success! Return decrypted data
-	printf("PROGOUTPUT:0:");
+	fputs("PROGOUTPUT:0:", stdout);
 	for (int i = 0; i < 16; i++) {
 		printf("%02x", output_data.pbData[i]);
 	}
