@@ -711,6 +711,10 @@ def buildActivateReq(useVersionIndex: int = 0):
 
     ret += "<adept:fingerprint>%s</adept:fingerprint>" % (devicexml.find("./%s" % (adNS("fingerprint"))).text)
 
+    # TODO: Here's where multiple <adept:activationToken>s, each with a user and a device,
+    # TODO: would show up if the client was already activated and just adds an additional activation.
+    # TODO: Not sure if I want to replicate this, or if I'd rather replicate independant installations ...
+
     ret += "</adept:targetDevice>"
 
     ret += addNonce()

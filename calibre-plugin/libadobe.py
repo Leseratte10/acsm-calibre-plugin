@@ -51,6 +51,7 @@ VAR_VER_OS_IDENTIFIERS = [ "Windows Vista", "Windows Vista", "Windows 8", "Windo
 
 # "Missing" versions:
 # 1.7.1, 2.0, 3.0, 4.0, 4.0.1, 4.0.2, 4.5 to 4.5.9
+# 4.5.7.179634
 
 # This is a list of ALL versions we know (and can potentially use if present in a config file).
 # Must have the same length / size as the four lists above.
@@ -66,6 +67,11 @@ VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO = [ 1131, 78765, 91394, 123281, 187303 ]
 # Versions >= this one are using HTTPS
 # According to changelogs, this is implemented as of ADE 4.0.1 - no idea what build ID that is.
 VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT = 123281
+
+# Versions >= this are using a different order for the XML elements in a FulfillmentNotification.
+# This doesn't matter for fulfillment at all, but I want to emulate ADE as accurately as possible.
+# Implemented as of ADE 4.0.0, no idea what exact build number that is.
+VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER = 123281
 
 # Default build ID to use - ADE 2.0.1
 VAR_VER_DEFAULT_BUILD_ID = 78765

@@ -5,10 +5,12 @@ try:
     from libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
     from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
     from libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
+    from libadobe import VAR_VER_BUILD_IDS, VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER
 except: 
     from calibre_plugins.deacsm.libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
     from calibre_plugins.deacsm.libadobe import get_devkey_path, get_device_path, get_activation_xml_path
     from calibre_plugins.deacsm.libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
+    from calibre_plugins.deacsm.libadobe import VAR_VER_BUILD_IDS, VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER
 
  
 def buildFulfillRequest(acsm):
@@ -658,8 +660,32 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
         full_text = "<adept:notification xmlns:adept=\"http://ns.adobe.com/adept\">"
         full_text += "<adept:user>%s</adept:user>" % user
         full_text += "<adept:device>%s</adept:device>" % device
-        full_text += etree.tostring(body, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-        full_text += addNonce()
+
+
+        # ADE 4.0 apparently changed the order of these two elements. 
+        # I still don't know exactly how this order is determined, but in most cases
+        # ADE 4+ has the body first, then the nonce, while ADE 3 and lower usually has nonce first, then body.
+        # It probably doesn't matter, but still, we want to behave exactly like ADE, so check the version number: 
+
+        devicexml = etree.parse(get_device_path())
+        for f in devicexml.findall("./%s" % (adNS("version"))):
+            if f.get("name") == "hobbes":
+                version = f.get("value")
+
+        try: 
+            v_idx = VAR_VER_HOBBES_VERSIONS.index(version)
+            clientVersion = VAR_VER_BUILD_IDS[v_idx]
+        except:
+            clientVersion = 0
+        
+        if (clientVersion >= VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER):
+            full_text += etree.tostring(body, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+            full_text += addNonce()
+        else:
+            full_text += addNonce()
+            full_text += etree.tostring(body, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+            
+
         full_text += "</adept:notification>"
 
             

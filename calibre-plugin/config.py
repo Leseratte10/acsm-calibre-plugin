@@ -498,7 +498,10 @@ class ConfigWidget(QWidget):
         except:
             pass
         if ade_mail is None: 
-            self.button_convert_anon_to_account.setEnabled(False)
+            try: 
+                self.button_convert_anon_to_account.setEnabled(False)
+            except:
+                pass
         self.button_export_activation.setEnabled(False)
         self.button_export_key.setEnabled(False)
         self.lblAccInfo.setText("Authorization deleted.\nClose and re-open this window to add a new authorization.")
