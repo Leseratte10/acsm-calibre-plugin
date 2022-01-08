@@ -706,7 +706,18 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
         # Debug: Print notify request
         #print(doc_send)
 
-        code, msg = sendRequestDocuRC(doc_send, url)
+        try: 
+            code, msg = sendRequestDocuRC(doc_send, url)
+        except:
+            if not critical:
+                print("There was an error during an optional fulfillment notification:")
+                import traceback
+                traceback.print_exc()
+                print("Continuing execution ...")
+                continue
+            else:
+                print("Error during critical notification:")
+                raise
 
         try: 
             msg = msg.decode("utf-8")
