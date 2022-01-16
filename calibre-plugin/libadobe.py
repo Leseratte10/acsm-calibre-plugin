@@ -198,16 +198,10 @@ def makeSerial(random):
 
         mac_address = get_mac_address()
 
-        if sys.version_info[0] >= 3:
-            dataToHash = "%d:%s:%02x:%02x:%02x:%02x:%02x:%02x\x00" % (uid, username, 
-                mac_address[0], mac_address[1], mac_address[2], 
-                mac_address[3], mac_address[4], mac_address[5])
+        dataToHash = "%d:%s:%02x:%02x:%02x:%02x:%02x:%02x\x00" % (uid, username, 
+            mac_address[0], mac_address[1], mac_address[2], 
+            mac_address[3], mac_address[4], mac_address[5])
             
-        else:
-            dataToHash = "%d:%s:%02x:%02x:%02x:%02x:%02x:%02x\x00" % (uid, username, 
-                mac_address[0], mac_address[1], mac_address[2], 
-                mac_address[3], mac_address[4], mac_address[5])
-
         sha_out = hashlib.sha1(dataToHash.encode('latin-1')).hexdigest().lower()
     else: 
         import binascii

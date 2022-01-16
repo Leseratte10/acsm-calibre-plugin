@@ -37,7 +37,8 @@
 #          Ignore fatal HTTP errors and/or a missing or broken server during optional 
 #          fulfillment notifications, allow authorizing an eReader through USB (experimental), 
 #          drop dependencies python-cryptography, python-rsa and python-pyasn1. 
-#          add a ton of testing code, try to prevent AV false-positives.
+#          add a ton of testing code, try to prevent AV false-positives, 
+#          experimental support for Python2 / Calibre < 5.
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = (0, 0, 15)
@@ -70,10 +71,9 @@ class DeACSM(FileTypePlugin):
 
     def initialize(self):
         """
-        On initialization, make sure we have all the libraries (python-rsa, cryptography, 
-        oscrypto and their dependencies asn1crypto and pyasn1) that the plugin needs.
-        Unfortunately the Adobe encryption is kinda weird and nonstandard and doesn't work
-        with just the python modules included with Calibre. 
+        On initialization, make sure we have all the libraries (oscrypto and its dependency 
+        asn1crypto) that the plugin needs. Unfortunately the Adobe encryption is kinda weird 
+        and nonstandard and doesn't work with just the python modules included with Calibre. 
         """
 
         try:
