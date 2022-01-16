@@ -34,9 +34,10 @@
 #          allow converting an anonymous auth to an AdobeID auth, 
 #          update python-cryptography from 3.4.8 to 36.0.1, update python-rsa from 4.7.2 to 4.8.
 # Currently in development: 
-#          Ignore fatal HTTP errors during optional fulfillment notifications, 
-#          allow authorizing an eReader through USB, add a ton of testing code,
+#          Ignore fatal HTTP errors and/or a missing or broken server during optional 
+#          fulfillment notifications, allow authorizing an eReader through USB (experimental), 
 #          drop dependencies python-cryptography, python-rsa and python-pyasn1. 
+#          add a ton of testing code, try to prevent AV false-positives.
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = (0, 0, 15)

@@ -3,6 +3,41 @@
 This is a Calibre plugin that allows you to turn ACSM files into EPUB or PDF files without the need for Adobe Digital Editions. 
 It is a full Python reimplementation of libgourou by Grégory Soutadé (http://indefero.soutade.fr/p/libgourou/).
 
+<details>
+  <summary>ACSM Input Plugin for Calibre - Copyright (c) 2021-2022 Leseratte10</summary>
+
+```
+ACSM Input Plugin for Calibre (DeACSM) / acsm-calibre-plugin
+Copyright (c) 2021-2022 Leseratte10
+
+This software is a Python reimplementation of the C++ library 
+"libgourou" by Grégory Soutadé which is under the LGPLv3 or later 
+license (http://indefero.soutade.fr/p/libgourou/).
+
+I have no idea whether a reimplementation in another language counts 
+as "derivative use", so just in case it does, I'm putting this project 
+under the GPLv3 (which is allowed in the LGPLv3 license) to prevent any 
+licensing issues. 
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+See the "LICENSE" file for a full copy of the GNU GPL v3.
+```
+
+</details>
+
+
 ## Setup
 
 Download the plugin and import it into Calibre, then open the plugin settings. The plugin should display "Not authorized for any ADE ID". You now have multiple options to authorize the plugin: 

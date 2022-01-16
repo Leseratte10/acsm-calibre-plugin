@@ -17,8 +17,9 @@ rm -r __pycache__
 # Set module ID. This needs to be changed if any of the module ZIPs change.
 echo -n "2021-12-19-03" > module_id.txt
 
-# Copy LICENSE so it'll be included in the ZIP.
+# Copy LICENSE and README.md so it'll be included in the ZIP.
 cp ../LICENSE LICENSE
+cp ../README.md README.md
 
 # Create ZIP file from calibre-plugin folder.
 zip -r ../calibre-plugin.zip *
