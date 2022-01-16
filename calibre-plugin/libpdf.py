@@ -1,25 +1,37 @@
-import os, zlib, base64, time
+import sys, os, zlib, base64, time
 
 class BackwardReader:
 
     def __init__(self, file):
         self.file = file
 
+
     def readlines(self):
         BLKSIZE = 4096
         # Move reader to the end of file
         self.file.seek(0, os.SEEK_END)
-        buffer = bytearray()
+        if sys.version_info[0] >= 3:
+            buffer = bytearray()
+        else:
+            buffer = ""
 
         while True:
-            pos_newline = buffer.rfind(bytes([0x0a]))
+            if sys.version_info[0] >= 3:
+                pos_newline = buffer.rfind(bytes([0x0a]))
+            else:
+                pos_newline = buffer.rfind("\n")
+
             # Get the current position of the reader
             current_pos = self.file.tell()
             if pos_newline != -1:
                 # Newline is found
                 line = buffer[pos_newline+1:]
                 buffer = buffer[:pos_newline]
-                yield line.decode("latin-1")
+                if sys.version_info[0] >= 3:
+                    yield line.decode("latin-1")
+                else:
+                    yield line
+
             elif current_pos:
                 # Need to fill the buffer
                 to_read = min(BLKSIZE, current_pos)
@@ -27,10 +39,14 @@ class BackwardReader:
                 buffer = self.file.read(to_read) + buffer
                 self.file.seek(current_pos-to_read, 0)
                 if current_pos is to_read:
-                    buffer = bytes([0x0a]) + buffer
+                    if sys.version_info[0] >= 3:
+                        buffer = bytes([0x0a]) + buffer
+                    else:
+                        buffer = "\n" + buffer
             else:
                 # Start of file
                 return
+
 
 
 

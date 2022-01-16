@@ -392,6 +392,8 @@ def encrypt_with_device_key(data):
     for _ in range(remain):
         data.append(remain)
 
+    data = bytes(data)
+
 
     iv = Random.get_random_bytes(16)
     cip = AES.new(devkey_bytes, AES.MODE_CBC, iv)

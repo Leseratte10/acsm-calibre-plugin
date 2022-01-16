@@ -17,6 +17,7 @@ popd
 
 # Delete cache
 rm -r __pycache__
+rm *.pyc
 
 # Set module ID. This needs to be changed if any of the module ZIPs change.
 echo -n "2021-12-19-03" > module_id.txt
