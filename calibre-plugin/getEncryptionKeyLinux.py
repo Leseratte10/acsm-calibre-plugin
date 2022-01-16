@@ -3,7 +3,7 @@
 
 #@@CALIBRE_COMPAT_CODE@@
 
-import sys
+import sys, binascii
 
 def unfuck(user):
     # Wine uses a pretty nonstandard encoding in their registry file. 
@@ -175,7 +175,7 @@ def GetMasterKey(path_to_wine_prefix):
     signature = struct.pack('>I', signature)[1:]
 
     if (verbose_logging):
-        print("Signature: " + str(signature.hex()))
+        print("Signature: " + str(binascii.hexlify(signature)))
 
     # Search for the username in the registry:
     user = None
@@ -240,8 +240,8 @@ def GetMasterKey(path_to_wine_prefix):
 
                 # Now parse ...
                 key_line = key_line.split(':', 1)[1]
-                key_line = key_line.replace('\t', '').replace(' ', '').replace(',', '')
-                key_line = bytes.fromhex(key_line)
+                key_line = key_line.replace('\t', '').replace('\r', '').replace('\n', '').replace(' ', '').replace(',', '')
+                key_line = binascii.unhexlify(key_line)
 
             else: 
                 if (line.startswith("[Software\\\\Adobe\\\\Adept\\\\Device]")):
@@ -261,12 +261,15 @@ def GetMasterKey(path_to_wine_prefix):
         return None
 
     if verbose_logging:
-        print("Encrypted key: " + str(key_line))
+        print("Encrypted key: " + binascii.hexlify(key_line))
 
-    # These should all be "bytes" or "bytearray"
+    # These should all be "bytes" (Py3) or "str" (Py2)
     #print(type(vendor))
     #print(type(signature))
     #print(type(user))
+
+    if sys.version_info[0] == 2:
+        user = bytes(user)
 
     entropy = struct.pack('>I12s3s13s', serial, vendor, signature, user)
 
@@ -290,7 +293,7 @@ def GetMasterKey(path_to_wine_prefix):
         keykey = data
         if verbose_logging:
             print("Key key: ")
-            print(keykey)
+            print(binascii.hexlify(keykey))
         return keykey
     
     else: 
@@ -347,8 +350,8 @@ def CryptUnprotectDataExecuteWine(wineprefix, data, entropy):
     env_dict["WINEDEBUG"] = "+err,+fixme"
 
     # Use environment variables to get the input data to the application.
-    env_dict["X_DECRYPT_DATA"] = data.hex()
-    env_dict["X_DECRYPT_ENTROPY"] = entropy.hex()
+    env_dict["X_DECRYPT_DATA"] = binascii.hexlify(data)
+    env_dict["X_DECRYPT_ENTROPY"] = binascii.hexlify(entropy)
 
     try: 
         from calibre.utils.config import config_dir
@@ -372,7 +375,7 @@ def CryptUnprotectDataExecuteWine(wineprefix, data, entropy):
             #print(prog_stderr.decode("utf-8"))
         else:
             print("Successfully got encryption key from WINE.")
-        master_key = bytes.fromhex(key_string)
+        master_key = binascii.unhexlify(key_string)
         return True, master_key
 
         
