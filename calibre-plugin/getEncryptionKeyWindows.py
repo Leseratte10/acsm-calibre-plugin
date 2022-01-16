@@ -17,6 +17,8 @@ except ImportError:
     else:
         raise
 
+#@@CALIBRE_COMPAT_CODE@@
+
 def GetSystemDirectory():
     from ctypes import windll, c_wchar_p, c_uint, create_unicode_buffer
     MAX_PATH = 255
@@ -126,11 +128,8 @@ def GetMasterKey():
 
     
     # Get CPU vendor:
-    try:
-        import cpuid
-    except:
-        import calibre_plugins.deacsm.cpuid as cpuid
 
+    import cpuid
     import struct
     cpu = cpuid.CPUID()
     _, b, c, d = cpu(0)

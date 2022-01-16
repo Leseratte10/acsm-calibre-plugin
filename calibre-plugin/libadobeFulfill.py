@@ -1,16 +1,13 @@
 from lxml import etree
 import base64
 
-try: 
-    from libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
-    from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
-    from libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
-    from libadobe import VAR_VER_BUILD_IDS, VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER
-except: 
-    from calibre_plugins.deacsm.libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
-    from calibre_plugins.deacsm.libadobe import get_devkey_path, get_device_path, get_activation_xml_path
-    from calibre_plugins.deacsm.libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
-    from calibre_plugins.deacsm.libadobe import VAR_VER_BUILD_IDS, VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER
+#@@CALIBRE_COMPAT_CODE@@
+
+from libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
+from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+from libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
+from libadobe import VAR_VER_BUILD_IDS, VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER
+
 
  
 def buildFulfillRequest(acsm):
@@ -108,7 +105,8 @@ def buildFulfillRequest(acsm):
 
 
 
-def buildInitLicenseServiceRequest(authURL: str):
+def buildInitLicenseServiceRequest(authURL):
+    # type: (str) -> str
 
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
@@ -175,7 +173,9 @@ def buildAuthRequest():
     return ret
 
 
-def doOperatorAuth(operatorURL: str):
+def doOperatorAuth(operatorURL):
+    # type: (str) -> str
+
     auth_req = buildAuthRequest()
 
     authURL = operatorURL
@@ -212,7 +212,8 @@ def doOperatorAuth(operatorURL: str):
 
 
 
-def operatorAuth(operatorURL: str):
+def operatorAuth(operatorURL):
+    # type: (str) -> str
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }    
@@ -749,7 +750,8 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
 
 
 
-def fetchLicenseServiceCertificate(licenseURL: str, operatorURL: str):
+def fetchLicenseServiceCertificate(licenseURL, operatorURL):
+
     # Check if we already have a cert for this URL: 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }    

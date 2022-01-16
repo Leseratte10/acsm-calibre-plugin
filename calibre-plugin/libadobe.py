@@ -6,8 +6,15 @@ Helper library with code needed for Adobe stuff.
 '''
 
 from uuid import getnode
-import os, hashlib, base64
-import urllib.request, ssl
+import sys, os, hashlib, base64
+import ssl
+try: 
+    import urllib.request as ulib
+    import urllib.error as uliberror
+except: 
+    import urllib2 as ulib
+    import urllib2 as uliberror
+
 from datetime import datetime, timedelta
 
 from lxml import etree
@@ -23,10 +30,11 @@ except ImportError:
     from Crypto.Cipher import AES
     from Crypto.Hash import SHA
 
-try: 
-    from customRSA import CustomRSA
-except: 
-    from calibre_plugins.deacsm.customRSA import CustomRSA
+
+#@@CALIBRE_COMPAT_CODE@@
+
+
+from customRSA import CustomRSA
 
 from oscrypto import keys
 from oscrypto.asymmetric import dump_certificate, dump_private_key
@@ -115,7 +123,9 @@ def get_activation_xml_path():
     return FILE_ACTIVATIONXML
 
 
-def update_account_path(folder_path: str):
+def update_account_path(folder_path):
+    # type: (str) -> None
+
     global FILE_DEVICEKEY, FILE_DEVICEXML, FILE_ACTIVATIONXML
 
     FILE_DEVICEKEY = os.path.join(folder_path, "devicesalt")
@@ -134,17 +144,40 @@ def createDeviceKeyFile():
     f.write(devkey_bytes)
     f.close()
 
+def int_to_bytes(value, length, big_endian = True):
+    # Helper function for Python2 only (big endian)
+    # Python3 uses int.to_bytes()
+    result = []
+
+    for i in range(0, length):
+        result.append(value >> (i * 8) & 0xff)
+
+    if big_endian:
+        result.reverse()
+
+    return result
+
 def get_mac_address(): 
     mac1 = getnode()
     mac2 = getnode()
     if (mac1 != mac2) or ((mac1 >> 40) % 2):
-        return bytes([1, 2, 3, 4, 5, 0])
+        if sys.version_info[0] >= 3:
+            return bytes([1, 2, 3, 4, 5, 0])
+        else: 
+            return bytearray([1, 2, 3, 4, 5, 0])
     
-    return mac1.to_bytes(6, byteorder='big')
+    if sys.version_info[0] >= 3:
+        return mac1.to_bytes(6, byteorder='big')
+
+    return int_to_bytes(mac1, 6)
+    
 
 
 
-def makeSerial(random: bool):
+
+def makeSerial(random):
+    # type: (bool) -> str
+
     # Original implementation: std::string Device::makeSerial(bool random)
 
     # It doesn't look like this implementation results in the same fingerprint Adobe is using in ADE.
@@ -165,17 +198,26 @@ def makeSerial(random: bool):
 
         mac_address = get_mac_address()
 
-        dataToHash = "%d:%s:%02x:%02x:%02x:%02x:%02x:%02x\x00" % (uid, username, 
-            mac_address[0], mac_address[1], mac_address[2], 
-            mac_address[3], mac_address[4], mac_address[5])
+        if sys.version_info[0] >= 3:
+            dataToHash = "%d:%s:%02x:%02x:%02x:%02x:%02x:%02x\x00" % (uid, username, 
+                mac_address[0], mac_address[1], mac_address[2], 
+                mac_address[3], mac_address[4], mac_address[5])
+            
+        else:
+            dataToHash = "%d:%s:%02x:%02x:%02x:%02x:%02x:%02x\x00" % (uid, username, 
+                mac_address[0], mac_address[1], mac_address[2], 
+                mac_address[3], mac_address[4], mac_address[5])
 
         sha_out = hashlib.sha1(dataToHash.encode('latin-1')).hexdigest().lower()
     else: 
-        sha_out = Random.get_random_bytes(20).hex().lower()
+        import binascii
+        sha_out = binascii.hexlify(Random.get_random_bytes(20)).lower()
 
     return sha_out
 
-def makeFingerprint(serial: str):
+def makeFingerprint(serial):
+    # type: (str) -> str
+
     # Original implementation: std::string Device::makeFingerprint(const std::string& serial)
     # base64(sha1(serial + privateKey))
     # Fingerprint must be 20 bytes or less.
@@ -195,14 +237,16 @@ def makeFingerprint(serial: str):
 
 ############################################## HTTP stuff:
 
-def sendHTTPRequest_DL2FILE(URL: str, outputfile: str):
+def sendHTTPRequest_DL2FILE(URL, outputfile):
+    # type: (str, str) -> int
+
     headers = {
         "Accept": "*/*",
         "User-Agent": "book2png",
         # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
     }
-    req = urllib.request.Request(url=URL, headers=headers)
-    handler = urllib.request.urlopen(req)
+    req = ulib.Request(url=URL, headers=headers)
+    handler = ulib.urlopen(req)
 
     chunksize = 16 * 1024
 
@@ -230,7 +274,8 @@ def sendHTTPRequest_DL2FILE(URL: str, outputfile: str):
 
     return 200
 
-def sendHTTPRequest_getSimple(URL: str):
+def sendHTTPRequest_getSimple(URL):
+    # type: (str) -> str
 
     headers = {
         "Accept": "*/*",
@@ -246,8 +291,8 @@ def sendHTTPRequest_getSimple(URL: str):
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
 
-    req = urllib.request.Request(url=URL, headers=headers)
-    handler = urllib.request.urlopen(req, context=ctx)
+    req = ulib.Request(url=URL, headers=headers)
+    handler = ulib.urlopen(req, context=ctx)
 
     content = handler.read()
 
@@ -262,7 +307,8 @@ def sendHTTPRequest_getSimple(URL: str):
 
     return content
 
-def sendPOSTHTTPRequest(URL: str, document: bytes, type: str, returnRC = False):
+def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
+    # type: (str, bytes, str, bool) -> str
 
     headers = {
         "Accept": "*/*",
@@ -279,10 +325,10 @@ def sendPOSTHTTPRequest(URL: str, document: bytes, type: str, returnRC = False):
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
 
-    req = urllib.request.Request(url=URL, headers=headers, data=document)
+    req = ulib.Request(url=URL, headers=headers, data=document)
     try: 
-        handler = urllib.request.urlopen(req, context=ctx)
-    except urllib.error.HTTPError as err: 
+        handler = ulib.urlopen(req, context=ctx)
+    except uliberror.HTTPError as err: 
         # This happens with HTTP 500 and related errors.
         print("Post request caused HTTPError %d" % (err.code))
         return err.code, "Post request caused HTTPException"
@@ -311,14 +357,17 @@ def sendPOSTHTTPRequest(URL: str, document: bytes, type: str, returnRC = False):
     return content
 
 
-def sendHTTPRequest(URL: str):
+def sendHTTPRequest(URL):
+    # type: (str) -> str
     return sendHTTPRequest_getSimple(URL)
 
 
-def sendRequestDocu(document: str, URL: str):
+def sendRequestDocu(document, URL):
+    # type: (str, str) -> str
     return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", False)
 
-def sendRequestDocuRC(document: str, URL: str):
+def sendRequestDocuRC(document, URL):
+    # type: (str, str) -> str
     return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", True)
 
 
@@ -327,6 +376,8 @@ def sendRequestDocuRC(document: str, URL: str):
 
 
 def encrypt_with_device_key(data):
+
+    data = bytearray(data)
 
     global devkey_bytes
     if devkey_bytes is None: 
@@ -338,7 +389,9 @@ def encrypt_with_device_key(data):
     if (len(data) % 16):
         remain = 16 - (len(data) % 16)
 
-    data += bytes([remain])*remain
+    for _ in range(remain):
+        data.append(remain)
+
 
     iv = Random.get_random_bytes(16)
     cip = AES.new(devkey_bytes, AES.MODE_CBC, iv)
@@ -348,6 +401,11 @@ def encrypt_with_device_key(data):
     return res
 
 def decrypt_with_device_key(data): 
+
+    if isinstance(data, str):
+        # Python2 
+        data = bytes(data)
+
     global devkey_bytes
     if devkey_bytes is None: 
         f = open(FILE_DEVICEKEY, "rb")
@@ -355,7 +413,7 @@ def decrypt_with_device_key(data):
         f.close()
 
     cip = AES.new(devkey_bytes, AES.MODE_CBC, data[:16])
-    decrypted = cip.decrypt(data[16:])
+    decrypted = bytearray(cip.decrypt(data[16:]))
 
     # Remove padding
     decrypted = decrypted[:-decrypted[-1]]
@@ -380,12 +438,17 @@ def addNonce():
     # Unixtime to gregorian timestamp
     Ntime += 62167219200000
 
-    final = bytearray(Ntime.to_bytes(8, 'little'))
-
     # Something is fishy with this tmp value. It usually is 0 in ADE, but not always. 
     # I haven't yet figured out what it means ...
     tmp = 0
-    final.extend(tmp.to_bytes(4, 'little'))
+
+    if sys.version_info[0] >= 3:
+        final = bytearray(Ntime.to_bytes(8, 'little'))
+        final.extend(tmp.to_bytes(4, 'little'))
+    else:
+        final = bytearray(int_to_bytes(Ntime, 8, False))
+        final.extend(int_to_bytes(tmp, 4, True))
+
 
     ret = ""
 
@@ -552,9 +615,13 @@ def hash_node_ctx(node, hash_ctx):
 
 
 
-def hash_do_append_string(hash_ctx, string: str):
+def hash_do_append_string(hash_ctx, string):
+    # type: (SHA.SHA1Hash, str) -> None
 
-    str_bytes = bytes(string, encoding="utf-8")
+    if sys.version_info[0] >= 3: 
+        str_bytes = bytes(string, encoding="utf-8")
+    else:
+        str_bytes = bytes(string)
 
     length = len(str_bytes)
     len_upper = int(length / 256)
@@ -563,12 +630,14 @@ def hash_do_append_string(hash_ctx, string: str):
     hash_do_append_raw_bytes(hash_ctx, [len_upper, len_lower])
     hash_do_append_raw_bytes(hash_ctx, str_bytes)
 
-def hash_do_append_tag(hash_ctx, tag: int):
+def hash_do_append_tag(hash_ctx, tag):
+    # type: (SHA.SHA1Hash, int) -> None
 
     if (tag > 5):
         return
     
     hash_do_append_raw_bytes(hash_ctx, [tag])
 
-def hash_do_append_raw_bytes(hash_ctx, data: bytes):
+def hash_do_append_raw_bytes(hash_ctx, data):
+    # type: (SHA.SHA1Hash, bytes) -> None
     hash_ctx.update(bytearray(data))

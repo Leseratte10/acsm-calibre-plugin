@@ -8,6 +8,10 @@ except ImportError:
     # Some distros still ship this as Crypto
     from Crypto.Cipher import AES as _AES
 
+
+#@@CALIBRE_COMPAT_CODE@@
+
+
 class AES(object):
     def __init__(self, key, iv):
         self._aes = _AES.new(key, _AES.MODE_CBC, iv)
@@ -15,12 +19,8 @@ class AES(object):
         return self._aes.decrypt(data)
 
 
-try: 
-    from libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path
-    from libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS, VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
-except: 
-    from calibre_plugins.deacsm.libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path
-    from calibre_plugins.deacsm.libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS, VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
+from libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path
+from libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS, VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
 
 
 def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):

@@ -12,25 +12,20 @@ except ImportError:
     from Crypto.Util.asn1 import DerSequence
     from Crypto.Cipher import PKCS1_v1_5
 
-
-try: 
-    from libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
-    from libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key
-    from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
-    from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
-    from libadobe import VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO, VAR_VER_SUPP_VERSIONS, VAR_ACS_SERVER_HTTP
-    from libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
-except: 
-    from calibre_plugins.deacsm.libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
-    from calibre_plugins.deacsm.libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key
-    from calibre_plugins.deacsm.libadobe import get_devkey_path, get_device_path, get_activation_xml_path
-    from calibre_plugins.deacsm.libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
-    from calibre_plugins.deacsm.libadobe import VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO, VAR_VER_SUPP_VERSIONS, VAR_ACS_SERVER_HTTP
-    from calibre_plugins.deacsm.libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
+#@@CALIBRE_COMPAT_CODE@@
 
 
+from libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
+from libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key
+from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
+from libadobe import VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO, VAR_VER_SUPP_VERSIONS, VAR_ACS_SERVER_HTTP
+from libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
 
-def createDeviceFile(randomSerial: bool, useVersionIndex: int = 0): 
+
+def createDeviceFile(randomSerial, useVersionIndex = 0): 
+    # type: (bool, int) -> bool
+
     # Original implementation: Device::createDeviceFile(const std::string& hobbes, bool randomSerial)
 
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
@@ -142,7 +137,7 @@ def getAuthMethodsAndCert():
 
 
 
-def createUser(useVersionIndex: int = 0, authCert = None): 
+def createUser(useVersionIndex = 0, authCert = None): 
 
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
         return False, "Invalid Version index", [[], []]
@@ -215,12 +210,11 @@ def createUser(useVersionIndex: int = 0, authCert = None):
 
     return True, "Done"
 
-def encryptLoginCredentials(username: str, password: str, authenticationCertificate: str): 
+def encryptLoginCredentials(username, password, authenticationCertificate): 
+    # type: (str, str, str) -> bytes
 
-    try: 
-        from calibre_plugins.deacsm.libadobe import devkey_bytes as devkey_adobe
-    except: 
-        from libadobe import devkey_bytes as devkey_adobe
+    from libadobe import devkey_bytes as devkey_adobe
+    import struct
 
     if devkey_adobe is not None: 
         devkey_bytes = devkey_adobe
@@ -234,9 +228,9 @@ def encryptLoginCredentials(username: str, password: str, authenticationCertific
     # Build buffer <devkey_bytes> <len username> <username> <len password> <password>
 
     ar = bytearray(devkey_bytes)
-    ar.extend(bytearray(len(username).to_bytes(1, 'big')))
+    ar.extend(bytearray(struct.pack("B", len(username))))
     ar.extend(bytearray(username.encode("latin-1")))
-    ar.extend(bytearray(len(password).to_bytes(1, 'big')))
+    ar.extend(bytearray(struct.pack("B", len(password))))
     ar.extend(bytearray(password.encode("latin-1")))
 
     # Crypt code from https://stackoverflow.com/a/12921889/4991648
@@ -253,7 +247,9 @@ def encryptLoginCredentials(username: str, password: str, authenticationCertific
     return crypted_msg
 
 
-def buildSignInRequestForAnonAuthConvert(username: str, password: str, authenticationCertificate: str):
+def buildSignInRequestForAnonAuthConvert(username, password, authenticationCertificate):
+    # type: (str, str, str) -> str
+
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     etree.register_namespace("adept", NSMAP["adept"])
 
@@ -283,7 +279,9 @@ def buildSignInRequestForAnonAuthConvert(username: str, password: str, authentic
     return "<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
 
 
-def buildSignInRequest(type: str, username: str, password: str, authenticationCertificate: str):
+def buildSignInRequest(type, username, password, authenticationCertificate):
+    # type: (str, str, str, str) -> str
+
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     etree.register_namespace("adept", NSMAP["adept"])
 
@@ -316,7 +314,8 @@ def buildSignInRequest(type: str, username: str, password: str, authenticationCe
     return "<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
     
 
-def convertAnonAuthToAccount(username: str, passwd: str):
+def convertAnonAuthToAccount(username, passwd):
+
     # If you have an anonymous authorization, you can convert that to an AdobeID. 
     # Important: You can only do this ONCE for each AdobeID. 
     # The AdobeID you are using for this must not be connected to any ADE install.
@@ -402,7 +401,7 @@ def convertAnonAuthToAccount(username: str, passwd: str):
 
 
 
-def signIn(account_type: str, username: str, passwd: str):
+def signIn(account_type, username, passwd):
 
 
     # Get authenticationCertificate
@@ -556,7 +555,7 @@ def exportProxyAuth(act_xml_path, activationToken):
 
 
 
-def buildActivateReqProxy(useVersionIndex: int = 0, proxyData = None):
+def buildActivateReqProxy(useVersionIndex = 0, proxyData = None):
 
     if proxyData is None: 
         return False
@@ -652,7 +651,7 @@ def buildActivateReqProxy(useVersionIndex: int = 0, proxyData = None):
     return True, ret
 
 
-def buildActivateReq(useVersionIndex: int = 0): 
+def buildActivateReq(useVersionIndex = 0): 
 
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
         return False
@@ -727,7 +726,7 @@ def buildActivateReq(useVersionIndex: int = 0):
 
 
 # Call this function to change from ADE2 to ADE3 and vice versa.
-def changeDeviceVersion(useVersionIndex: int = 0):
+def changeDeviceVersion(useVersionIndex = 0):
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
         return False, "Invalid Version index"
 
@@ -771,7 +770,7 @@ def changeDeviceVersion(useVersionIndex: int = 0):
         
 
 
-def activateDevice(useVersionIndex: int = 0, proxyData = None): 
+def activateDevice(useVersionIndex = 0, proxyData = None): 
 
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
         return False, "Invalid Version index"
@@ -881,7 +880,8 @@ def getAccountUUID():
         return None
 
 
-def exportAccountEncryptionKeyDER(output_file: str):
+def exportAccountEncryptionKeyDER(output_file):
+    # type: (str) -> bool
     try: 
         activationxml = etree.parse(get_activation_xml_path())
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+#@@CALIBRE_COMPAT_CODE@@
 
-from re import VERBOSE
-
+import sys
 
 def unfuck(user):
     # Wine uses a pretty nonstandard encoding in their registry file. 
@@ -22,10 +22,16 @@ def unfuck(user):
     while i < len(user):
         # Convert string of len 1 to a byte
         char = user[i][0].encode("latin-1")[0]
+        if sys.version_info[0] == 2:
+            char = ord(char)
+
         if char == ord('\\'):
             # Get next char:
             i += 1
             char = user[i][0].encode("latin-1")[0]
+            if sys.version_info[0] == 2:
+                char = ord(char)
+
             if (char == ord('a')):
                 user_new.append(0x07)
             elif (char == ord('b')):
@@ -46,6 +52,8 @@ def unfuck(user):
                 # Get next char
                 i += 1
                 char = user[i][0].encode("latin-1")[0]
+                if sys.version_info[0] == 2:
+                    char = ord(char)
                 if char not in hex_char_list:
                     user_new.append(ord('x'))
                     # This seems to be fallback code. 
@@ -57,16 +65,25 @@ def unfuck(user):
                     
                     # Read up to 3 more chars
                     next = user[i + 1][0].encode("latin-1")[0]
+                    if sys.version_info[0] == 2:
+                        next = ord(next)
+
                     if next in hex_char_list:
                         ival += chr(next)
                         i += 1
                     
                     next = user[i + 1][0].encode("latin-1")[0]
+                    if sys.version_info[0] == 2:
+                        next = ord(next)
+
                     if next in hex_char_list:
                         ival += chr(next)
                         i += 1
                     
                     next = user[i + 1][0].encode("latin-1")[0]
+                    if sys.version_info[0] == 2:
+                        next = ord(next)
+
                     if next in hex_char_list:
                         ival += chr(next)
                         i += 1
@@ -83,11 +100,17 @@ def unfuck(user):
 
                 # Read up to 2 more chars
                 next = user[i + 1][0].encode("latin-1")[0]
+                if sys.version_info[0] == 2:
+                    next = ord(next)
+
                 if next >= ord('0') and next <= ord('9'):
                     octal = (octal * 8) + (next - ord('0'))
                     i += 1
                 
                 next = user[i + 1][0].encode("latin-1")[0]
+                if sys.version_info[0] == 2:
+                    next = ord(next)
+
                 if next >= ord('0') and next <= ord('9'):
                     octal = (octal * 8) + (next - ord('0'))
                     i += 1
@@ -122,11 +145,8 @@ def GetMasterKey(path_to_wine_prefix):
     except:
         pass
 
-    try:
-        import cpuid
-    except:
-        import calibre_plugins.deacsm.cpuid as cpuid
-    
+
+    import cpuid
     import struct
 
     try: 

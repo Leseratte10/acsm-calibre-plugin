@@ -54,13 +54,15 @@ import os, shutil, traceback, sys, time, io, random
 import zipfile
 from lxml import etree
 
+#@@CALIBRE_COMPAT_CODE@@
+
 class DeACSM(FileTypePlugin):
     name                        = PLUGIN_NAME
     description                 = "ACSM Input Plugin - Takes an Adobe ACSM file and converts that into a useable EPUB or PDF file. Python reimplementation of libgourou by Grégory Soutadé"
     supported_platforms         = ['linux', 'osx', 'windows']
     author                      = "Leseratte10"
     version                     = PLUGIN_VERSION_TUPLE
-    minimum_calibre_version     = (5, 0, 0)
+    minimum_calibre_version     = (4, 0, 0)
     file_types                  = set(['acsm'])
     on_import                   = True
     on_preprocess               = True
@@ -184,21 +186,9 @@ class DeACSM(FileTypePlugin):
             
             # Okay, now all the modules are available, import the Adobe modules.
 
-            # Account:
-            try: 
-                from calibre_plugins.deacsm.libadobe import createDeviceKeyFile, update_account_path
-                from calibre_plugins.deacsm.libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
-            except: 
-                from libadobe import createDeviceKeyFile, update_account_path
-                from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
-
-            # Fulfill:
-            try: 
-                from calibre_plugins.deacsm.libadobe import sendHTTPRequest
-                from calibre_plugins.deacsm.libadobeFulfill import buildRights, fulfill
-            except: 
-                from libadobe import sendHTTPRequest
-                from libadobeFulfill import buildRights, fulfill
+            from libadobe import createDeviceKeyFile, update_account_path, sendHTTPRequest
+            from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+            from libadobeFulfill import buildRights, fulfill
 
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
@@ -245,20 +235,13 @@ class DeACSM(FileTypePlugin):
         except: 
             return False
 
-    def download(self, replyData: str):
+    def download(self, replyData):
+        # type: (str) -> str
 
 
-        try: 
-            from calibre_plugins.deacsm.libadobe import sendHTTPRequest_DL2FILE
-            from calibre_plugins.deacsm.libadobeFulfill import buildRights, fulfill
-        except: 
-            from libadobe import sendHTTPRequest_DL2FILE
-            from libadobeFulfill import buildRights, fulfill
-
-        try:
-            from calibre_plugins.deacsm.libpdf import patch_drm_into_pdf
-        except: 
-            from libpdf import patch_drm_into_pdf
+        from libadobe import sendHTTPRequest_DL2FILE
+        from libadobeFulfill import buildRights, fulfill
+        from libpdf import patch_drm_into_pdf
 
 
         adobe_fulfill_response = etree.fromstring(replyData)
@@ -344,7 +327,9 @@ class DeACSM(FileTypePlugin):
             print("{0} v{1}: Error: Unsupported file type ...".format(PLUGIN_NAME, PLUGIN_VERSION))
             return None
 
-    def run(self, path_to_ebook: str):
+    def run(self, path_to_ebook):
+        # type: (str) -> str
+
         # This code gets called by Calibre with a path to the new book file. 
         # We need to check if it's an ACSM file
 
@@ -363,12 +348,9 @@ class DeACSM(FileTypePlugin):
             print("{0} v{1}: ADE auth is missing or broken ".format(PLUGIN_NAME, PLUGIN_VERSION))
             return path_to_ebook
 
-        try: 
-            from calibre_plugins.deacsm.libadobe import are_ade_version_lists_valid
-            from calibre_plugins.deacsm.libadobeFulfill import fulfill
-        except: 
-            from libadobe import are_ade_version_lists_valid
-            from libadobeFulfill import fulfill
+
+        from libadobe import are_ade_version_lists_valid
+        from libadobeFulfill import fulfill
 
         if not are_ade_version_lists_valid():
             print("{0} v{1}: ADE version list mismatch, please open a bug report.".format(PLUGIN_NAME, PLUGIN_VERSION))

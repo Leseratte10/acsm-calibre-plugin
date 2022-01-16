@@ -3,7 +3,11 @@
 [ ! -f calibre-plugin/asn1crypto.zip ] && ./package_modules.sh
 [ ! -f calibre-plugin/oscrypto.zip ] && ./package_modules.sh
 
-pushd calibre-plugin
+rm -rf calibre-plugin-tmp || /bin/true
+
+cp -r calibre-plugin calibre-plugin-tmp
+
+pushd calibre-plugin-tmp
 pushd keyextract
 
 # Compile C programs: 
@@ -21,8 +25,24 @@ echo -n "2021-12-19-03" > module_id.txt
 cp ../LICENSE LICENSE
 cp ../README.md README.md
 
+shopt -s globstar
+echo "Injecting Python2 compat code ..."
+for file in **/*.py;
+do
+    #echo $file
+    # Inject Python2 compat code:
+    sed '/#@@CALIBRE_COMPAT_CODE@@/ {
+        r __calibre_compat_code.py
+        d
+    }' -i $file
+
+done
+
+
+
 # Create ZIP file from calibre-plugin folder.
 zip -r ../calibre-plugin.zip *
 
 popd
+rm -rf calibre-plugin-tmp
 

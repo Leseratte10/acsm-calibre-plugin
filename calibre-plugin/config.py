@@ -32,6 +32,13 @@ from calibre.utils.config import config_dir         # type: ignore
 from calibre.constants import isosx, iswindows, islinux                 # type: ignore
 
 
+#@@CALIBRE_COMPAT_CODE@@
+
+if sys.version_info[0] == 2:
+    class FileNotFoundError(Exception):
+        pass
+
+
 class ConfigWidget(QWidget):
     def __init__(self, plugin_path):
         QWidget.__init__(self)
@@ -171,15 +178,11 @@ class ConfigWidget(QWidget):
 
 
         try: 
-            from calibre_plugins.deacsm.libadobe import createDeviceKeyFile, update_account_path, are_ade_version_lists_valid
-            from calibre_plugins.deacsm.libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+            from libadobe import createDeviceKeyFile, update_account_path, are_ade_version_lists_valid
+            from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
         except: 
-            try: 
-                from libadobe import createDeviceKeyFile, update_account_path, are_ade_version_lists_valid
-                from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
-            except: 
-                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
+            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+            traceback.print_exc()
 
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
@@ -242,15 +245,11 @@ class ConfigWidget(QWidget):
         # So just open up a folder picker dialog and have the user select the eReader's root folder. 
 
         try: 
-            from calibre_plugins.deacsm.libadobe import update_account_path, VAR_VER_HOBBES_VERSIONS
-            from calibre_plugins.deacsm.libadobeAccount import activateDevice, exportProxyAuth
+            from libadobe import update_account_path, VAR_VER_HOBBES_VERSIONS
+            from libadobeAccount import activateDevice, exportProxyAuth
         except: 
-            try: 
-                from libadobe import update_account_path, VAR_VER_HOBBES_VERSIONS
-                from libadobeAccount import activateDevice, exportProxyAuth
-            except: 
-                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
+            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+            traceback.print_exc()
 
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
@@ -402,7 +401,7 @@ class ConfigWidget(QWidget):
 
             try: 
                 containerdev = etree.parse(device_xml_path)
-            except (FileNotFoundError, OSError) as e:
+            except (IOError, FileNotFoundError, OSError) as e:
                 return error_dialog(None, "Failed", "Error while reading device.xml", show=True, show_copy_button=False)
 
             try: 
@@ -509,14 +508,12 @@ class ConfigWidget(QWidget):
 
     def get_account_info(self): 
 
+       
         try: 
-            from calibre_plugins.deacsm.libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
+            from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
         except: 
-            try: 
-                from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
-            except: 
-                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
+            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+            traceback.print_exc()
 
         activation_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "activation.xml")
         device_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml")
@@ -525,7 +522,7 @@ class ConfigWidget(QWidget):
         try: 
             container = etree.parse(activation_xml_path)
             containerdev = etree.parse(device_xml_path)
-        except (FileNotFoundError, OSError) as e:
+        except (IOError, FileNotFoundError, OSError) as e:
             return "Not authorized for any ADE ID", False, None
 
         try: 
@@ -579,16 +576,12 @@ class ConfigWidget(QWidget):
     def export_activation(self):
 
         try: 
-            from calibre_plugins.deacsm.libadobe import update_account_path
-            from calibre_plugins.deacsm.libadobeAccount import getAccountUUID
+            from libadobe import update_account_path
+            from libadobeAccount import getAccountUUID
         except: 
-            try: 
-                from libadobe import update_account_path
-                from libadobeAccount import getAccountUUID
-            except: 
-                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
-                return False
+            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+            traceback.print_exc()
+            return False
 
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
@@ -678,7 +671,7 @@ class ConfigWidget(QWidget):
             return error_dialog(None, "Import failed", "The WINEPREFIX you entered doesn't seem to contain an authorized ADE.", show=True, show_copy_button=False)
 
 
-        from calibre_plugins.deacsm.libadobeImportAccount import importADEactivationLinuxWine
+        from libadobeImportAccount import importADEactivationLinuxWine
 
         ret, msg = importADEactivationLinuxWine(text)
 
@@ -715,7 +708,7 @@ class ConfigWidget(QWidget):
     def import_activation_from_Win(self):
         # This will try to import the activation from Adobe Digital Editions on Windows ...
 
-        from calibre_plugins.deacsm.libadobeImportAccount import importADEactivationWindows
+        from libadobeImportAccount import importADEactivationWindows
 
         ret, msg = importADEactivationWindows()
 
@@ -757,7 +750,7 @@ class ConfigWidget(QWidget):
 
         info_dialog(None, "Importing from ADE", msg, show=True, show_copy_button=False)
 
-        from calibre_plugins.deacsm.libadobeImportAccount import importADEactivationMac
+        from libadobeImportAccount import importADEactivationMac
 
         ret, msg = importADEactivationMac()
 
@@ -862,24 +855,19 @@ class ConfigWidget(QWidget):
 
     def switch_ade_version(self): 
         try: 
-            from calibre_plugins.deacsm.libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES
-            from calibre_plugins.deacsm.libadobe import VAR_VER_BUILD_IDS, VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO
-            from calibre_plugins.deacsm.libadobeAccount import changeDeviceVersion
+            from libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES
+            from libadobe import VAR_VER_BUILD_IDS, VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO
+            from libadobeAccount import changeDeviceVersion
         except: 
-            try: 
-                from libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES
-                from libadobe import VAR_VER_BUILD_IDS, VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO
-                from libadobeAccount import changeDeviceVersion
-            except: 
-                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
+            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+            traceback.print_exc()
 
 
         device_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml")
 
         try: 
             containerdev = etree.parse(device_xml_path)
-        except (FileNotFoundError, OSError) as e:
+        except (IOError, FileNotFoundError, OSError) as e:
             return error_dialog(None, "Failed", "Error while reading file", show=True, show_copy_button=False)
 
         try: 
@@ -961,18 +949,14 @@ class ConfigWidget(QWidget):
             
 
     def create_anon_auth(self): 
+    
         try: 
-            from calibre_plugins.deacsm.libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
-            from calibre_plugins.deacsm.libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
-            from calibre_plugins.deacsm.libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+            from libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
+            from libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
+            from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
         except: 
-            try: 
-                from libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
-                from libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
-                from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
-            except: 
-                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
+            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+            traceback.print_exc()
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
 
@@ -1059,15 +1043,11 @@ class ConfigWidget(QWidget):
     
     def convert_anon_to_account(self): 
         try: 
-            from calibre_plugins.deacsm.libadobe import createDeviceKeyFile, update_account_path
-            from calibre_plugins.deacsm.libadobeAccount import convertAnonAuthToAccount
+            from libadobe import createDeviceKeyFile, update_account_path
+            from libadobeAccount import convertAnonAuthToAccount
         except: 
-            try: 
-                from libadobe import createDeviceKeyFile, update_account_path
-                from libadobeAccount import convertAnonAuthToAccount
-            except: 
-                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
+            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+            traceback.print_exc()
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
 
@@ -1128,17 +1108,12 @@ class ConfigWidget(QWidget):
     def link_account(self):
 
         try: 
-            from calibre_plugins.deacsm.libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
-            from calibre_plugins.deacsm.libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
-            from calibre_plugins.deacsm.libadobeAccount import createDeviceFile, getAuthMethodsAndCert, createUser, signIn, activateDevice
+            from libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
+            from libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
+            from libadobeAccount import createDeviceFile, getAuthMethodsAndCert, createUser, signIn, activateDevice
         except: 
-            try: 
-                from libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
-                from libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
-                from libadobeAccount import createDeviceFile, getAuthMethodsAndCert, createUser, signIn, activateDevice
-            except: 
-                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
+            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+            traceback.print_exc()
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
 
@@ -1247,15 +1222,11 @@ class ConfigWidget(QWidget):
     def export_key(self):
 
         try: 
-            from calibre_plugins.deacsm.libadobe import update_account_path
-            from calibre_plugins.deacsm.libadobeAccount import exportAccountEncryptionKeyDER, getAccountUUID
+            from libadobe import update_account_path
+            from libadobeAccount import exportAccountEncryptionKeyDER, getAccountUUID
         except: 
-            try: 
-                from libadobe import update_account_path
-                from libadobeAccount import exportAccountEncryptionKeyDER, getAccountUUID
-            except: 
-                print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
+            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+            traceback.print_exc()
 
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
@@ -1421,13 +1392,10 @@ class RentedBooksDialog(QDialog):
 
 
         try: 
-            from calibre_plugins.deacsm.libadobeFulfill import tryReturnBook
+            from libadobeFulfill import tryReturnBook
         except: 
-            try: 
-                from libadobeFulfill import tryReturnBook
-            except: 
-                print("{0} v{1}: Error while importing book return stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-                traceback.print_exc()
+            print("{0} v{1}: Error while importing book return stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+            traceback.print_exc()
 
         Ret_book = None
         for book in self.parent.deacsmprefs["list_of_rented_books"]:

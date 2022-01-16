@@ -7,7 +7,10 @@ sys.path.append("../calibre-plugin")
 import unittest
 import base64
 from freezegun import freeze_time
-from unittest.mock import patch
+if sys.version_info[0] >= 3:
+    from unittest.mock import patch
+else: 
+    from mock import patch
 from lxml import etree
 
 
@@ -38,9 +41,9 @@ class TestAdobe(unittest.TestCase):
 
 
     def test_checkIfVersionListsAreValid(self):
-        '''
-        Check if version lists are sane
+        '''Check if version lists are sane'''
 
+        '''
         These four lists must all have the same amount of elements. 
         Also, the default build ID must be valid, and all the IDs 
         available for authorization or switching must be valid, too.
@@ -67,7 +70,7 @@ class TestAdobe(unittest.TestCase):
 
     def test_fingerprintGeneration(self): 
         '''Check if fingerprint generation works'''
-        libadobe.devkey_bytes = bytes([0xf8, 0x7a, 0xfc, 0x8c, 0x75, 0x25, 0xdc, 0x4b, 0x83, 0xec, 0x0c, 0xe2, 0xab, 0x4b, 0xef, 0x51])
+        libadobe.devkey_bytes = bytearray([0xf8, 0x7a, 0xfc, 0x8c, 0x75, 0x25, 0xdc, 0x4b, 0x83, 0xec, 0x0c, 0xe2, 0xab, 0x4b, 0xef, 0x51])
 
         self.assertEqual(libadobe.makeFingerprint("f0081bce3f771bdeeb26fcb4b2011fed77edff7b"), b"FgLMNXxv1BZPqMOM6IUnfaG4Qj8=", "Wrong fingerprint")
         self.assertEqual(libadobe.makeFingerprint("HelloWorld123"),                            b"hpp223C1kfLDOoyxo8WR7KhcXB8=", "Wrong fingerprint")
@@ -79,14 +82,14 @@ class TestAdobe(unittest.TestCase):
 
         # Overwrite the get_random_bytes function that's used to get a random IV
         # Forcing hard-coded IV ...
-        random.get_random_bytes._mock_side_effect = lambda rndlen: bytes([0xc2, 0x3b, 0x0f, 0xde, 0xf2, 0x4a, 0xc3, 0x03, 
+        random.get_random_bytes._mock_side_effect = lambda rndlen: bytearray([0xc2, 0x3b, 0x0f, 0xde, 0xf2, 0x4a, 0xc3, 0x03, 
                                                                           0xae, 0xc8, 0x70, 0xd4, 0x46, 0x6c, 0x8b, 0xb0])
 
 
-        libadobe.devkey_bytes = bytes([0xf8, 0x7a, 0xfc, 0x8c, 0x75, 0x25, 0xdc, 0x4b, 0x83, 0xec, 0x0c, 0xe2, 0xab, 0x4b, 0xef, 0x51])
+        libadobe.devkey_bytes = bytearray([0xf8, 0x7a, 0xfc, 0x8c, 0x75, 0x25, 0xdc, 0x4b, 0x83, 0xec, 0x0c, 0xe2, 0xab, 0x4b, 0xef, 0x51])
         mock_data = b"Test message"
         mock_result = libadobe.encrypt_with_device_key(mock_data)
-        expected_result = bytes([0xc2, 0x3b, 0x0f, 0xde, 0xf2, 0x4a, 0xc3, 0x03, 0xae, 0xc8, 0x70, 0xd4,
+        expected_result = bytearray([0xc2, 0x3b, 0x0f, 0xde, 0xf2, 0x4a, 0xc3, 0x03, 0xae, 0xc8, 0x70, 0xd4,
                                  0x46, 0x6c, 0x8b, 0xb0, 0x23, 0x5a, 0xd3, 0x1b, 0x4e, 0x2b, 0x12, 0x79,
                                  0x85, 0x63, 0x2d, 0x01, 0xa4, 0xe8, 0x29, 0x22])
         
@@ -95,9 +98,9 @@ class TestAdobe(unittest.TestCase):
     def test_deviceKeyDecryption(self):
         '''Check if decryption with the device key works'''
 
-        libadobe.devkey_bytes = bytes([0xf8, 0x7a, 0xfc, 0x8c, 0x75, 0x25, 0xdc, 0x4b, 0x83, 0xec, 0x0c, 0xe2, 0xab, 0x4b, 0xef, 0x51])
+        libadobe.devkey_bytes = bytearray([0xf8, 0x7a, 0xfc, 0x8c, 0x75, 0x25, 0xdc, 0x4b, 0x83, 0xec, 0x0c, 0xe2, 0xab, 0x4b, 0xef, 0x51])
 
-        mock_data = bytes([0xc2, 0x3b, 0x0f, 0xde, 0xf2, 0x4a, 0xc3, 0x03, 0xae, 0xc8, 0x70, 0xd4,
+        mock_data = bytearray([0xc2, 0x3b, 0x0f, 0xde, 0xf2, 0x4a, 0xc3, 0x03, 0xae, 0xc8, 0x70, 0xd4,
                            0x46, 0x6c, 0x8b, 0xb0, 0x23, 0x5a, 0xd3, 0x1b, 0x4e, 0x2b, 0x12, 0x79,
                            0x85, 0x63, 0x2d, 0x01, 0xa4, 0xe8, 0x29, 0x22])
 
@@ -175,7 +178,7 @@ class TestAdobe(unittest.TestCase):
         # in case we need to go back to the old method.
 
         mock_signing_key = "MIICdAIBADANBgkqhkiG9w0BAQEFAASCAl4wggJaAgEAAoGBALluuPvdDpr4L0j3eIGy3VxhgRcEKU3++qwbdvLXI99/izW9kfELFFJtq5d4ktIIUIvHsWkW0jblGi+bQ4sQXCeIvtOgqVHMSvRpW78lnGEkdD4Y1qhbcVGw7OGpWlhp8qCJKVCGbrkML7BSwFvQqqvg4vMU8O1uALfJvicKN3YfAgMBAAECf3uEg+Hr+DrstHhZF40zJPHKG3FkFd3HerXbOawMH5Q6CKTuKDGmOYQD+StFIlMArQJh8fxTVM3gSqgPkyyiesw0OuECU985FaLbUWxuCQzBcitnhl+VSv19oEPHTJWu0nYabasfT4oPjf8eiWR/ymJ9DZrjMWWy4Xf/S+/nFYUCQQDIZ1pc9nZsCB4QiBl5agTXoMcKavxFHPKxI/mHfRCHYjNyirziBJ+Dc/N40zKvldNBjO43KjLhUZs/BxdAJo09AkEA7OAdsg6SmviVV8xk0vuTmgLxhD7aZ9vpV4KF5+TH2DbximFoOP3YRObXV862wAjCpa84v43ok7Imtsu3NKQ+iwJAc0mx3GUU/1U0JoKFVSm+m2Ws27tsYT4kB/AQLvetuJSv0CcsPkI2meLsoAev0v84Ry+SIz4tgx31V672mzsSaQJBAJET1rw2Vq5Zr8Y9ZkceVFGQmfGAOW5A71Jsm6zin0+anyc874NwXaQdqiiab61/8A9gGSahOKA1DacJcCTqr28CQGm4mn3rOQFf+nniajIobATjNHaZJ76Xnc6rtoreK6+ZjO9wYF+797X/bhiV11Fpakvyrz6+t7bAd0PPQ2taTDg="
-        payload_bytes = bytes([0x34, 0x52, 0xe3, 0xd1, 0x1c, 0xdd, 0x70, 0xeb, 0x90, 0x32, 0x3f, 0x29, 0x1c, 0x06, 0xaf, 0xaf, 0xe1, 0x0e, 0x09, 0x8a])
+        payload_bytes = bytearray([0x34, 0x52, 0xe3, 0xd1, 0x1c, 0xdd, 0x70, 0xeb, 0x90, 0x32, 0x3f, 0x29, 0x1c, 0x06, 0xaf, 0xaf, 0xe1, 0x0e, 0x09, 0x8a])
         
         try: 
             import rsa
@@ -184,7 +187,10 @@ class TestAdobe(unittest.TestCase):
 
         key = rsa.PrivateKey.load_pkcs1(RSA.importKey(base64.b64decode(mock_signing_key)).exportKey())
         keylen = rsa.pkcs1.common.byte_size(key.n)
-        padded = rsa.pkcs1._pad_for_signing(payload_bytes, keylen)
+        if sys.version_info[0] >= 3:
+            padded = rsa.pkcs1._pad_for_signing(bytes(payload_bytes), keylen)
+        else: 
+            padded = rsa.pkcs1._pad_for_signing(bytes(payload_bytes), keylen)
         payload = rsa.pkcs1.transform.bytes2int(padded)
         encrypted = key.blinded_encrypt(payload)
         block = rsa.pkcs1.transform.int2bytes(encrypted, keylen)
@@ -200,7 +206,7 @@ class TestAdobe(unittest.TestCase):
         '''Check if the builtin CustomRSA library signs correctly'''
 
         mock_signing_key = "MIICdAIBADANBgkqhkiG9w0BAQEFAASCAl4wggJaAgEAAoGBALluuPvdDpr4L0j3eIGy3VxhgRcEKU3++qwbdvLXI99/izW9kfELFFJtq5d4ktIIUIvHsWkW0jblGi+bQ4sQXCeIvtOgqVHMSvRpW78lnGEkdD4Y1qhbcVGw7OGpWlhp8qCJKVCGbrkML7BSwFvQqqvg4vMU8O1uALfJvicKN3YfAgMBAAECf3uEg+Hr+DrstHhZF40zJPHKG3FkFd3HerXbOawMH5Q6CKTuKDGmOYQD+StFIlMArQJh8fxTVM3gSqgPkyyiesw0OuECU985FaLbUWxuCQzBcitnhl+VSv19oEPHTJWu0nYabasfT4oPjf8eiWR/ymJ9DZrjMWWy4Xf/S+/nFYUCQQDIZ1pc9nZsCB4QiBl5agTXoMcKavxFHPKxI/mHfRCHYjNyirziBJ+Dc/N40zKvldNBjO43KjLhUZs/BxdAJo09AkEA7OAdsg6SmviVV8xk0vuTmgLxhD7aZ9vpV4KF5+TH2DbximFoOP3YRObXV862wAjCpa84v43ok7Imtsu3NKQ+iwJAc0mx3GUU/1U0JoKFVSm+m2Ws27tsYT4kB/AQLvetuJSv0CcsPkI2meLsoAev0v84Ry+SIz4tgx31V672mzsSaQJBAJET1rw2Vq5Zr8Y9ZkceVFGQmfGAOW5A71Jsm6zin0+anyc874NwXaQdqiiab61/8A9gGSahOKA1DacJcCTqr28CQGm4mn3rOQFf+nniajIobATjNHaZJ76Xnc6rtoreK6+ZjO9wYF+797X/bhiV11Fpakvyrz6+t7bAd0PPQ2taTDg="
-        payload_bytes = bytes([0x34, 0x52, 0xe3, 0xd1, 0x1c, 0xdd, 0x70, 0xeb, 0x90, 0x32, 0x3f, 0x29, 0x1c, 0x06, 0xaf, 0xaf, 0xe1, 0x0e, 0x09, 0x8a])
+        payload_bytes = bytearray([0x34, 0x52, 0xe3, 0xd1, 0x1c, 0xdd, 0x70, 0xeb, 0x90, 0x32, 0x3f, 0x29, 0x1c, 0x06, 0xaf, 0xaf, 0xe1, 0x0e, 0x09, 0x8a])
         
         block = CustomRSA.encrypt_for_adobe_signature(base64.b64decode(mock_signing_key), payload_bytes)
         signature = base64.b64encode(block).decode()
@@ -287,7 +293,7 @@ class TestAdobe(unittest.TestCase):
         user = "username"
         passwd = "unit-test-password"
 
-        libadobe.devkey_bytes = bytes([0xf8, 0x7a, 0xfc, 0x8c, 0x75, 0x25, 0xdc, 0x4b, 0x83, 0xec, 0x0c, 0xe2, 0xab, 0x4b, 0xef, 0x51])
+        libadobe.devkey_bytes = bytearray([0xf8, 0x7a, 0xfc, 0x8c, 0x75, 0x25, 0xdc, 0x4b, 0x83, 0xec, 0x0c, 0xe2, 0xab, 0x4b, 0xef, 0x51])
         encrypted = libadobeAccount.encryptLoginCredentials(user, passwd, mock_auth_certificate)
 
         # Okay, now try to decrypt this again: 
@@ -296,13 +302,18 @@ class TestAdobe(unittest.TestCase):
         cipher_engine = PKCS1_v1_5.new(pkey)
         msg = cipher_engine.decrypt(encrypted, bytes([0x00] * 16))
 
+        import struct
+
         expected_msg = bytearray(libadobe.devkey_bytes)
-        expected_msg.extend(bytearray(len(user).to_bytes(1, 'big')))
+        expected_msg.extend(bytearray(struct.pack("B", len(user))))
         expected_msg.extend(bytearray(user.encode("latin-1")))
-        expected_msg.extend(bytearray(len(passwd).to_bytes(1, 'big')))
+        expected_msg.extend(bytearray(struct.pack("B", len(passwd))))
         expected_msg.extend(bytearray(passwd.encode("latin-1")))
 
-        self.assertEqual(msg.hex(), expected_msg.hex(), "devkey encryption returned invalid result")
+        if sys.version_info[0] >= 3:
+            self.assertEqual(msg.hex(), expected_msg.hex(), "devkey encryption returned invalid result")
+        else:
+            self.assertEqual(msg, expected_msg, "devkey encryption returned invalid result")
 
 
 
@@ -322,7 +333,7 @@ class TestOther(unittest.TestCase):
         '''Check if Wine username decoder is working properly'''
 
         self.assertEqual(fix_wine_username(r'"1234"'),      b'1234',    "Wine username mismatch")
-        self.assertEqual(fix_wine_username(r'"a\x00e931"'), b'a\xe931', "Wine username mismatch")
+        self.assertEqual(fix_wine_username(r'"a\x00e931"'), b'a\xe931', "Wine username mismatch with UTF-8")
 
     def test_pdf_trimEncrypt(self): 
         '''Check if PDF encryption string trimming code is working properly'''
