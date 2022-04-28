@@ -12,6 +12,7 @@ if sys.version_info[0] >= 3:
 else: 
     from mock import patch
 from lxml import etree
+import binascii
 
 
 try: 
@@ -187,10 +188,7 @@ class TestAdobe(unittest.TestCase):
 
         key = rsa.PrivateKey.load_pkcs1(RSA.importKey(base64.b64decode(mock_signing_key)).exportKey())
         keylen = rsa.pkcs1.common.byte_size(key.n)
-        if sys.version_info[0] >= 3:
-            padded = rsa.pkcs1._pad_for_signing(bytes(payload_bytes), keylen)
-        else: 
-            padded = rsa.pkcs1._pad_for_signing(bytes(payload_bytes), keylen)
+        padded = rsa.pkcs1._pad_for_signing(bytes(payload_bytes), keylen)
         payload = rsa.pkcs1.transform.bytes2int(padded)
         encrypted = key.blinded_encrypt(payload)
         block = rsa.pkcs1.transform.int2bytes(encrypted, keylen)
@@ -310,10 +308,7 @@ class TestAdobe(unittest.TestCase):
         expected_msg.extend(bytearray(struct.pack("B", len(passwd))))
         expected_msg.extend(bytearray(passwd.encode("latin-1")))
 
-        if sys.version_info[0] >= 3:
-            self.assertEqual(msg.hex(), expected_msg.hex(), "devkey encryption returned invalid result")
-        else:
-            self.assertEqual(msg, expected_msg, "devkey encryption returned invalid result")
+        self.assertEqual(binascii.hexlify(msg), binascii.hexlify(expected_msg), "devkey encryption returned invalid result")
 
 
 

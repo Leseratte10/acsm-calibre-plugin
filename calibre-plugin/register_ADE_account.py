@@ -7,10 +7,6 @@ This is an experimental Python version of libgourou.
 
 import getpass, sys
 
-if sys.version_info[0] < 3:
-    print("This script requires Python 3.")
-    exit(1)
-
 from libadobe import createDeviceKeyFile, VAR_VER_SUPP_CONFIG_NAMES
 from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
 
@@ -32,9 +28,9 @@ def main():
 
 
     if (VAR_MAIL == ""):
-        VAR_MAIL = input("Please enter your AdobeID: ")
+        VAR_MAIL = input("Please enter your AdobeID (or press enter for anonymous auth): ")
     
-    if (VAR_PASS == ""):
+    if (VAR_PASS == "" and VAR_MAIL != ""):
         VAR_PASS = getpass.getpass("Please enter the password for your AdobeID: ")
 
     if (VAR_VER is None):
@@ -44,8 +40,8 @@ def main():
         print("Invalid version")
         exit(1)
 
-    if (VAR_MAIL == "" or VAR_PASS == ""):
-        print("Empty credential, aborting")
+    if (VAR_MAIL != "" and VAR_PASS == ""):
+        print("Empty password, aborting")
         exit(1)
 
 
@@ -61,7 +57,11 @@ def main():
         print("Error, couldn't create user: %s" % resp)
         exit(1)
 
-    success, resp = signIn("AdobeID", VAR_MAIL, VAR_PASS)
+    if VAR_MAIL == "": 
+        success, resp = signIn("anonymous", "", "")
+    else:    
+        success, resp = signIn("AdobeID", VAR_MAIL, VAR_PASS)
+        
     if (success is False):
         print("Login unsuccessful: " + resp)
         exit(1)

@@ -8,9 +8,6 @@ This is an experimental Python version of libgourou.
 # pyright: reportUndefinedVariable=false
 
 import sys, os, time, shutil
-if sys.version_info[0] < 3:
-    print("This script requires Python 3.")
-    exit(1)
 
 import zipfile
 from lxml import etree
