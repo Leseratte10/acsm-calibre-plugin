@@ -41,7 +41,7 @@ def download(replyData):
 
     if (rights_xml_str is None):
         print("Building rights.xml failed!")
-        exit(1)
+        return False
 
     book_name = None
 
@@ -65,7 +65,7 @@ def download(replyData):
 
     if (ret != 200):
         print("Download failed with error %d" % (ret))
-        exit()
+        return False
 
     with open(filename_tmp, "rb") as f:
         book_content = f.read(10)
@@ -89,7 +89,7 @@ def download(replyData):
         zf.close()
 
         print("File successfully fulfilled to " + filename)
-        exit(0)
+        return True
     
     elif filetype == ".pdf":
         print("Successfully downloaded PDF, patching encryption ...")
@@ -104,24 +104,36 @@ def download(replyData):
         os.remove("tmp_" + filename)
         if (ret):
             print("File successfully fulfilled to " + filename)
+            return True
         else: 
             print("Errors occurred while patching " + filename)
-            exit(1)
-        exit(0)
+            return False
+
     else: 
         print("Error: Weird filetype")
-        exit(1)
+        return False
 
 
 def main():
-    print("Fulfilling book ...")
-    success, replyData = fulfill("URLLink.acsm")
-    if (success is False):
-        print("Hey, that didn't work!")
-        print(replyData)
+
+    if len(sys.argv) < 2:
+        files = [ "URLLink.acsm" ]
     else: 
-        print("Downloading book ...")
-        download(replyData)
+        files = sys.argv[1:]
+
+    for file in files:
+
+        print("Fulfilling book '" + file + "' ...")
+        success, replyData = fulfill(file)
+        if (success is False):
+            print("Hey, that didn't work!")
+            print(replyData)
+        else: 
+            print("Downloading book '" + file + "' ...")
+            success = download(replyData)
+            if (success is False):
+                print("That didn't work!")
+
 
 
 if __name__ == "__main__":
