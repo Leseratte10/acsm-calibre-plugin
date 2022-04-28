@@ -326,6 +326,10 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
         # This happens with HTTP 500 and related errors.
         print("Post request caused HTTPError %d" % (err.code))
         return err.code, "Post request caused HTTPException"
+    except uliberror.URLError as err: 
+        # This happens if the hostname cannot be resolved.
+        print("Post request failed with URLError")
+        return 900, "Post request failed with URLError"
 
 
     ret_code = handler.getcode()
