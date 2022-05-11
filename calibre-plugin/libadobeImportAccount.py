@@ -34,10 +34,7 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
         pass
 
     # Get encryption key
-    try: 
-        from getEncryptionKeyLinux import GetMasterKey
-    except: 
-        from calibre_plugins.deacsm.getEncryptionKeyLinux import GetMasterKey
+    from getEncryptionKeyLinux import GetMasterKey
 
     master_key = GetMasterKey(wine_prefix_path)
 
@@ -120,10 +117,7 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
         return False, "Windows only!"
 
     # Get encryption key:
-    try: 
-        from getEncryptionKeyWindows import GetMasterKey
-    except: 
-        from calibre_plugins.deacsm.getEncryptionKeyWindows import GetMasterKey
+    from getEncryptionKeyWindows import GetMasterKey
 
     master_key = GetMasterKey()
 
