@@ -319,6 +319,14 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
 
+    # Make sure URL has a protocol
+    # Some vendors (see issue #22) apparently don't include "http://" in some of their URLs.
+    # Python returns an error when it encounters such a URL, so just add that prefix if it's not present. 
+
+    if not "://" in URL:
+        print("Provider is using malformed URL %s, fixing." % (URL))
+        URL = "http://" + URL
+
     req = ulib.Request(url=URL, headers=headers, data=document)
     try: 
         handler = ulib.urlopen(req, context=ctx)
