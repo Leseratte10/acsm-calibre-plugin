@@ -649,27 +649,27 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
                 # "Normal" Adobe fulfillment
                 user = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("user"))).text
             except AttributeError:
-                # B&N Adobe PassHash fulfillment
-                user = body.find("./%s" % (adNS("user"))).text
+                # B&N Adobe PassHash fulfillment. Doesn't use notifications usually ...
+                #user = body.find("./%s" % (adNS("user"))).text
+                print("Skipping notify due to passHash?")
+                print("If this is not a passHash book pls open a bug report.")
+                continue
         
         if (device is None):
             try: 
                 # "Normal" Adobe fulfillment
                 device = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("device"))).text
             except:
-                # B&N Adobe PassHash fulfillment without device ID. 
-                # PassHash books aren't linked to a particular device, so there's no ID to send to Adobe.
-                # If I understand Adobe's documentation correctly, PassHash books do not support notifications
-                # and are not supposed to contain notify tags, so lets just skip if that's the case. 
-                print("Skipping notify due to passHash")
-                continue
-
+                print("Missing deviceID for loan metadata ... why?")
+                # I have no idea if this behaviour is correct, need to do more testing on loaned books without deviceID
 
 
         
         full_text = "<adept:notification xmlns:adept=\"http://ns.adobe.com/adept\">"
         full_text += "<adept:user>%s</adept:user>" % user
-        full_text += "<adept:device>%s</adept:device>" % device
+        
+        if device is not None: 
+            full_text += "<adept:device>%s</adept:device>" % device
 
 
         # ADE 4.0 apparently changed the order of these two elements. 
@@ -750,6 +750,11 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
             if critical:
                 errmsg_crit += "ERROR\n" + url + "\n" + msg + "\n\n"
 
+
+    if device is None and errmsg_crit != "":
+        errmsg_crit = ""
+        print("Skipping critical notification failure due to weird book.")
+        
 
     if errmsg_crit == "": 
         return True, ""
