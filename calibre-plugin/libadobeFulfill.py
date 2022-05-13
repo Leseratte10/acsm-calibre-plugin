@@ -429,6 +429,10 @@ def fulfill(acsm_file, do_notify = False):
         if do_notify:
             print("Notifying server ...")
             success, response = performFulfillmentNotification(adobe_fulfill_response)
+            if not success: 
+                print("Some errors occurred during notify: ")
+                print(response)
+                print("The book was probably still downloaded correctly.")
         else:
             print("Not notifying any server since that was disabled.")
     else: 
@@ -474,15 +478,16 @@ def updateLoanReturnData(fulfillmentResultToken):
         return False
 
     try: 
-        loanID = loanToken.findall("./%s" % (adNS("loan")))[0].text
-        if (loanID is None):
-            print("Loan ID not found")
-            return False
-
         operatorURL = loanToken.find("./%s" % (adNS("operatorURL"))).text
     except: 
-        print("Loan ID error")
+        print("OperatorURL missing")
         return False
+    
+    try: 
+        loanID = None
+        loanID = loanToken.findall("./%s" % (adNS("loan")))[0].text        
+    except: 
+        pass
 
     book_name = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("metadata"), dcNS("title"))).text 
 
@@ -490,9 +495,10 @@ def updateLoanReturnData(fulfillmentResultToken):
     try: 
         deviceUUID = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("device"))).text
     except: 
-        deviceUUID = None
+        activationxml = etree.parse(get_activation_xml_path())
+        deviceUUID = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("device"))).text
 
-    loanid = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("fulfillment"))).text
+
     permissions = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("permissions")))
 
     display = permissions.findall("./%s" % (adNS("display")))[0]
@@ -530,7 +536,7 @@ def updateLoanReturnData(fulfillmentResultToken):
             "book_name": book_name,
             "user": userUUID, 
             "device": deviceUUID, 
-            "loanID": loanid, 
+            "loanID": loanID, 
             "operatorURL": operatorURL, 
             "validUntil": dsp_until
         })
@@ -544,16 +550,11 @@ def tryReturnBook(bookData):
     try: 
         user = bookData["user"]
         loanID = bookData["loanID"]
+        device = bookData["device"]
         operatorURL = bookData["operatorURL"]
-        device = None
     except: 
         print("Invalid book data!")
         return False, "Invalid book data"
-
-    try: 
-        device = bookData["device"]
-    except: 
-        pass
 
 
     req_data = "<?xml version=\"1.0\"?>"
@@ -589,7 +590,10 @@ def tryReturnBook(bookData):
         return False, retval
     elif "<envelope" in retval: 
         print("Loan return successful")
-        return performFulfillmentNotification(etree.fromstring(retval), True, user=user, device=device)
+        bl, txt = performFulfillmentNotification(etree.fromstring(retval), True, user=user, device=device)
+        if not bl: 
+            print("Error while notifying of book return. Book's probably still been returned properly.")
+        return True, retval
     else: 
         print("Invalid loan return response: %s" % (retval))
         return False, retval
@@ -661,15 +665,17 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
                 device = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("device"))).text
             except:
                 print("Missing deviceID for loan metadata ... why?")
-                # I have no idea if this behaviour is correct, need to do more testing on loaned books without deviceID
+                print("Reading from device.xml instead.")
+                # Lets try to read this from the activation ...
+                activationxml = etree.parse(get_activation_xml_path())
+                device = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("device"))).text
+
 
 
         
         full_text = "<adept:notification xmlns:adept=\"http://ns.adobe.com/adept\">"
         full_text += "<adept:user>%s</adept:user>" % user
-        
-        if device is not None: 
-            full_text += "<adept:device>%s</adept:device>" % device
+        full_text += "<adept:device>%s</adept:device>" % device
 
 
         # ADE 4.0 apparently changed the order of these two elements. 

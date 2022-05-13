@@ -1427,11 +1427,15 @@ class RentedBooksDialog(QDialog):
         print("Deleting book entry %s (ID %s)" % (self.listy.currentItem().text(), userdata))
 
         success = False
-        for book in self.parent.deacsmprefs["list_of_rented_books"]:
-            if book["loanID"] == userdata:
-                self.parent.deacsmprefs["list_of_rented_books"].remove(book)
-                success = True
-                break
+        done = False
+        while not done:
+            done = True 
+            for book in self.parent.deacsmprefs["list_of_rented_books"]:
+                if book["loanID"] == userdata:
+                    done = False
+                    self.parent.deacsmprefs["list_of_rented_books"].remove(book)
+                    success = True
+                    break
 
         self.populate_list()
 
