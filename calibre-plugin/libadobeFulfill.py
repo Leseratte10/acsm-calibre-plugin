@@ -487,7 +487,10 @@ def updateLoanReturnData(fulfillmentResultToken):
     book_name = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("metadata"), dcNS("title"))).text 
 
     userUUID = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("user"))).text
-    deviceUUID = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("device"))).text
+    try: 
+        deviceUUID = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("device"))).text
+    except: 
+        deviceUUID = None
 
     loanid = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("fulfillment"))).text
     permissions = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("permissions")))
@@ -540,17 +543,24 @@ def updateLoanReturnData(fulfillmentResultToken):
 def tryReturnBook(bookData): 
     try: 
         user = bookData["user"]
-        device = bookData["device"]
         loanID = bookData["loanID"]
         operatorURL = bookData["operatorURL"]
+        device = None
     except: 
         print("Invalid book data!")
         return False, "Invalid book data"
 
+    try: 
+        device = bookData["device"]
+    except: 
+        pass
+
+
     req_data = "<?xml version=\"1.0\"?>"
     req_data += "<adept:loanReturn xmlns:adept=\"http://ns.adobe.com/adept\">"
     req_data += "<adept:user>%s</adept:user>" % (user)
-    req_data += "<adept:device>%s</adept:device>" % (device)
+    if device is not None: 
+        req_data += "<adept:device>%s</adept:device>" % (device)
     req_data += "<adept:loan>%s</adept:loan>" % (loanID)
     req_data += addNonce()
     req_data += "</adept:loanReturn>"
