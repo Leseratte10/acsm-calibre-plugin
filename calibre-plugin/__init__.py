@@ -189,7 +189,7 @@ class DeACSM(FileTypePlugin):
 
             from libadobe import createDeviceKeyFile, update_account_path, sendHTTPRequest
             from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
-            from libadobeFulfill import buildRights, fulfill
+            from libadobeFulfill import buildRights, fulfill, getDecryptedCert
 
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
@@ -215,25 +215,35 @@ class DeACSM(FileTypePlugin):
         import calibre_plugins.deacsm.prefs as prefs     # type: ignore
         deacsmprefs = prefs.DeACSM_Prefs()
 
-        activation_xml_path = os.path.join(deacsmprefs["path_to_account_data"], "activation.xml")
+        from libadobe import get_activation_xml_path
+        from libadobeFulfill import getDecryptedCert
 
         container = None
         try: 
-            container = etree.parse(activation_xml_path)
+            container = etree.parse(get_activation_xml_path())
         except:
+            print("ADE sanity check: Can't parse activation container")
             return False
 
         try: 
             adeptNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)        
 
             if container.find(adeptNS("activationToken")) == None:
+                print("ADE sanity check: activationToken missing")
                 return False
 
             if container.find(adeptNS("credentials")).find(adeptNS("pkcs12")) == None:
+                print("ADE sanity check: pkcs12 missing")
+                return False
+
+            if getDecryptedCert() is None:
+                print("ADE sanity check: Can't decrypt pkcs12")
                 return False
 
             return True
         except: 
+            print("ADE sanity check: Exception")
+            traceback.print_exc()
             return False
 
     def download(self, replyData):

@@ -511,6 +511,7 @@ class ConfigWidget(QWidget):
        
         try: 
             from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
+            from libadobeFulfill import getDecryptedCert
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -563,6 +564,9 @@ class ConfigWidget(QWidget):
 
             if container.find(adeptNS("credentials")).find(adeptNS("pkcs12")) == None:
                 return "ADE authorization seems to be corrupted (pkcs12 missing)", False, None
+
+            if getDecryptedCert() is None: 
+                return "ADE authorization seems to be corrupted (failed to decrypt pkcs12)", False, None            
 
             if not anon: 
                 return "Authorized with ADE ID ("+ade_type+") " + ade_mail + "\non device " + ade_device_name + ", emulating " + ADE_version + ".", True, ade_mail

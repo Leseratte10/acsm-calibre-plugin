@@ -137,8 +137,8 @@ def buildInitLicenseServiceRequest(authURL):
 
     return "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
 
-def buildAuthRequest():
 
+def getDecryptedCert(): 
     activationxml = etree.parse(get_activation_xml_path())
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
@@ -155,9 +155,21 @@ def buildAuthRequest():
         f = open(get_devkey_path(), "rb")
         devkey_bytes = f.read()
         f.close()
-        
 
-    my_cert = get_cert_from_pkcs12(user_pkcs12, base64.b64encode(devkey_bytes))
+    try:     
+        return get_cert_from_pkcs12(user_pkcs12, base64.b64encode(devkey_bytes))
+    except: 
+        return None
+
+def buildAuthRequest():
+
+    activationxml = etree.parse(get_activation_xml_path())
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)     
+
+    my_cert = getDecryptedCert()
+    if my_cert is None: 
+        print("Can't decrypt pkcs12 with devkey!")
+        return None
 
 
     ret = "<?xml version=\"1.0\"?>\n"
@@ -176,6 +188,10 @@ def doOperatorAuth(operatorURL):
     # type: (str) -> str
 
     auth_req = buildAuthRequest()
+
+    if auth_req is None:
+        return "Failed to create auth request"
+
 
     authURL = operatorURL
     if authURL.endswith("Fulfill"):
