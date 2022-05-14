@@ -3,3 +3,8 @@
 /calibre-plugin/module_id.txt
 /calibre-plugin/__pycache__
 /calibre-plugin/*.pyc
+/calibre-plugin.zip
+/devel
+/deps
+/releases
+/adobe_account_backup_*.zip
