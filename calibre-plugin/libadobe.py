@@ -194,7 +194,11 @@ def makeSerial(random):
         except: 
             # Windows
             uid = 1000
-            username = os.getlogin().encode("utf-8").decode("latin-1")
+            try: 
+                username = os.getlogin().encode("utf-8").decode("latin-1")
+            except: 
+                import getpass
+                username = getpass.getuser().encode("utf-8").decode("latin-1")
 
         mac_address = get_mac_address()
 
