@@ -160,6 +160,36 @@ class DeACSM(FileTypePlugin):
                         traceback.print_exc()
                         pass
 
+                
+                # TEMPORARY
+                # oscrypto still doesn't support Ubuntu 22.04
+                # add a hacky bugfix
+                # once oscrypto supports 22.04, this can be removed. 
+
+                ts_dict = self.load_resources( ["module_id.txt"] )
+                id_plugin = ts_dict["module_id.txt"].decode("latin-1").split('\n')[0].strip()
+
+                if islinux:
+                    try: 
+                        print("{0} v{1}: Patching oscrypto for OpenSSL3 support".format(PLUGIN_NAME, PLUGIN_VERSION))
+                        res_dict = self.load_resources( ["_libcrypto_replacement_file_bugfix.py"] )
+                        bugfix_file = res_dict["_libcrypto_replacement_file_bugfix.py"]
+                        dest_path = os.path.join(rand_path, "oscrypto", "oscrypto", "_openssl", "_libcrypto.py")
+                        backup_path = os.path.join(rand_path, "oscrypto", "oscrypto", "_openssl", "_libcrypto.py.bak")
+
+                        shutil.copyfile(dest_path, backup_path)
+                        f = open(dest_path, "wb")
+                        f.write(bugfix_file)
+                        f.close()
+                        print("{0} v{1}: Patch done".format(PLUGIN_NAME, PLUGIN_VERSION))
+                    except: 
+                        print("{0} v{1}: Error while patching oscrypto".format(PLUGIN_NAME, PLUGIN_VERSION))
+                        traceback.print_exc()
+
+                # TEMPORARY END
+                
+                
+
                 if islinux: 
                     # Also extract EXE files needed for WINE ADE key extraction
                     names = [ "keyextract/decrypt_win32.exe", "keyextract/decrypt_win64.exe" ]
@@ -189,7 +219,7 @@ class DeACSM(FileTypePlugin):
 
             from libadobe import createDeviceKeyFile, update_account_path, sendHTTPRequest
             from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
-            from libadobeFulfill import buildRights, fulfill, getDecryptedCert
+            from libadobeFulfill import buildRights, fulfill
 
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
@@ -216,7 +246,6 @@ class DeACSM(FileTypePlugin):
         deacsmprefs = prefs.DeACSM_Prefs()
 
         from libadobe import get_activation_xml_path
-        from libadobeFulfill import getDecryptedCert
 
         container = None
         try: 
@@ -236,9 +265,13 @@ class DeACSM(FileTypePlugin):
                 print("ADE sanity check: pkcs12 missing")
                 return False
 
-            if getDecryptedCert() is None:
-                print("ADE sanity check: Can't decrypt pkcs12")
-                return False
+            try:  
+                from libadobeFulfill import getDecryptedCert
+                if getDecryptedCert() is None:
+                    print("ADE sanity check: Can't decrypt pkcs12")
+                    return False
+            except: 
+                print("Skipping decryption check")
 
             return True
         except: 
