@@ -138,11 +138,15 @@ def buildInitLicenseServiceRequest(authURL):
     return "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
 
 
-def getDecryptedCert(): 
-    activationxml = etree.parse(get_activation_xml_path())
-    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+def getDecryptedCert(pkcs12_b64_string = None): 
+    
+    if pkcs12_b64_string is None: 
+        activationxml = etree.parse(get_activation_xml_path())
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-    user_pkcs12 = base64.b64decode(activationxml.find("./%s/%s" % (adNS("credentials"), adNS("pkcs12"))).text)
+        pkcs12_b64_string = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("pkcs12"))).text
+
+    pkcs12_data = base64.b64decode(pkcs12_b64_string)
 
     try: 
         from libadobe import devkey_bytes as devkey_adobe
@@ -157,7 +161,7 @@ def getDecryptedCert():
         f.close()
 
     try:     
-        return get_cert_from_pkcs12(user_pkcs12, base64.b64encode(devkey_bytes))
+        return get_cert_from_pkcs12(pkcs12_data, base64.b64encode(devkey_bytes))
     except: 
         return None
 
