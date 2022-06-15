@@ -7,15 +7,14 @@ on:
 jobs: 
   build:
     runs-on: ubuntu-20.04
-    container: debian:bullseye
     steps: 
       - uses: actions/checkout@v2
 
       - name: Install compilers
         run: |
-          apt update
-          apt install -y gcc-mingw-w64-i686 gcc-mingw-w64-x86-64
-          apt install -y wget make zip
+          sudo apt update
+          sudo apt install -y gcc-mingw-w64-i686 gcc-mingw-w64-x86-64
+          sudo apt install -y wget make zip
 
       - name: Compile
         run: |

@@ -192,13 +192,26 @@ class DeACSM(FileTypePlugin):
 
                 if islinux: 
                     # Also extract EXE files needed for WINE ADE key extraction
-                    names = [ "keyextract/decrypt_win32.exe", "keyextract/decrypt_win64.exe" ]
-                    lib_dict = self.load_resources(names)
-                    for entry, data in lib_dict.items():
-                        file_path = os.path.join(rand_path, entry.split('/')[1])
-                        f = open(file_path, "wb")
-                        f.write(data)
+                    # EXE files are obfuscated with base64 so that stupid AV programs
+                    # don't flag this whole plugin as malicious. 
+                    # See keyextractDecryptor.py and the folder "keyextract" for more information.
+
+                    try: 
+                        print("{0} v{1}: Extracting WINE key tools ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+                        from keyextractDecryptor import get_win32_data, get_win64_data
+
+                        file32 = os.path.join(rand_path, "decrypt_win32.exe")
+                        f = open(file32, "wb")
+                        f.write(get_win32_data())
                         f.close()
+
+                        file64 = os.path.join(rand_path, "decrypt_win64.exe")
+                        f = open(file64, "wb")
+                        f.write(get_win64_data())   
+                        f.close()
+                    except:
+                        print("{0} v{1}: Error while extracting packed WINE ADE key extraction EXE files ".format(PLUGIN_NAME, PLUGIN_VERSION))
+                        traceback.print_exc()
 
                 
                 # Write module ID
