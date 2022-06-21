@@ -162,20 +162,20 @@ def GetMasterKey(path_to_wine_prefix):
         serial = 0
 
     if (verbose_logging):
-        print("Serial: " + str(serial))
+        print("Serial: {}".format(serial))
     
     cpu = cpuid.CPUID()
     _, b, c, d = cpu(0)
     vendor = struct.pack("III", b, d, c)
 
     if (verbose_logging):
-        print("Vendor: " + vendor.decode("utf-8"))
+        print("Vendor: {}".format(vendor))
 
     signature, _, _, _ = cpu(1)
     signature = struct.pack('>I', signature)[1:]
 
     if (verbose_logging):
-        print("Signature: " + str(binascii.hexlify(signature)))
+        print("Signature: {}".format(binascii.hexlify(signature)))
 
     # Search for the username in the registry:
     user = None
@@ -216,8 +216,14 @@ def GetMasterKey(path_to_wine_prefix):
         print("Error while determining username ...")
         exit()
 
+    # Comes as bytearray
+    if sys.version_info[0] == 3:
+        user = bytes(user)
+    else:
+        user = str(user)
+
     if verbose_logging:
-        print("Username: " + str(user))
+        print("Username: {}".format(user))
 
     # Find the value we want to decrypt from the registry. loop through the Wine registry file to find the "key" attribute
     try: 
@@ -261,20 +267,17 @@ def GetMasterKey(path_to_wine_prefix):
         return None
 
     if verbose_logging:
-        print("Encrypted key: " + binascii.hexlify(key_line))
+        print("Encrypted key: {}".format(binascii.hexlify(key_line)))
 
     # These should all be "bytes" (Py3) or "str" (Py2)
-    #print(type(vendor))
-    #print(type(signature))
-    #print(type(user))
-
-    if sys.version_info[0] == 2:
-        user = bytes(user)
+    # print(type(vendor))
+    # print(type(signature))
+    # print(type(user))
 
     entropy = struct.pack('>I12s3s13s', serial, vendor, signature, user)
 
     if verbose_logging:
-        print("Entropy: " + str(entropy))
+        print("Entropy: {}".format(binascii.hexlify(entropy)))
 
     # We would now call CryptUnprotectData to decrypt the stuff, 
     # but unfortunately there's no working Linux implementation 
@@ -292,12 +295,11 @@ def GetMasterKey(path_to_wine_prefix):
     if (success):
         keykey = data
         if verbose_logging:
-            print("Key key: ")
-            print(binascii.hexlify(keykey))
+            print("Key: {}".format(binascii.hexlify(keykey)))
         return keykey
     
     else: 
-        print("Error number: " + str(data))
+        print("Error number: {}".format(data))
         if data == 13: # WINError ERROR_INVALID_DATA
             print("Could not decrypt data with the given key. Did the entropy change?")
         return None
@@ -350,8 +352,8 @@ def CryptUnprotectDataExecuteWine(wineprefix, data, entropy):
     env_dict["WINEDEBUG"] = "+err,+fixme"
 
     # Use environment variables to get the input data to the application.
-    env_dict["X_DECRYPT_DATA"] = binascii.hexlify(data)
-    env_dict["X_DECRYPT_ENTROPY"] = binascii.hexlify(entropy)
+    env_dict["X_DECRYPT_DATA"] = binascii.hexlify(data).decode("utf-8")
+    env_dict["X_DECRYPT_ENTROPY"] = binascii.hexlify(entropy).decode("utf-8")
 
     try: 
         from calibre.utils.config import config_dir
@@ -362,17 +364,16 @@ def CryptUnprotectDataExecuteWine(wineprefix, data, entropy):
         import os
         moddir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "keyextract")
 
-    proc = subprocess.Popen(["wine", "decrypt_" + winearch + ".exe" ], shell=False, cwd=moddir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    prog_output, prog_stderr = proc.communicate()
     # calls decrypt_win32.exe or decrypt_win64.exe
+    proc = subprocess.Popen(["wine", "decrypt_" + winearch + ".exe"], shell=False, cwd=moddir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    prog_output, prog_stderr = proc.communicate()
+    stdout = prog_output.decode("utf-8")
+    stderr = prog_stderr.decode("utf-8")
 
-
-    if prog_output.decode("utf-8").startswith("PROGOUTPUT:0:"):
-        key_string = prog_output.decode("utf-8").split(':')[2]
+    if stdout.startswith("PROGOUTPUT:0:"):
+        key_string = stdout.split(':')[2]
         if verbose_logging:
-            print("Successfully got encryption key from WINE: " + key_string)
-            #print("Debug log:")
-            #print(prog_stderr.decode("utf-8"))
+            print("Successfully got encryption key from WINE: {}".format(key_string))
         else:
             print("Successfully got encryption key from WINE.")
         master_key = binascii.unhexlify(key_string)
@@ -382,20 +383,19 @@ def CryptUnprotectDataExecuteWine(wineprefix, data, entropy):
     else: 
         print("Huh. That didn't work. ")
         try: 
-            err = int(prog_output.decode("utf-8").split(':')[1])
+            err = int(stdout.split(':')[1])
             if err == -4:
-                err = int(prog_output.decode("utf-8").split(':')[2])
-                new_serial = int(prog_output.decode("utf-8").split(':')[3])
+                err = int(stdout.split(':')[2])
+                new_serial = int(stdout.split(':')[3])
                 if verbose_logging:
-                    print("New serial: " + str(new_serial))
+                    print("New serial: {}".format(new_serial))
         except:
-            pass
+            err = None
 
         if verbose_logging:
-            print("Program reported: " + prog_output.decode("utf-8"))
-            print("Debug log: ")
-            print(prog_stderr.decode("utf-8"))
-            
+            # print("Stderr log:\n{}".format(stderr))
+            print("Program output: {}".format(stdout))
+
         return False, err
 
 
