@@ -39,7 +39,8 @@
 #          drop dependencies python-cryptography, python-rsa and python-pyasn1. 
 #          add a ton of testing code, try to prevent AV false-positives, 
 #          experimental support for Python2 / Calibre < 5, 
-#          fix broken URLs with missing protocol, fix loan data for loans without device ID.
+#          fix broken URLs with missing protocol, fix loan data for loans without device ID, 
+#          fix nonce calculation yet again.
 
 PLUGIN_NAME = "DeACSM"
 PLUGIN_VERSION_TUPLE = (0, 0, 15)

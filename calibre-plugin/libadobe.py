@@ -447,11 +447,9 @@ def addNonce():
     # every time a Nonce is needed. 
 
     dt = datetime.utcnow()
-    usec = dt.microsecond
     sec = (dt - datetime(1970,1,1)).total_seconds()
-
-
-    Ntime = int(int(sec * 1000) + usec/1000)
+    Ntime = int(sec * 1000)
+    # Ntime is now milliseconds since 1970
 
     # Unixtime to gregorian timestamp
     Ntime += 62167219200000
