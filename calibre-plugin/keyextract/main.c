@@ -50,10 +50,16 @@ int main() {
 	TCHAR user[USERBUFSIZE];
 	memset(&user, 0, sizeof(user));  // GetUserName only sets bytes as needed for length of username, but we need null bytes to fill the rest
 	DWORD bufsize = USERBUFSIZE	;
-	if (GetUserName(user, &bufsize) == 0) {
-		DWORD err = GetLastError();
-		fprintf(stderr, "Error with GetUserName: %ld\n", err);
-		return err;
+	LSTATUS user_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\Adobe\\Adept\\Device", "username", RRF_RT_REG_SZ, NULL, &user, &bufsize);
+	if (user_retval != ERROR_SUCCESS) {
+		fprintf(stderr, "Error with RegGetValue: %ld\n", user_retval);
+		fprintf(stderr, "bufsize: %ld\n", bufsize);
+		fprintf(stderr, "Falling back to GetUserName");
+		if (GetUserName(user, &bufsize) == 0) {
+			DWORD err = GetLastError();
+			fprintf(stderr, "Error with GetUserName: %ld\n", err);
+			return err;
+		}
 	}
 	fprintf(stderr, "Username: %s\n", user);
 
@@ -62,11 +68,11 @@ int main() {
 	#define KEYBUFSIZE 180  // As measured
 	BYTE key[KEYBUFSIZE];
 	DWORD regkeysize = KEYBUFSIZE;
-	LSTATUS retval = RegGetValue(HKEY_CURRENT_USER, "Software\\Adobe\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &regkeysize);
-	if (retval != ERROR_SUCCESS) {
-		fprintf(stderr, "Error with RegGetValue: %ld\n", retval);
+	LSTATUS key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\Adobe\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &regkeysize);
+	if (key_retval != ERROR_SUCCESS) {
+		fprintf(stderr, "Error with RegGetValue: %ld\n", key_retval);
 		fprintf(stderr, "regkeysize: %ld\n", regkeysize);
-		return retval;
+		return key_retval;
 	}
 	fprintf(stderr, "Encrypted key (hex): ");
 	for (size_t i = 0; i < KEYBUFSIZE; i++ )
