@@ -47,22 +47,30 @@ int main() {
 
 	// Get windows user
 	#define USERBUFSIZE 512
-	TCHAR user[USERBUFSIZE];
-	memset(&user, 0, sizeof(user));  // GetUserName only sets bytes as needed for length of username, but we need null bytes to fill the rest
-	DWORD bufsize = USERBUFSIZE	;
-	LSTATUS user_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\Adobe\\Adept\\Device", "username", RRF_RT_REG_SZ, NULL, &user, &bufsize);
+	wchar_t wideuser[USERBUFSIZE];
+	// RegGetValueW/GetUserNameW only sets bytes as needed for length of username, but we need null bytes to fill the rest
+	// Only the first 13 bytes are used for entropy, so only set those
+	memset(&wideuser, 0, 13); 
+	DWORD bufsize = USERBUFSIZE;
+	LSTATUS user_retval = RegGetValueW(HKEY_CURRENT_USER, L"Software\\Adobe\\Adept\\Device", L"username", RRF_RT_REG_SZ, NULL, &wideuser, &bufsize);
 	if (user_retval != ERROR_SUCCESS) {
 		fprintf(stderr, "Error with RegGetValue: %ld\n", user_retval);
 		fprintf(stderr, "bufsize: %ld\n", bufsize);
-		fprintf(stderr, "Falling back to GetUserName");
-		if (GetUserName(user, &bufsize) == 0) {
+		fprintf(stderr, "Falling back to GetUserNameW\n");
+		if (GetUserNameW(wideuser, &bufsize) == 0) {
 			DWORD err = GetLastError();
 			fprintf(stderr, "Error with GetUserName: %ld\n", err);
 			return err;
 		}
 	}
-	fprintf(stderr, "Username: %s\n", user);
-
+	fprintf(stderr, "Username: %ls\n", wideuser);
+	// Copy every second byte of the wide string, to make an ascii-ish/non-long string
+	// As adobe does
+	// Only the first 13 bytes are used, so only copy those
+	char user[13];
+	for (unsigned int i = 0; i < 13; i++) {
+		user[i] = ((char *)wideuser)[i*2];
+	}
 
 	// Get Encrypted adobe key
 	#define KEYBUFSIZE 180  // As measured
@@ -112,7 +120,7 @@ int main() {
 	fprintf(stderr, "Decrypted key length: %lu\n", plaintext_data.cbData);
 
 	// Print decrypted key to stdout
-	for (int i = 0; i < 16; i++) {
+	for (unsigned int i = 0; i < 16; i++) {
 		printf("%02x", plaintext_data.pbData[i]);
 	}
 }
