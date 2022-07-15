@@ -2,6 +2,9 @@
 #include <cpuid.h>
 #include <intsafe.h>
 
+// Size for buffers that will hold unknown-size data
+#define BUFSIZE 1024
+
 union CPUIDVendor {
 	unsigned int reg[3];
 	char vendor[13];
@@ -46,44 +49,43 @@ int main() {
 
 
 	// Get windows user
-	#define USERBUFSIZE 512
-	wchar_t wideuser[USERBUFSIZE];
+	wchar_t wideuser[BUFSIZE];
 	// RegGetValueW/GetUserNameW only sets bytes as needed for length of username, but we need null bytes to fill the rest
-	// Only the first 13 bytes are used for entropy, so only set those
-	memset(&wideuser, 0, 13); 
-	DWORD bufsize = USERBUFSIZE;
-	LSTATUS user_retval = RegGetValueW(HKEY_CURRENT_USER, L"Software\\Adobe\\Adept\\Device", L"username", RRF_RT_REG_SZ, NULL, &wideuser, &bufsize);
+	memset(&wideuser, 0, sizeof(wideuser)); 
+	DWORD wideuser_size = BUFSIZE;
+	LSTATUS user_retval = RegGetValueW(HKEY_CURRENT_USER, L"Software\\Adobe\\Adept\\Device", L"username", RRF_RT_REG_SZ, NULL, &wideuser, &wideuser_size);
 	if (user_retval != ERROR_SUCCESS) {
 		fprintf(stderr, "Error with RegGetValue: %ld\n", user_retval);
-		fprintf(stderr, "bufsize: %ld\n", bufsize);
+		fprintf(stderr, "wideuser_size: %ld\n", wideuser_size);
 		fprintf(stderr, "Falling back to GetUserNameW\n");
-		if (GetUserNameW(wideuser, &bufsize) == 0) {
+		if (GetUserNameW(wideuser, &wideuser_size) == 0) {
 			DWORD err = GetLastError();
 			fprintf(stderr, "Error with GetUserName: %ld\n", err);
+			fprintf(stderr, "wideuser_size: %ld\n", wideuser_size);
 			return err;
 		}
 	}
 	fprintf(stderr, "Username: %ls\n", wideuser);
 	// Copy every second byte of the wide string, to make an ascii-ish/non-long string
 	// As adobe does
-	// Only the first 13 bytes are used, so only copy those
+	// Only the first 13 chars are used, so only copy those
 	char user[13];
 	for (unsigned int i = 0; i < 13; i++) {
 		user[i] = ((char *)wideuser)[i*2];
 	}
 
 	// Get Encrypted adobe key
-	#define KEYBUFSIZE 180  // As measured
-	BYTE key[KEYBUFSIZE];
-	DWORD regkeysize = KEYBUFSIZE;
-	LSTATUS key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\Adobe\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &regkeysize);
+	BYTE key[BUFSIZE];
+	memset(&key, 0, sizeof(key)); 
+	DWORD key_size = BUFSIZE;
+	LSTATUS key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\Adobe\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
 	if (key_retval != ERROR_SUCCESS) {
 		fprintf(stderr, "Error with RegGetValue: %ld\n", key_retval);
-		fprintf(stderr, "regkeysize: %ld\n", regkeysize);
+		fprintf(stderr, "key_size: %ld\n", key_size);
 		return key_retval;
 	}
 	fprintf(stderr, "Encrypted key (hex): ");
-	for (size_t i = 0; i < KEYBUFSIZE; i++ )
+	for (size_t i = 0; i < key_size; i++ )
 	{
 	   fprintf(stderr, "%02x", key[i]);
 	}
@@ -109,7 +111,7 @@ int main() {
 	// Run decryption API
 	DATA_BLOB ciphertext_data, entropy_data, plaintext_data;
 	ciphertext_data.pbData = key;
-	ciphertext_data.cbData = sizeof(key);
+	ciphertext_data.cbData = key_size;
 	entropy_data.pbData = (BYTE*)(&entropy);
 	entropy_data.cbData = sizeof(entropy);
 	if (CryptUnprotectData(&ciphertext_data, NULL, &entropy_data, NULL, NULL, 0, &plaintext_data) != TRUE) {
