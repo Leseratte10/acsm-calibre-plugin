@@ -49,7 +49,7 @@ jobs:
         run: |
           cd tests && PYTHONWARNINGS=ignore python2 ./main.py && cd ..
 
-  test-ubuntu-2204:
+  test-ubuntu-2204-oscrypto:
     runs-on: ubuntu-22.04
     steps: 
       - uses: actions/checkout@v2
@@ -72,6 +72,33 @@ jobs:
       - name: Run tests (Python 2)
         run: |
           cd tests && PYTHONWARNINGS=ignore python2 ./main.py && cd ..
+
+  test-ubuntu-2204-oscrypto-fork:
+    runs-on: ubuntu-22.04
+    steps: 
+      - uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          # Require cryptography >= 3.1 because in 3.0 and below, the backend param in load_key_and_certificates was still required.
+          # Installing a forked version of oscrypto to fix OpenSSL 3 issues
+          pip3 install freezegun lxml pycryptodome rsa "cryptography>=3.1"
+          pip3 install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_fe39273cc5020.zip
+          # Install Python2 stuff
+          curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
+          sudo apt install python2
+          python2 get-pip.py
+          pip2 install freezegun mock lxml pycryptodome "rsa<=4.3" cryptography==3.1
+          pip2 install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_fe39273cc5020.zip
+
+      - name: Run tests (Python 3)
+        run: |
+          cd tests && python3 ./main.py && cd ..
+
+      - name: Run tests (Python 2)
+        run: |
+          cd tests && PYTHONWARNINGS=ignore python2 ./main.py && cd ..
+
 
   test-windows:
     runs-on: windows-2022
