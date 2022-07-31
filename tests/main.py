@@ -25,7 +25,6 @@ except ImportError:
 import libadobe             # type: ignore
 import libadobeAccount      # type: ignore
 import libadobeFulfill      # type: ignore
-from getEncryptionKeyLinux import unfuck as fix_wine_username # type: ignore
 from libpdf import trim_encrypt_string, cleanup_encrypt_element, deflate_and_base64_encode  # type: ignore
 from customRSA import CustomRSA # type: ignore
 
@@ -336,13 +335,6 @@ class TestOther(unittest.TestCase):
 
     def forcefail(self):
         self.assertEqual(1, 2, "force fail")
-
-    @unittest.skipIf(os.name == "nt", "not testing wine on Windows")
-    def test_wineUsernameEscaping(self): 
-        '''Check if Wine username decoder is working properly'''
-
-        self.assertEqual(fix_wine_username(r'"1234"'),      b'1234',    "Wine username mismatch")
-        self.assertEqual(fix_wine_username(r'"a\x00e931"'), b'a\xe931', "Wine username mismatch with UTF-8")
 
     def test_pdf_trimEncrypt(self): 
         '''Check if PDF encryption string trimming code is working properly'''
