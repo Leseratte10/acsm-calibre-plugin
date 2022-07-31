@@ -270,9 +270,9 @@ class ConfigWidget(QWidget):
         info_dialog(None, "Authorize eReader", msg, show=True, show_copy_button=False)
 
         dialog = QFileDialog()
-        dialog.setFileMode(QFileDialog.Directory)
+        dialog.setFileMode(QFileDialog.FileMode.Directory)
         opts = dialog.options()
-        opts |= QFileDialog.ShowDirsOnly
+        opts |= QFileDialog.Option.ShowDirsOnly
         dialog.setOptions(opts)
 
         if dialog.exec_():
