@@ -33,18 +33,18 @@
 #          fix ACSM files from Google Play books (no metadata node), 
 #          allow converting an anonymous auth to an AdobeID auth, 
 #          update python-cryptography from 3.4.8 to 36.0.1, update python-rsa from 4.7.2 to 4.8.
-# Currently in development: 
-#          Ignore fatal HTTP errors and/or a missing or broken server during optional 
+# v0.0.16: Ignore fatal HTTP errors and/or a missing or broken server during optional 
 #          fulfillment notifications, allow authorizing an eReader through USB (experimental), 
 #          drop dependencies python-cryptography, python-rsa and python-pyasn1. 
 #          add a ton of testing code, try to prevent AV false-positives, 
 #          experimental support for Python2 / Calibre < 5, 
 #          fix broken URLs with missing protocol, fix loan data for loans without device ID, 
-#          fix nonce calculation yet again, 
+#          fix nonce calculation yet again, merge #26 to make importing a WINE auth more reliable,
 #          update python-oscrypto to unofficial fork to fix OpenSSL 3 support.
 
+
 PLUGIN_NAME = "DeACSM"
-PLUGIN_VERSION_TUPLE = (0, 0, 15)
+PLUGIN_VERSION_TUPLE = (0, 0, 16)
 
 from calibre.customize import FileTypePlugin        # type: ignore
 __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
