@@ -925,8 +925,8 @@ class ConfigWidget(QWidget):
         msg = "You are currently using " + ADE_version + "\n"
         msg += "You can switch to a different ADE version by using the selection box below.\n"
         msg += "- ADE 1.7.2 is for debugging only. Do not use this setting, it might get your account banned\n"
-        msg += "- ADE 2.0.1 works with most books, and will always get you the old, removable DRM. Select this if you're unsure\n"
-        msg += "- ADE 3.0.1 works with all books, but may give you unremovable DRM for some retailers\n"
+        msg += "- ADE 2.0.1 works with most books, and will always get you the old DRM. Select this if you're unsure\n"
+        msg += "- ADE 3.0.1 works with all books, but may give you newer DRM that requires newer tools to remove\n"
         msg += "- ADE 4.0.3 and ADE 4.5.11 are available, but aren't really needed for anything\n"
         msg += "Select ADE 2.0.1 if you are unsure\n\n"
         msg += "Which ADE version do you want to emulate?"
@@ -966,9 +966,7 @@ class ConfigWidget(QWidget):
 
         msg = "You are about to create an anonymous authorization.\n"
         msg += "If you lose access to this authorization, all books linked to it will be lost / inaccessible. "
-        msg += "Make sure to create backups of the authorization data! "
-        msg += "Also, if you do end up emulating ADE3 or newer, and you receive an eBook with the new DRM, "
-        msg += "you might not be able to read / access that book at all."
+        msg += "Make sure to create backups of the authorization data!"
         
         warning_dialog(None, "Warning", msg, show=True, show_copy_button=False)
         
@@ -985,8 +983,8 @@ class ConfigWidget(QWidget):
 
 
         msg = "Which ADE version do you want to emulate?\n"
-        msg += "- ADE 2.0.1 works with most but not all books, but will always give you the old, removable DRM.\n"
-        msg += "- ADE 3.0.1 works with all books, but may give you unremovable DRM for some retailers.\n"
+        msg += "- ADE 2.0.1 works with most but not all books, but will always give you the old DRM.\n"
+        msg += "- ADE 3.0.1 works with all books, but may give you newer DRM for some retailers.\n"
         msg += "- ADE 4.0.3 and 4.5.11 are only provided for completeness sake, but aren't usually needed.\n"
         msg += "Select ADE 2.0 if you are unsure."
         item, ok = QInputDialog.getItem(self, "Authorizing ADE account", msg, allowed_strings, 
@@ -1161,8 +1159,8 @@ class ConfigWidget(QWidget):
 
 
         msg = "Which ADE version do you want to emulate?\n"
-        msg += "- ADE 2.0.1 works with most but not all books, but will always give you the old, removable DRM.\n"
-        msg += "- ADE 3.0.1 works with all books, but may give you unremovable DRM for some retailers.\n"
+        msg += "- ADE 2.0.1 works with most but not all books, but will always give you the old DRM.\n"
+        msg += "- ADE 3.0.1 works with all books, but may give you newer DRM for some retailers.\n"
         msg += "- ADE 4.0.3 and 4.5.11 are only provided for completeness sake, but aren't usually needed.\n"
         msg += "Select ADE 2.0 if you are unsure."
         item, ok = QInputDialog.getItem(self, "Authorizing ADE account", msg, allowed_strings, 
