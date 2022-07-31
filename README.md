@@ -43,7 +43,7 @@ See the "LICENSE" file for a full copy of the GNU GPL v3.
 Download the plugin and import it into Calibre, then open the plugin settings. The plugin should display "Not authorized for any ADE ID". You now have multiple options to authorize the plugin: 
 
 - You can click on "Link to ADE account" and enter your AdobeID credentials to link your Calibre installation to your AdobeID account. This uses up one of your available activations. 
-- You can click on "Create anonymous authorization" to create an anonymous authorization. Make sure to create backups of that authorization. Also, if you do end up emulating ADE3+ and you receive a file with the new Adobe DRM, you might not be able to access it ...
+- You can click on "Create anonymous authorization" to create an anonymous authorization. Make sure to create backups of that authorization. 
 - If you have ADE installed and activated on your machine, you can click "Import activation from ADE" to clone the existing activation from your ADE installation. 
 - If you have used this plugin before, you can click on "Import existing activation backup" to import a previously created activation backup (ZIP) file to restore an activation. This functionality can also be used to clone one activation to multiple computers. 
 
@@ -94,6 +94,7 @@ Though, generally it's recommended to use the Calibre plugin instead of these st
 - Support for multiple independant authorizations (with an easy way to switch between them)
 - Import a JoinedAccount authorization from ADE (ADE2.0+)
 - Import multiple account authorizations from ADE (ADE2.0+)
+- Support to add an AdobeID to an eReader without replacing the existing one
 - Support for Adobe's "auth" download method instead of the "simple" method (ADE2.0+)
 - Support the JoinAccounts, ActivateLinkedAccounts and GetCredentialList functions to allow for merged AdobeIDs (ADE2.0+)
 - Support the SyncToDevice function to auto-download new books from ADE into Calibre (ADE4.0+)

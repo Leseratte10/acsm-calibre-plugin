@@ -329,7 +329,7 @@ class ConfigWidget(QWidget):
 
             print("Found Reader with Class " + devClass + " and Name " + devName)
 
-            if os.path.isfile(act_xml_path):
+            if os.path.isfile(act_xml_path) and os.path.getsize(act_xml_path) > 0:
 
                 active_device_act = etree.parse(act_xml_path)
                 adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
