@@ -38,6 +38,10 @@ See the "LICENSE" file for a full copy of the GNU GPL v3.
 </details>
 
 
+## Known bugs
+
+- Returning an eBook to a library running Adobe Content Server 6 (ACS6) or newer will fail. The plugin will claim the book return was successful, but the book won't be marked as returned on the libraries' servers. This will hopefully be fixed with the next version of the plugin - I already dumped a bunch of logs from ADE so I know what my plugin is missing, now I just need to implement the fix and see if it works. It might be a good idea to stop returning books with the current version of the plugin, as that'd be a difference that the libraries could detect as doing something weird, if they're using ACS6. 
+
 ## Setup
 
 Download the plugin and import it into Calibre, then open the plugin settings. The plugin should display "Not authorized for any ADE ID". You now have multiple options to authorize the plugin: 

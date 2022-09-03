@@ -567,6 +567,17 @@ def updateLoanReturnData(fulfillmentResultToken):
 
 
 def tryReturnBook(bookData): 
+
+
+    verbose_logging = False
+    try: 
+        import calibre_plugins.deacsm.prefs as prefs
+        deacsmprefs = prefs.DeACSM_Prefs()
+        verbose_logging = deacsmprefs["detailed_logging"]
+    except:
+        pass
+
+
     try: 
         user = bookData["user"]
         loanID = bookData["loanID"]
@@ -600,7 +611,8 @@ def tryReturnBook(bookData):
 
     print("Would notify server %s:" % (operatorURL + "/LoanReturn"))
     doc_send = "<?xml version=\"1.0\"?>\n" + etree.tostring(full_text_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-    # print(doc_send)
+    if verbose_logging:
+        print(doc_send)
 
 
     retval = sendRequestDocu(doc_send, operatorURL + "/LoanReturn").decode("utf-8")
@@ -610,6 +622,8 @@ def tryReturnBook(bookData):
         return False, retval
     elif "<envelope" in retval: 
         print("Loan return successful")
+        if verbose_logging:
+            print(retval)
         bl, txt = performFulfillmentNotification(etree.fromstring(retval), True, user=user, device=device)
         if not bl: 
             print("Error while notifying of book return. Book's probably still been returned properly.")
@@ -621,6 +635,14 @@ def tryReturnBook(bookData):
 
 
 def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False, user = None, device = None):
+
+    verbose_logging = False
+    try: 
+        import calibre_plugins.deacsm.prefs as prefs
+        deacsmprefs = prefs.DeACSM_Prefs()
+        verbose_logging = deacsmprefs["detailed_logging"]
+    except:
+        pass
 
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
@@ -759,6 +781,10 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
             msg = msg.decode("utf-8")
         except:
             pass
+
+        if verbose_logging:
+            print("MSG:")
+            print(msg)
 
         if "<error" in msg: 
             print("Fulfillment notification error: %s" % (msg))
