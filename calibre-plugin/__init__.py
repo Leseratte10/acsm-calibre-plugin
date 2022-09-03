@@ -140,8 +140,18 @@ class DeACSM(FileTypePlugin):
                     shutil.rmtree(self.moddir, ignore_errors=True)
 
                 rand_path = self.moddir + str(random.randint(0, 1000000000))
-                # Generate random name so we don't get conflicts with multiple instances of the plugin running at once. 
-                # Hack-y solution, but it should work.
+                
+                ctr = 0
+                while os.path.exists(rand_path):
+                    # None of this code should be necessary since a random number between 0 and a billion should be unique
+                    # enough, but apparently not. Make new ones until we find one that's not in use.
+                    # Should be using Calibre's TemporaryFile class but then I can't be certain it's on the same drive...
+                    ctr += 1
+                    if (ctr > 1000):
+                        print("{0} v{1}: Tried a thousand times to get a temp dir ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+                        raise Exception("Hey!")
+
+                    rand_path = self.moddir + str(random.randint(0, 1000000000))
 
                 os.mkdir(rand_path)
 
