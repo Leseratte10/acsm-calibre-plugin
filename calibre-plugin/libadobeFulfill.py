@@ -482,32 +482,28 @@ def fulfill(acsm_file, do_notify = False):
 
 
 
-def updateLoanReturnData(fulfillmentResultToken):
+def updateLoanReturnData(fulfillmentResultToken, forceTestBehaviour=False):
 
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     dcNS = lambda tag: '{%s}%s' % ('http://purl.org/dc/elements/1.1/', tag)
 
     try: 
-        loanToken = fulfillmentResultToken.find("./%s" % (adNS("loanToken")))
-        if (loanToken is None):
-            print("Loan token not found")
+        fulfillment_id = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("fulfillment"))).text
+        if (fulfillment_id is None):
+            print("Fulfillment ID not found, can't generate loan token")
             return False
+
     except: 
         print("Loan token error")
         return False
 
     try: 
-        operatorURL = loanToken.find("./%s" % (adNS("operatorURL"))).text
+        operatorURL = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("operatorURL"))).text
     except: 
         print("OperatorURL missing")
         return False
     
-    try: 
-        loanID = None
-        loanID = loanToken.findall("./%s" % (adNS("loan")))[0].text        
-    except: 
-        pass
 
     book_name = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("metadata"), dcNS("title"))).text 
 
@@ -539,6 +535,18 @@ def updateLoanReturnData(fulfillmentResultToken):
     # "loanID" is the loan ID
     # "validUntil" is how long it's valid
 
+    new_loan_record = {
+            "book_name": book_name,
+            "user": userUUID,
+            "device": deviceUUID,
+            "loanID": fulfillment_id,
+            "operatorURL": operatorURL,
+            "validUntil": dsp_until
+        }
+
+    if forceTestBehaviour:
+        return new_loan_record
+
     try: 
         import calibre_plugins.deacsm.prefs as prefs     # type: ignore
         deacsmprefs = prefs.DeACSM_Prefs()
@@ -552,14 +560,7 @@ def updateLoanReturnData(fulfillmentResultToken):
     # books, and can then return them.
     # Also, the config widget is responsible for cleaning up that list.
 
-    deacsmprefs["list_of_rented_books"].append({
-            "book_name": book_name,
-            "user": userUUID, 
-            "device": deviceUUID, 
-            "loanID": loanID, 
-            "operatorURL": operatorURL, 
-            "validUntil": dsp_until
-        })
+    deacsmprefs["list_of_rented_books"].append(new_loan_record)
 
     deacsmprefs.writeprefs()
 
@@ -762,7 +763,9 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
         doc_send = "<?xml version=\"1.0\"?>\n" + etree.tostring(full_text_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
         
         # Debug: Print notify request
-        #print(doc_send)
+        if (verbose_logging):
+            print("Notify payload XML:")
+            print(doc_send)
 
         try: 
             code, msg = sendRequestDocuRC(doc_send, url)

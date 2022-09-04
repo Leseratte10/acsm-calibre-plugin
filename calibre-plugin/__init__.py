@@ -41,6 +41,9 @@
 #          fix broken URLs with missing protocol, fix loan data for loans without device ID, 
 #          fix nonce calculation yet again, merge #26 to make importing a WINE auth more reliable,
 #          update python-oscrypto to unofficial fork to fix OpenSSL 3 support.
+# In Progress: 
+#          Fix bug that would sometimes return the wrong book (or none at all) if you had 
+#          multiple active loans from the same distributor.
 
 
 PLUGIN_NAME = "DeACSM"

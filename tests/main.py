@@ -172,6 +172,37 @@ class TestAdobe(unittest.TestCase):
         self.assertEqual(sha_hash, "3452e3d11cdd70eb90323f291c06afafe10e098a", "Invalid SHA hash for node signing")
 
 
+    def test_hash_node_returnbugfix(self): 
+        '''Check if the XML hash is correct when returning a book ...'''
+
+        # I don't think there's ever a case where the hashing algorithm is different, 
+        # but I needed this test during debugging and thought, hey, why not leave it in. 
+
+        mock_xml_str = """
+        <adept:notification xmlns:adept="http://ns.adobe.com/adept">
+        <adept:user>urn:uuid:6e5393e0-ff13-4ae8-8f6c-6654182ac7d5</adept:user>
+        <adept:device>urn:uuid:51abfbaf-f0e8-474d-b031-626c5224f90f</adept:device>
+        <adept:nonce>eVr2pi26AAAAAAAA</adept:nonce>
+        <adept:expiration>2022-08-03T09:16:22Z</adept:expiration>
+            <body xmlns="http://ns.adobe.com/adept">
+                <fulfillment>6ccfbc7a-349b-40ad-82d8-d7a4c717ca13-00000271</fulfillment>
+                <transaction>237493726-1749302749327354-Wed Aug 03 09:16:22 UTC 2022</transaction>
+                <user>urn:uuid:6e5393e0-ff13-4ae8-8f6c-6654182ac7d5</user>
+                <fulfilled>true</fulfilled>
+                <returned>true</returned>
+                <hmac>CB3Ql1FAJD957t5n749q5ZO8IzU=</hmac>
+            </body>
+        </adept:notification>
+        """
+
+        mock_xml_obj = etree.fromstring(mock_xml_str)
+        sha_hash = libadobe.hash_node(mock_xml_obj).hexdigest().lower()
+
+        self.assertEqual(sha_hash, "8b0a24ba37c4333d93650c6ce52f8ee779f21533", "Invalid SHA hash for node signing")
+
+
+
+
     def test_sign_node_old(self):
 
         '''Check if the external RSA library (unused) signs correctly'''
@@ -322,6 +353,85 @@ class TestAdobe(unittest.TestCase):
         expected_msg.extend(bytearray(passwd.encode("latin-1")))
 
         self.assertEqual(binascii.hexlify(msg), binascii.hexlify(expected_msg), "devkey encryption returned invalid result")
+
+
+class TestPluginInterface(unittest.TestCase): 
+
+    def setUp(self):
+        pass
+
+    def tearDown(self): 
+        pass
+
+    def forcefail(self):
+        self.assertEqual(1, 2, "force fail")
+
+    def test_loanReturnFulfillmentID(self): 
+        '''Check if proper ID is used for the loan token'''
+
+        # Previous versions of the plugin had a bug where sometimes the wrong loan token
+        # was used, which caused wrong (or no) books to be returned to a library. 
+        # Adding a test case so this never happens again ...
+
+
+        mock_data = """
+
+        <envelope xmlns="http://ns.adobe.com/adept">
+            <fulfillmentResult>
+                <fulfillment>34659b20-92c8-4004-9fd8-c5174e7eed47-00010214</fulfillment>
+                <returnable>true</returnable>
+                <initial>false</initial>
+                <resourceItemInfo>
+                    <resource>urn:uuid:b7c6ccb8-1012-44a9-9c8b-0388d0c685f7</resource>
+                    <resourceItem>0</resourceItem>
+                    <metadata>
+                        <dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">Book title for test</dc:title>
+                    </metadata>
+                    <licenseToken>
+                        <user>urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa</user>
+                        <resource>urn:uuid:b7c6ccb8-1012-44a9-9c8b-0388d0c685f7</resource>
+                        <deviceType>standalone</deviceType>
+                        <device>urn:uuid:83681cbb-b6df-44a3-a423-c2b37ba66e84</device>
+                        <operatorURL>https://acs.example.com/fulfillment</operatorURL>
+                        <fulfillment>34659b20-92c8-4004-9fd8-c5174e7eed47-00010214</fulfillment>
+                        <distributor>urn:uuid:1f5c2437-58f2-4a24-9495-3e99155e6f98</distributor>
+                        <permissions>
+                            <display>
+                                <loan>34659b20-92c8-4004-9fd8-c5174e7eed47-00010214</loan>
+                                <until>2022-07-03T01:14:42Z</until>
+                            </display>
+                        </permissions>
+                    </licenseToken>
+                </resourceItemInfo>
+            </fulfillmentResult>
+
+            <loanToken>
+                <time>2022-07-01T03:17:22+00:00</time>
+                <user>urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa</user>
+                <operatorURL>https://acs.example.com/fulfillment</operatorURL>
+                <licenseURL>https://nasigningservice.adobe.com/licensesign</licenseURL>
+                <loan>6d2dc249-2bc0-43e1-a130-3866f85020d9-00003487</loan>
+                <loan>6d2dc249-2bc0-43e1-a130-3866f85020d9-00003467</loan>
+                <loan>34659b20-92c8-4004-9fd8-c5174e7eed47-00010214</loan>
+                <loan>11197eb9-3543-4b41-9c6e-03ffeaf277c0-00024754</loan>
+            </loanToken>
+        </envelope>
+
+        """
+
+
+        extracted_token = libadobeFulfill.updateLoanReturnData(etree.fromstring(mock_data), forceTestBehaviour=True)
+
+        expected_token = {
+            "book_name": "Book title for test",
+            "device": 'urn:uuid:83681cbb-b6df-44a3-a423-c2b37ba66e84',
+            "user": 'urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa',
+            "operatorURL": 'https://acs.example.com/fulfillment',
+            "loanID": '34659b20-92c8-4004-9fd8-c5174e7eed47-00010214',
+            "validUntil": '2022-07-03T01:14:42Z'
+        }
+
+        self.assertEqual(extracted_token, expected_token, "Loan record generator broken")
 
 
 
