@@ -554,11 +554,21 @@ def updateLoanReturnData(fulfillmentResultToken, forceTestBehaviour=False):
         print("Exception while reading config file")
         return False
 
+    # Check if that exact loan is already in the list, and if so, delete it:
+    done = False
+    while not done:
+        done = True
+        for book in deacsmprefs["list_of_rented_books"]:
+            if book["loanID"] == new_loan_record["loanID"]:
+                done = False
+                deacsmprefs["list_of_rented_books"].remove(book)
+                break
+            
 
     # Add all necessary information for a book return to the JSON array.
     # The config widget can then read this and present a list of not-yet-returned
     # books, and can then return them.
-    # Also, the config widget is responsible for cleaning up that list.
+    # Also, the config widget is responsible for cleaning up that list once a book's validity period is up.
 
     deacsmprefs["list_of_rented_books"].append(new_loan_record)
 
