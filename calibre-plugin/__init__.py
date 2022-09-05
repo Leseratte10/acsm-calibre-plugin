@@ -146,7 +146,12 @@ class ACSMInput(FileTypePlugin):
                 plugins["ACSM Input"] = os.path.join(self.pluginsdir, "ACSM Input.zip")
                 ui_plg_config['plugins'] = plugins
 
-                return
+                print("Need another restart due to plugin update ...")
+                # "Rude" exit, but otherwise it won't work ...
+                try: 
+                    os._exit(42)
+                except TypeError: 
+                    os._exit()
                 
                     
             # Make sure the GUI extension is loaded:
