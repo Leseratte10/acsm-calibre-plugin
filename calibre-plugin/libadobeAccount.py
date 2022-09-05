@@ -787,7 +787,7 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.DeACSM_Prefs()
+        deacsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = deacsmprefs["detailed_logging"]
     except:
         pass

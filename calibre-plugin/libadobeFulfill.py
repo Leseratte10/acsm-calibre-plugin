@@ -321,7 +321,7 @@ def fulfill(acsm_file, do_notify = False):
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.DeACSM_Prefs()
+        deacsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = deacsmprefs["detailed_logging"]
     except:
         pass
@@ -549,7 +549,7 @@ def updateLoanReturnData(fulfillmentResultToken, forceTestBehaviour=False):
 
     try: 
         import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-        deacsmprefs = prefs.DeACSM_Prefs()
+        deacsmprefs = prefs.ACSMInput_Prefs()
     except: 
         print("Exception while reading config file")
         return False
@@ -563,7 +563,7 @@ def updateLoanReturnData(fulfillmentResultToken, forceTestBehaviour=False):
                 done = False
                 deacsmprefs["list_of_rented_books"].remove(book)
                 break
-            
+
 
     # Add all necessary information for a book return to the JSON array.
     # The config widget can then read this and present a list of not-yet-returned
@@ -583,7 +583,7 @@ def tryReturnBook(bookData):
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.DeACSM_Prefs()
+        deacsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = deacsmprefs["detailed_logging"]
     except:
         pass
@@ -620,7 +620,7 @@ def tryReturnBook(bookData):
 
     etree.SubElement(full_text_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
 
-    print("Would notify server %s:" % (operatorURL + "/LoanReturn"))
+    print("Notifying loan return server %s" % (operatorURL + "/LoanReturn"))
     doc_send = "<?xml version=\"1.0\"?>\n" + etree.tostring(full_text_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
     if verbose_logging:
         print(doc_send)
@@ -650,7 +650,7 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.DeACSM_Prefs()
+        deacsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = deacsmprefs["detailed_logging"]
     except:
         pass

@@ -43,10 +43,11 @@
 #          update python-oscrypto to unofficial fork to fix OpenSSL 3 support.
 # In Progress: 
 #          Fix bug that would sometimes return the wrong book (or none at all) if you had 
-#          multiple active loans from the same distributor.
+#          multiple active loans from the same distributor, add experimental GUI button, 
+#          rename plugin from "DeACSM" to "ACSM Input"
 
 
-PLUGIN_NAME = "DeACSM"
+PLUGIN_NAME = "ACSM Input"
 PLUGIN_VERSION_TUPLE = (0, 0, 16)
 
 from calibre.customize import FileTypePlugin        # type: ignore
@@ -60,10 +61,11 @@ from calibre.constants import isosx, iswindows, islinux                 # type: 
 import os, shutil, traceback, sys, time, io, random
 import zipfile
 from lxml import etree
+from calibre.gui2 import error_dialog
 
 #@@CALIBRE_COMPAT_CODE@@
 
-class DeACSM(FileTypePlugin):
+class ACSMInput(FileTypePlugin):
     name                        = PLUGIN_NAME
     description                 = "ACSM Input Plugin - Takes an Adobe ACSM file and converts that into a useable EPUB or PDF file. Python reimplementation of libgourou by Grégory Soutadé"
     supported_platforms         = ['linux', 'osx', 'windows']
@@ -75,7 +77,35 @@ class DeACSM(FileTypePlugin):
     on_preprocess               = True
     priority                    = 2000
 
+    def init_embedded_plugins(self):
+        """
+        A Calibre plugin can normally only contain one Plugin class. 
+        In our case, this would be the DeACSM class. 
+        However, we want to load the GUI plugin, too, so we have to trick
+        Calibre into believing that there's actually a 2nd plugin.
+        """
+        from calibre.customize.ui import _initialized_plugins
+        from calibre_plugins.deacsm.gui_main_wrapper import DeACSMGUIExtension
+
+        def init_plg(plg_type):
+            for plugin in _initialized_plugins:
+                if isinstance(plugin, plg_type):
+                    return plugin
+            
+            plg_type.version = self.version
+            plg_type.minimum_calibre_version = self.minimum_calibre_version
+            plugin = plg_type(self.plugin_path)
+            _initialized_plugins.append(plugin)
+            plugin.initialize()
+
+            return plugin
+
+        init_plg(DeACSMGUIExtension)
+
+
+
     def initialize(self):
+
         """
         On initialization, make sure we have all the libraries (oscrypto and its dependency 
         asn1crypto) that the plugin needs. Unfortunately the Adobe encryption is kinda weird 
@@ -98,7 +128,49 @@ class DeACSM(FileTypePlugin):
             self.pluginsdir = os.path.join(config_dir,"plugins")
             if not os.path.exists(self.pluginsdir):
                 os.mkdir(self.pluginsdir)
-            self.maindir = os.path.join(self.pluginsdir,"DeACSM")
+
+            # Okay, "I" am now the new version. If I'm running under the old name,
+            # move "me" to the new one. 
+            if os.path.exists(os.path.join(self.pluginsdir, "DeACSM.zip")): 
+
+                from calibre.customize.ui import _config
+
+                shutil.copyfile(os.path.join(self.pluginsdir, "DeACSM.zip"), os.path.join(self.pluginsdir, "ACSM Input.zip"))
+
+                # Delete the old plugin.
+                os.remove(os.path.join(self.pluginsdir, "DeACSM.zip"))
+
+                # Forcibly add the new plugin, circumventing the Calibre code.
+                ui_plg_config = _config()
+                plugins = ui_plg_config['plugins']
+                plugins["ACSM Input"] = os.path.join(self.pluginsdir, "ACSM Input.zip")
+                ui_plg_config['plugins'] = plugins
+
+                return
+                
+                    
+            # Make sure the GUI extension is loaded:
+            self.init_embedded_plugins()    
+                
+
+           
+
+            self.maindir_old = os.path.join(self.pluginsdir,"DeACSM")
+            self.maindir = os.path.join(self.pluginsdir,"ACSMInput")
+
+            if os.path.exists(self.maindir_old) and not os.path.exists(self.maindir):
+                # Migrate config to new folder
+                os.rename(self.maindir_old, self.maindir)
+                if not iswindows: 
+                    # Linux and Mac support symlinks, so create one so the old paths
+                    # still work and people can downgrade the plugin again. 
+                    # Windows ... doesn't, so downgrading will be tricky. 
+                    try: 
+                        os.symlink(self.maindir_old, self.maindir)
+                    except: 
+                        pass
+
+
             if not os.path.exists(self.maindir):
                 os.mkdir(self.maindir)
 
@@ -222,7 +294,7 @@ class DeACSM(FileTypePlugin):
 
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-            deacsmprefs = prefs.DeACSM_Prefs()
+            deacsmprefs = prefs.ACSMInput_Prefs()
             update_account_path(deacsmprefs["path_to_account_data"])
 
         except Exception as e:
@@ -242,7 +314,7 @@ class DeACSM(FileTypePlugin):
 
     def ADE_sanity_check(self):
         import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-        deacsmprefs = prefs.DeACSM_Prefs()
+        deacsmprefs = prefs.ACSMInput_Prefs()
 
         from libadobe import get_activation_xml_path
 
@@ -403,7 +475,7 @@ class DeACSM(FileTypePlugin):
         print("{0} v{1}: Try to fulfill ...".format(PLUGIN_NAME, PLUGIN_VERSION))
 
         import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-        deacsmprefs = prefs.DeACSM_Prefs()
+        deacsmprefs = prefs.ACSMInput_Prefs()
 
 
         success, replyData = fulfill(path_to_ebook, deacsmprefs["notify_fulfillment"])

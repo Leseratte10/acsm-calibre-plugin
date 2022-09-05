@@ -35,16 +35,16 @@ body:
     id: calibre-version
     attributes:
       label: Which version of Calibre are you running?
-      description: "Example: 6.2.1"
-      placeholder: "6.2.1"
+      description: "Example: 6.4"
+      placeholder: "6.4"
     validations: 
       required: true
   - type: input
     id: plugin-version
     attributes:
       label: Which version of the DeACSM plugin are you running?
-      description: "Example: v0.0.16"
-      placeholder: "v0.0.16"
+      description: "Example: v0.0.17"
+      placeholder: "v0.0.17"
     validations: 
       required: true
   - type: textarea

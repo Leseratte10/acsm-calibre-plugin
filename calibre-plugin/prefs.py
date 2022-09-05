@@ -8,12 +8,20 @@ import os
 import traceback
 
 from calibre.utils.config import JSONConfig, config_dir  # type: ignore
-from calibre_plugins.deacsm.__init__ import PLUGIN_NAME  # type: ignore
+from calibre.constants import iswindows                  # type: ignore
 
 
-class DeACSM_Prefs():
+class ACSMInput_Prefs():
     def __init__(self):
-        JSON_PATH = os.path.join("plugins", PLUGIN_NAME.strip().lower().replace(' ', '_') + '.json')
+
+        JSON_PATH_OLD = os.path.join("plugins", "deacsm.json")
+        JSON_PATH = os.path.join("plugins", "ACSMInput", "ACSMInput.json")
+
+        if os.path.exists(JSON_PATH_OLD) and not os.path.exists(JSON_PATH):
+            os.rename(JSON_PATH_OLD, JSON_PATH)
+            if not iswindows:
+                os.symlink(JSON_PATH_OLD, JSON_PATH)
+
         self.deacsmprefs = JSONConfig(JSON_PATH)
 
         self.deacsmprefs.defaults['configured'] = False
@@ -30,19 +38,15 @@ class DeACSM_Prefs():
 
 
         self.pluginsdir = os.path.join(config_dir,"plugins")
-        if not os.path.exists(self.pluginsdir):
-            os.mkdir(self.pluginsdir)
-        self.maindir = os.path.join(self.pluginsdir,"DeACSM")
-        if not os.path.exists(self.maindir):
-            os.mkdir(self.maindir)
+        self.maindir = os.path.join(self.pluginsdir,"ACSMInput")
         self.accountdir = os.path.join(self.maindir,"account")
         if not os.path.exists(self.accountdir):
-            os.mkdir(self.accountdir)
+            raise Exception("Why does the account folder not exist?")
         
-        # Default to the builtin UA
+        # Default to the builtin account path
         self.deacsmprefs.defaults['path_to_account_data'] = self.accountdir
 
-
+    
     def __getitem__(self,kind = None):
         if kind is not None:
             return self.deacsmprefs[kind]

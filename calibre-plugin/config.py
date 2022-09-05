@@ -46,7 +46,7 @@ class ConfigWidget(QWidget):
         self.plugin_path = plugin_path
 
         # get the prefs
-        self.deacsmprefs = prefs.DeACSM_Prefs()
+        self.deacsmprefs = prefs.ACSMInput_Prefs()
 
         # make a local copy
         self.tempdeacsmprefs = {}
@@ -57,7 +57,6 @@ class ConfigWidget(QWidget):
         self.tempdeacsmprefs['delete_acsm_after_fulfill'] = self.deacsmprefs['delete_acsm_after_fulfill']
 
         self.tempdeacsmprefs['list_of_rented_books'] = self.deacsmprefs['list_of_rented_books']
-
 
         # Start Qt Gui dialog layout
         layout = QVBoxLayout(self)
@@ -150,7 +149,13 @@ class ConfigWidget(QWidget):
         self.button_rented_books.setEnabled(activated)
         ua_group_box_layout.addWidget(self.button_rented_books)
 
-        if (len(self.deacsmprefs["list_of_rented_books"]) == 0):
+
+        # First remove all overdue books from the loan list, 
+        # to determine if we should enable the button.
+        self.delete_overdue_books_from_loan_list()
+
+        if (len(self.tempdeacsmprefs["list_of_rented_books"]) == 0):
+            self.button_rented_books.setText(_("No loaned books available"))
             self.button_rented_books.setEnabled(False)
 
 
@@ -1275,16 +1280,46 @@ class ConfigWidget(QWidget):
 
 
     def show_rented_books(self):
-        d = RentedBooksDialog(self, self.deacsmprefs["list_of_rented_books"])
+        self.delete_overdue_books_from_loan_list()
+
+        d = RentedBooksDialog(self)
         d.exec_()
 
 
+    def delete_overdue_books_from_loan_list(self): 
+        overdue_books = []
+
+        for book in self.deacsmprefs["list_of_rented_books"]:
+            try: 
+                book_time_stamp = book["validUntil"]
+                timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%SZ")
+                currenttime = datetime.datetime.utcnow()
+            except: 
+                # Invalid book timestano
+                continue
+
+            if (timestamp <= currenttime):
+                # Book is overdue, no need to return. Delete from list.
+                overdue_books.append(book)
+                continue
+
+        templist = self.deacsmprefs["list_of_rented_books"]
+
+        for book in overdue_books:
+            templist.remove(book)
+
+        self.deacsmprefs.set("list_of_rented_books", templist)
+        self.deacsmprefs.writeprefs()
+
+
 class RentedBooksDialog(QDialog):
-    def __init__(self, parent, booklist):
+    def __init__(self, parent):
         QDialog.__init__(self,parent)
         self.parent = parent
 
         self.setWindowTitle("DeACSM: Manage loaned Books")
+
+        self.deacsmprefs = prefs.ACSMInput_Prefs()
 
         # Start Qt Gui dialog layout
         layout = QVBoxLayout(self)
@@ -1353,36 +1388,21 @@ class RentedBooksDialog(QDialog):
     def populate_list(self):
         self.listy.clear()
 
-        overdue_books = []
-
-        for book in self.parent.deacsmprefs["list_of_rented_books"]:
+        for book in self.deacsmprefs["list_of_rented_books"]:
 
             try: 
                 book_time_stamp = book["validUntil"]
                 timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%SZ")
                 currenttime = datetime.datetime.utcnow()
             except: 
-                # Invalid book timestano
+                # Invalid book timestamp
                 continue
 
-
-            if (timestamp <= currenttime):
-                # Book is overdue, no need to return. Delete from list.
-                overdue_books.append(book)
-                continue
-            else: 
-                info = "(" + self.td_format(timestamp - currenttime)
-                info += " remaining)"
-
+            info = "(" + self.td_format(timestamp - currenttime) + " remaining)"
 
             item = QListWidgetItem(book["book_name"] + " " + info)
             item.setData(QtCore.Qt.UserRole, book["loanID"])
             self.listy.addItem(item)
-
-        for book in overdue_books:
-            self.parent.deacsmprefs["list_of_rented_books"].remove(book)
-
-        self.parent.deacsmprefs.writeprefs()
 
 
     def return_book(self): 
@@ -1400,7 +1420,7 @@ class RentedBooksDialog(QDialog):
             traceback.print_exc()
 
         Ret_book = None
-        for book in self.parent.deacsmprefs["list_of_rented_books"]:
+        for book in self.deacsmprefs["list_of_rented_books"]:
             if book["loanID"] == userdata:
                 Ret_book = book
                 break
@@ -1430,14 +1450,16 @@ class RentedBooksDialog(QDialog):
 
         success = False
         done = False
+        templist = self.deacsmprefs["list_of_rented_books"]
         while not done:
             done = True 
-            for book in self.parent.deacsmprefs["list_of_rented_books"]:
+            for book in templist:
                 if book["loanID"] == userdata:
                     done = False
-                    self.parent.deacsmprefs["list_of_rented_books"].remove(book)
+                    templist.remove(book)
                     success = True
                     break
+        self.deacsmprefs.set("list_of_rented_books", templist)
 
         self.populate_list()
 
