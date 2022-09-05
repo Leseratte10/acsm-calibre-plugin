@@ -41,14 +41,14 @@
 #          fix broken URLs with missing protocol, fix loan data for loans without device ID, 
 #          fix nonce calculation yet again, merge #26 to make importing a WINE auth more reliable,
 #          update python-oscrypto to unofficial fork to fix OpenSSL 3 support.
-# In Progress: 
+# v0.0.17: 
 #          Fix bug that would sometimes return the wrong book (or none at all) if you had 
 #          multiple active loans from the same distributor, add experimental GUI button, 
-#          rename plugin from "DeACSM" to "ACSM Input"
+#          rename plugin from "DeACSM" to "ACSM Input". BETA build, not a normal release!!
 
 
 PLUGIN_NAME = "ACSM Input"
-PLUGIN_VERSION_TUPLE = (0, 0, 16)
+PLUGIN_VERSION_TUPLE = (0, 0, 17)
 
 from calibre.customize import FileTypePlugin        # type: ignore
 __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
