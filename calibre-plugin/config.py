@@ -1280,16 +1280,20 @@ class ConfigWidget(QWidget):
 
 
     def show_rented_books(self):
-        self.delete_overdue_books_from_loan_list()
-
         d = RentedBooksDialog(self)
         d.exec_()
 
 
-    def delete_overdue_books_from_loan_list(self): 
+class RentedBooksDialog(QDialog):
+
+    @staticmethod
+    def remove_overdue_books_from_list():
+        # Delete rented books that are overdue: 
         overdue_books = []
 
-        for book in self.deacsmprefs["list_of_rented_books"]:
+        deacsmprefs = prefs.ACSMInput_Prefs()
+
+        for book in deacsmprefs["list_of_rented_books"]:
             try: 
                 book_time_stamp = book["validUntil"]
                 timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%SZ")
@@ -1303,23 +1307,28 @@ class ConfigWidget(QWidget):
                 overdue_books.append(book)
                 continue
 
-        templist = self.deacsmprefs["list_of_rented_books"]
+        templist = deacsmprefs["list_of_rented_books"]
 
         for book in overdue_books:
             templist.remove(book)
 
-        self.deacsmprefs.set("list_of_rented_books", templist)
-        self.deacsmprefs.writeprefs()
+        deacsmprefs.set("list_of_rented_books", templist)
+        deacsmprefs.writeprefs()
 
 
-class RentedBooksDialog(QDialog):
+
+
     def __init__(self, parent):
         QDialog.__init__(self,parent)
         self.parent = parent
 
-        self.setWindowTitle("ACSM Input: Manage loaned Books")
+        
 
+        self.setWindowTitle("ACSM Input: Manage loaned Books")
         self.deacsmprefs = prefs.ACSMInput_Prefs()
+
+        # Delete rented books that are overdue: 
+        RentedBooksDialog.remove_overdue_books_from_list()
 
         # Start Qt Gui dialog layout
         layout = QVBoxLayout(self)
