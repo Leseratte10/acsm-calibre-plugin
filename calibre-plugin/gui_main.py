@@ -52,7 +52,7 @@ def create_menu_action_unique(ia, parent_menu, menu_text, image=None, tooltip=No
 
     return ac
 
-class ActualDeACSMGUIExtension(InterfaceAction):
+class ActualACSMInputGUIExtension(InterfaceAction):
     name                        = "ACSM Input Plugin GUI Extension"
     
     popup_type = QToolButton.ToolButtonPopupMode.InstantPopup
@@ -106,7 +106,7 @@ class ActualDeACSMGUIExtension(InterfaceAction):
                 break
 
         if plg is None:
-            msg = "Tried to open the ACSM Input plugin (DeACSM) settings, but I couldn't find the ACSM Input plugin. "
+            msg = "Tried to open the ACSM Input plugin settings, but I couldn't find the ACSM Input plugin. "
             msg += "This is most likely a bug in the plugin. Try restarting Calibre, and if you still get this error, "
             msg += "please open a bug report. "
             return error_dialog(None, "Plugin not found", msg, show=True)

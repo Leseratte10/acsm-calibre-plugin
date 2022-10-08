@@ -1317,7 +1317,7 @@ class RentedBooksDialog(QDialog):
         QDialog.__init__(self,parent)
         self.parent = parent
 
-        self.setWindowTitle("DeACSM: Manage loaned Books")
+        self.setWindowTitle("ACSM Input: Manage loaned Books")
 
         self.deacsmprefs = prefs.ACSMInput_Prefs()
 

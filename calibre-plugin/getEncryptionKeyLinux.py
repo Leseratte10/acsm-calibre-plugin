@@ -51,9 +51,15 @@ def GetMasterKey(wineprefix):
 
     try: 
         from calibre.utils.config import config_dir
-        pluginsdir = os.path.join(config_dir,"plugins")
-        maindir = os.path.join(pluginsdir,"DeACSM")
-        moddir = os.path.join(maindir,"modules")
+        from calibre_plugins.deacsm.__init__ import maindir as plg_maindir
+        
+        if plg_maindir is not None: 
+            print("FOUND MOD DIR!")
+            moddir = os.path.join(plg_maindir,"modules")
+        else: 
+            pluginsdir = os.path.join(config_dir,"plugins")
+            maindir = os.path.join(pluginsdir,"ACSMInput")
+            moddir = os.path.join(maindir,"modules")
     except: 
         import os
         moddir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "keyextract")

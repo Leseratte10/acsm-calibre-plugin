@@ -18,9 +18,8 @@ class ACSMInput_Prefs():
         JSON_PATH = os.path.join("plugins", "ACSMInput", "ACSMInput.json")
 
         if os.path.exists(JSON_PATH_OLD) and not os.path.exists(JSON_PATH):
-            os.rename(JSON_PATH_OLD, JSON_PATH)
-            if not iswindows:
-                os.symlink(JSON_PATH_OLD, JSON_PATH)
+            # If the file exists in the old location, use that.
+            JSON_PATH = JSON_PATH_OLD
 
         self.deacsmprefs = JSONConfig(JSON_PATH)
 
@@ -37,14 +36,21 @@ class ACSMInput_Prefs():
 
 
 
-        self.pluginsdir = os.path.join(config_dir,"plugins")
-        self.maindir = os.path.join(self.pluginsdir,"ACSMInput")
-        self.accountdir = os.path.join(self.maindir,"account")
-        if not os.path.exists(self.accountdir):
-            raise Exception("Why does the account folder not exist?")
+        self.__pluginsdir = os.path.join(config_dir,"plugins")
+
+        success = False
+        for f in ["ACSMInput", "DeACSM"]:
+            self.__maindir = os.path.join(self.__pluginsdir, f)
+            self.__accountdir = os.path.join(self.__maindir,"account")
+            if os.path.exists(self.__accountdir):
+                self.deacsmprefs.defaults['path_to_account_data'] = self.__accountdir
+                success = True
+                break
+
         
-        # Default to the builtin account path
-        self.deacsmprefs.defaults['path_to_account_data'] = self.accountdir
+        if not success:
+            raise Exception("Why does the account folder not exist?")
+            
 
     
     def __getitem__(self,kind = None):

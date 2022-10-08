@@ -19,13 +19,15 @@ jobs:
       - name: Compile
         run: |
           ./bundle_calibre_plugin.sh
+          ./bundle_migration_plugin.sh
 
       - name: Upload
         uses: actions/upload-artifact@v2
         with: 
-          name: linux
+          name: calibre-plugins
           path: |
             calibre-plugin.zip
+            migration-plugin.zip
     
   test-ubuntu-2004:
     runs-on: ubuntu-20.04

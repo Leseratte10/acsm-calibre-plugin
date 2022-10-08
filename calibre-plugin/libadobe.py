@@ -101,7 +101,7 @@ def are_ade_version_lists_valid():
         fail = True
     
     if fail:
-        print("Internal error in DeACSM: Mismatched version list lenghts.")
+        print("Internal error in ACSM Input: Mismatched version list lenghts.")
         print("This should never happen, please open a bug report.")
         return False
     

@@ -45,10 +45,14 @@
 #          Fix bug that would sometimes return the wrong book (or none at all) if you had 
 #          multiple active loans from the same distributor, add experimental GUI button, 
 #          rename plugin from "DeACSM" to "ACSM Input". BETA build, not a normal release!!
+#
+# v0.1.0:  Continue work on renaming from "DeACSM" to "ACSM Input". 
+#          The big version number jump is to make that name change clearer.
+
 
 
 PLUGIN_NAME = "ACSM Input"
-PLUGIN_VERSION_TUPLE = (0, 0, 17)
+PLUGIN_VERSION_TUPLE = (0, 1, 0)
 
 from calibre.customize import FileTypePlugin        # type: ignore
 __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
@@ -61,7 +65,6 @@ from calibre.constants import isosx, iswindows, islinux                 # type: 
 import os, shutil, traceback, sys, time, io, random
 import zipfile
 from lxml import etree
-from calibre.gui2 import error_dialog
 
 #@@CALIBRE_COMPAT_CODE@@
 
@@ -80,12 +83,12 @@ class ACSMInput(FileTypePlugin):
     def init_embedded_plugins(self):
         """
         A Calibre plugin can normally only contain one Plugin class. 
-        In our case, this would be the DeACSM class. 
+        In our case, this would be the file type class. 
         However, we want to load the GUI plugin, too, so we have to trick
         Calibre into believing that there's actually a 2nd plugin.
         """
         from calibre.customize.ui import _initialized_plugins
-        from calibre_plugins.deacsm.gui_main_wrapper import DeACSMGUIExtension
+        from calibre_plugins.deacsm.gui_main_wrapper import ACSMInputGUIExtension
 
         def init_plg(plg_type):
             for plugin in _initialized_plugins:
@@ -100,7 +103,7 @@ class ACSMInput(FileTypePlugin):
 
             return plugin
 
-        init_plg(DeACSMGUIExtension)
+        init_plg(ACSMInputGUIExtension)
 
 
 
@@ -129,51 +132,24 @@ class ACSMInput(FileTypePlugin):
             if not os.path.exists(self.pluginsdir):
                 os.mkdir(self.pluginsdir)
 
-            # Okay, "I" am now the new version. If I'm running under the old name,
-            # move "me" to the new one. 
-            if os.path.exists(os.path.join(self.pluginsdir, "DeACSM.zip")): 
-
-                from calibre.customize.ui import _config
-
-                shutil.copyfile(os.path.join(self.pluginsdir, "DeACSM.zip"), os.path.join(self.pluginsdir, "ACSM Input.zip"))
-
-                # Delete the old plugin.
-                os.remove(os.path.join(self.pluginsdir, "DeACSM.zip"))
-
-                # Forcibly add the new plugin, circumventing the Calibre code.
-                ui_plg_config = _config()
-                plugins = ui_plg_config['plugins']
-                plugins["ACSM Input"] = os.path.join(self.pluginsdir, "ACSM Input.zip")
-                ui_plg_config['plugins'] = plugins
-
-                print("Need another restart due to plugin update ...")
-                # "Rude" exit, but otherwise it won't work ...
-                try: 
-                    os._exit(42)
-                except TypeError: 
-                    os._exit()
-                
+            
+            # If the old DeACSM plugin still exists, rename it to BAK or something so it doesn't load.
+            os.rename(os.path.join(self.pluginsdir, "DeACSM.zip"), os.path.join(self.pluginsdir, "DeACSM.BAK"))
                     
             # Make sure the GUI extension is loaded:
             self.init_embedded_plugins()    
                 
-
-           
-
             self.maindir_old = os.path.join(self.pluginsdir,"DeACSM")
             self.maindir = os.path.join(self.pluginsdir,"ACSMInput")
 
-            if os.path.exists(self.maindir_old) and not os.path.exists(self.maindir):
-                # Migrate config to new folder
-                os.rename(self.maindir_old, self.maindir)
-                if not iswindows: 
-                    # Linux and Mac support symlinks, so create one so the old paths
-                    # still work and people can downgrade the plugin again. 
-                    # Windows ... doesn't, so downgrading will be tricky. 
-                    try: 
-                        os.symlink(self.maindir_old, self.maindir)
-                    except: 
-                        pass
+            # Do NOT try to migrate data, that just screws everything up. 
+            # If this is a fresh install of the plugin and there's no old data, 
+            # use the new path. Otherwise, if there's already data at the old location,
+            # continue to use that.
+
+            if os.path.exists(self.maindir_old):
+                # We have the old folder, continue to use that
+                self.maindir = self.maindir_old
 
 
             if not os.path.exists(self.maindir):

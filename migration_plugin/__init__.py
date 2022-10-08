@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# GUI for the ACSM plugin. 
-#
+# Migration plugin from "DeACSM" to "ACSM Input"
+# See README.md for details.
+
+
+# Revision history: 
+# v0.0.20: First version of the migration plugin, released under the old name.
+
 
 from calibre.customize import InterfaceActionBase        # type: ignore
 from calibre.customize import PluginInstallationType
 
 
-
-#@@CALIBRE_COMPAT_CODE@@
-
-class ACSMInputGUIExtension(InterfaceActionBase):
-    name                        = "ACSM Input Plugin GUI Extension"
-    description                 = "GUI code for ACSM Input Plugin. This is automatically installed and updated with the ACSM plugin."
+class DeACSMMigrationPlugin(InterfaceActionBase):
+    name                        = "DeACSM"
+    description                 = "Extension for the ACSM Input plugin to migrate to a new plugin name"
     supported_platforms         = ['linux', 'osx', 'windows']
     author                      = "Leseratte10"
     minimum_calibre_version     = (4, 0, 0)
+    version                     = (0, 0, 20)
 
     can_be_disabled = False
     # This plugin will be auto-loaded from the ACSM Input plugin. It doesn't make sense for the user
@@ -28,7 +31,7 @@ class ACSMInputGUIExtension(InterfaceActionBase):
     installation_type = PluginInstallationType.EXTERNAL
     # Mark this as user-installed so it shows up in the plugin list by default. 
 
-    actual_plugin = "calibre_plugins.deacsm.gui_main:ActualACSMInputGUIExtension"
+    actual_plugin = "calibre_plugins.deacsm.migration:ActualMigrationPlugin"
 
     def is_customizable(self):
         return False

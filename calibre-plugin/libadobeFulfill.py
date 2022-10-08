@@ -572,6 +572,9 @@ def updateLoanReturnData(fulfillmentResultToken, forceTestBehaviour=False):
 
     deacsmprefs["list_of_rented_books"].append(new_loan_record)
 
+    print("DEBUG, list of books:")
+    print(deacsmprefs["list_of_rented_books"])
+
     deacsmprefs.writeprefs()
 
     return True
