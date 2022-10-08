@@ -17,7 +17,7 @@ class ACSMInput_Prefs():
         JSON_PATH_OLD = os.path.join("plugins", "deacsm.json")
         JSON_PATH = os.path.join("plugins", "ACSMInput", "ACSMInput.json")
 
-        if os.path.exists(JSON_PATH_OLD) and not os.path.exists(JSON_PATH):
+        if os.path.exists(os.path.join(config_dir, JSON_PATH_OLD)):
             # If the file exists in the old location, use that.
             JSON_PATH = JSON_PATH_OLD
 
@@ -39,7 +39,7 @@ class ACSMInput_Prefs():
         self.__pluginsdir = os.path.join(config_dir,"plugins")
 
         success = False
-        for f in ["ACSMInput", "DeACSM"]:
+        for f in ["DeACSM", "ACSMInput"]:
             self.__maindir = os.path.join(self.__pluginsdir, f)
             self.__accountdir = os.path.join(self.__maindir,"account")
             if os.path.exists(self.__accountdir):

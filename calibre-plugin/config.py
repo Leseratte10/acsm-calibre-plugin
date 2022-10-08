@@ -152,7 +152,7 @@ class ConfigWidget(QWidget):
 
         # First remove all overdue books from the loan list, 
         # to determine if we should enable the button.
-        self.delete_overdue_books_from_loan_list()
+        RentedBooksDialog.remove_overdue_books_from_list()
 
         if (len(self.tempdeacsmprefs["list_of_rented_books"]) == 0):
             self.button_rented_books.setText(_("No loaned books available"))
