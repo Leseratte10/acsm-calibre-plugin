@@ -609,9 +609,7 @@ def hash_node_ctx(node, hash_ctx):
             while True: 
                 remaining = textlen - done
                 if remaining > 0x7fff:
-                    print("Warning: Hashing text node larger than 32k.")
-                    print("This usually doesn't happen, and I'm not sure if this is implemented correctly.")
-                    print("If you run into issues, please open a bug report.")
+                    #print("Warning: Why are we hashing a node larger than 32k?")
                     remaining = 0x7fff
 
                 hash_do_append_tag(hash_ctx, ASN_TEXT)
