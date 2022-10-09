@@ -12,12 +12,21 @@ from calibre.gui2.actions import InterfaceAction
 class ActualMigrationPlugin(InterfaceAction):
     name                        = "DeACSM"
 
+    def file_is_zip_file(self, filepath): 
+        try: 
+            file = open(filepath, "rb")
+            data = file.read(10)
+            file.close()
+            if data[:4] == b'PK\x03\x04':
+                return True
+        except: 
+            return False
+
+        return False
 
 
     def genesis(self): 
         print("DeACSM -> ACSM Input migration started ...")
-
-
 
         DOWNLOAD_URL = "https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/TEST_calibre_plugin_acsminput_new_0_0_30.zip"
         
@@ -32,9 +41,10 @@ class ActualMigrationPlugin(InterfaceAction):
 
         if os.path.exists(new_path):
             # If so, delete ourselves and exit
-            print("Already done ...")
+            print("Migration has already happened? ...")
             return
 
+        print("Downloading new plugin ...")
         if sys.version_info[0] == 2:
             import urllib
             urllib.urlretrieve(DOWNLOAD_URL, new_path)
@@ -42,8 +52,11 @@ class ActualMigrationPlugin(InterfaceAction):
             import urllib.request
             urllib.request.urlretrieve(DOWNLOAD_URL, new_path)
 
+        print("Download done")
+
         # Check if the download was successful and the new file exists: 
-        if os.path.exists(new_path):
+        if os.path.exists(new_path) and self.file_is_zip_file(new_path):
+            print("Downloaded file is valid, replacing old plugin with new one")
             # Delete myself
             os.remove(os.path.join(self.pluginsdir, "DeACSM.zip"))
 
@@ -55,7 +68,7 @@ class ActualMigrationPlugin(InterfaceAction):
             ui_plg_config['plugins'] = plugins
 
             # Force-kill Calibre and have the user manually restart it:
-            print("Force-exit, please restart")
+            print("Done, exiting Calibre, please restart")
             try: 
                 os._exit(42)
             except TypeError: 
@@ -64,6 +77,13 @@ class ActualMigrationPlugin(InterfaceAction):
         else: 
             print("Download / Update failed, trying again later ...")
             print("Please open a bug report for the ACSM Input plugin")
+
+            try: 
+                # If we downloaded an error page or something else that's not a ZIP, delete that.
+                os.remove(new_path)
+            except: 
+                pass
+
 
 
 
