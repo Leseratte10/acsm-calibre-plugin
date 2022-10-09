@@ -9,7 +9,13 @@
 
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.actions import menu_action_unique_name
-from PyQt5.QtGui import QMenu, QToolButton
+try: 
+    from PyQt5.QtGui import QMenu, QToolButton
+except ImportError:
+    try: 
+        from PyQt5.QtWidgets import QMenu, QToolButton
+    except ImportError:
+        from PyQt4.Qt import QMenu, QToolButton
 
 
 #@@CALIBRE_COMPAT_CODE@@
@@ -61,13 +67,19 @@ class ActualACSMInputGUIExtension(InterfaceAction):
     # Text, icon, tooltip, keyboard shortcut
 
     def genesis(self): 
-        print("Genesis!")
+        print("ACSM Input: GUI Plugin Genesis!")
         self.menu = QMenu(self.gui)
 
         self.rebuild_menus()
 
         self.qaction.setMenu(self.menu)
-        icon = get_icons('acsm_logo_2.png', "ACSM Input Plugin")
+        try:
+            # Py3 
+            icon = get_icons('acsm_logo_2.png', "ACSM Input Plugin")
+        except TypeError:
+            # Py2
+            icon = get_icons('acsm_logo_2.png')
+
         self.qaction.setIcon(icon)
         #self.qaction.triggered.connect(self.trigger_config_dialog)
 

@@ -5,7 +5,10 @@
 #
 
 from calibre.customize import InterfaceActionBase        # type: ignore
-from calibre.customize import PluginInstallationType
+try: 
+    from calibre.customize import PluginInstallationType
+except:
+    pass
 
 
 
@@ -25,8 +28,12 @@ class ACSMInputGUIExtension(InterfaceActionBase):
     type = "File type"
     # Just so that the GUI extension shows up at the same place as the actual ACSM Input plugin.
 
-    installation_type = PluginInstallationType.EXTERNAL
-    # Mark this as user-installed so it shows up in the plugin list by default. 
+    try: 
+        installation_type = PluginInstallationType.EXTERNAL
+        # Mark this as user-installed so it shows up in the plugin list by default. 
+    except: 
+        # Setting the Installation type doesn't always work on Calibre 4 and below.
+        pass
 
     actual_plugin = "calibre_plugins.deacsm.gui_main:ActualACSMInputGUIExtension"
 
