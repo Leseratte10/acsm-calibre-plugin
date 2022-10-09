@@ -1,16 +1,18 @@
 # Calibre ACSM Input plugin
 
 This is a Calibre plugin that allows you to turn ACSM files into EPUB or PDF files without the need for Adobe Digital Editions. 
-It is a full Python reimplementation of libgourou by Grégory Soutadé (http://indefero.soutade.fr/p/libgourou/).
+It is a full Python reimplementation of libgourou by Grégory Soutadé (http://indefero.soutade.fr/p/libgourou/), and has since been
+extended by more and more features.
 
 <details>
   <summary>ACSM Input Plugin for Calibre - Copyright (c) 2021-2022 Leseratte10</summary>
 
 ```
-ACSM Input Plugin for Calibre (DeACSM) / acsm-calibre-plugin
+ACSM Input Plugin for Calibre / acsm-calibre-plugin
+Formerly known as "DeACSM"
 Copyright (c) 2021-2022 Leseratte10
 
-This software is a Python reimplementation of the C++ library 
+This software is based on a Python reimplementation of the C++ library 
 "libgourou" by Grégory Soutadé which is under the LGPLv3 or later 
 license (http://indefero.soutade.fr/p/libgourou/).
 
@@ -40,7 +42,7 @@ See the "LICENSE" file for a full copy of the GNU GPL v3.
 
 ## Known bugs
 
-- Versions 0.0.16 and below did sometimes return the wrong eBook (or none at all) when trying to return a book to the library through the "Loaned books" list, if you had multiple active loans from the same distributor / library. This will be fixed with 0.0.17. 
+- Versions 0.0.16 and below did sometimes return the wrong eBook (or none at all) when trying to return a book to the library through the "Loaned books" list, if you had multiple active loans from the same distributor / library. This will be fixed with the next release. 
 
 ## Setup
 
