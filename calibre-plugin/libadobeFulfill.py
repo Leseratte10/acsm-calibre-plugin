@@ -1,5 +1,7 @@
 from lxml import etree
 import base64
+import random
+import time
 
 #@@CALIBRE_COMPAT_CODE@@
 
@@ -553,6 +555,15 @@ def updateLoanReturnData(fulfillmentResultToken, forceTestBehaviour=False):
     if forceTestBehaviour:
         return new_loan_record
 
+    addLoanRecordToConfigFile(new_loan_record)
+
+    return True
+
+    
+
+
+def addLoanRecordToConfigFile(new_loan_record):
+
     try: 
         import calibre_plugins.deacsm.prefs as prefs     # type: ignore
         deacsmprefs = prefs.ACSMInput_Prefs()
@@ -560,30 +571,77 @@ def updateLoanReturnData(fulfillmentResultToken, forceTestBehaviour=False):
         print("Exception while reading config file")
         return False
 
-    # Check if that exact loan is already in the list, and if so, delete it:
-    done = False
-    while not done:
-        done = True
-        for book in deacsmprefs["list_of_rented_books"]:
-            if book["loanID"] == new_loan_record["loanID"]:
-                done = False
-                deacsmprefs["list_of_rented_books"].remove(book)
-                break
+
+    error_counter = 0
+    last_token = None
+
+    while True: 
+
+        if error_counter >= 10: 
+            print("Took us 10 attempts to acquire loan token lock, still didn't work.")
+            print("(still the same token %s)" % (deacsmprefs["loan_identifier_token"]))
+            print("If you see this error message please open a bug report.")
 
 
-    # Add all necessary information for a book return to the JSON array.
-    # The config widget can then read this and present a list of not-yet-returned
-    # books, and can then return them.
-    # Also, the config widget is responsible for cleaning up that list once a book's validity period is up.
+        # "Mark" the current access with a random token, to prevent multiple instances
+        # of the plugin overwriting eachother's data.
+        deacsmprefs.refresh()
+        if deacsmprefs["loan_identifier_token"] == 0: 
+            random_identifier = random.getrandbits(64)
+            deacsmprefs.set("loan_identifier_token", random_identifier)
+            deacsmprefs.commit()
+            deacsmprefs.refresh()
+            if random_identifier != deacsmprefs["loan_identifier_token"]:
+                #print("we broke another thread's token, try again")
+                last_token = deacsmprefs["loan_identifier_token"]
+                error_counter = error_counter + 1
+                continue
+        else: 
+            if last_token != deacsmprefs["loan_identifier_token"]:
+                #print("Token changed in the meantime ...")
+                # Give it another 5 tries
+                error_counter = max(0, error_counter - 5)
+                pass
 
-    deacsmprefs["list_of_rented_books"].append(new_loan_record)
+            last_token = deacsmprefs["loan_identifier_token"]
+            #print("waiting on another thread ...")
+            sleeptime = random.randrange(2, 10) / 1000
+            print(str(sleeptime))
+            time.sleep(sleeptime)
+            error_counter = error_counter + 1
+            continue
 
-    print("DEBUG, list of books:")
-    print(deacsmprefs["list_of_rented_books"])
+        # Okay, now this thread can "use" the config list, and no other thread should overwrite it ...        
+        # Check if that exact loan is already in the list, and if so, delete it:
+        done = False
+        while not done:
+            done = True
+            for book in deacsmprefs["list_of_rented_books"]:
+                if book["loanID"] == new_loan_record["loanID"]:
+                    done = False
+                    deacsmprefs["list_of_rented_books"].remove(book)
+                    break
 
-    deacsmprefs.writeprefs()
 
-    return True
+        # Add all necessary information for a book return to the JSON array.
+        # The config widget can then read this and present a list of not-yet-returned
+        # books, and can then return them.
+        # Also, the config widget is responsible for cleaning up that list once a book's validity period is up.
+        deacsmprefs["list_of_rented_books"].append(new_loan_record)
+
+        # Okay, now we added our loan record. 
+        # Remove the identifier token so other threads can use the config again: 
+        deacsmprefs.commit()
+        deacsmprefs.refresh()
+        if deacsmprefs["loan_identifier_token"] != random_identifier:
+            print("Another thread stole the loan token while we were working with it - that's not supposed to happen ...")
+            print("If you see this message, please open a bug report.")
+            return False
+
+        deacsmprefs.set("loan_identifier_token", 0)
+        deacsmprefs.commit()
+
+        return True
 
 
 def tryReturnBook(bookData): 

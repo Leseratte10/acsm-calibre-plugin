@@ -29,6 +29,8 @@ class ACSMInput_Prefs():
         self.deacsmprefs.defaults['detailed_logging'] = False
         self.deacsmprefs.defaults['delete_acsm_after_fulfill'] = False
 
+        self.deacsmprefs.defaults['loan_identifier_token'] = 0
+
         self.deacsmprefs.defaults['list_of_rented_books'] = []
 
         if self.deacsmprefs['list_of_rented_books'] == []:
@@ -52,6 +54,11 @@ class ACSMInput_Prefs():
             raise Exception("Why does the account folder not exist?")
             
 
+    def refresh(self):
+        return self.deacsmprefs.refresh()
+
+    def commit(self):
+        return self.deacsmprefs.commit()
     
     def __getitem__(self,kind = None):
         if kind is not None:
