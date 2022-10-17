@@ -48,6 +48,7 @@
 #
 # v0.1.0:  Continue work on renaming from "DeACSM" to "ACSM Input". 
 #          The big version number jump is to make that name change clearer.
+#          Print useful warning if LicenseServiceCertificate download fails.
 
 
 

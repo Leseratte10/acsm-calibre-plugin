@@ -305,9 +305,13 @@ def buildRights(license_token_node):
                 found = True
                 break
     except: 
-        return None
+        pass
 
     if not found:
+        print("Did not find the licenseService certificate in the activation data.")
+        print("This usually means it failed to download from the distributor's servers.")
+        print("Please try to download an ACSM book from the Adobe Sample Library, then if that was successful, ")
+        print("try your ACSM book file again.")
         return None
 
     ret += "</adept:licenseServiceInfo>\n"
@@ -476,6 +480,8 @@ def fulfill(acsm_file, do_notify = False):
     success, response = fetchLicenseServiceCertificate(licenseURL, operatorURL)
 
     if success is False: 
+        print("Why did the license download fail?")
+        print("This is probably a temporary error on the distributor's server")
         return False, response
 
     return True, replyData
@@ -863,7 +869,10 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL):
 
     licenseServiceInfoReq = operatorURL + "/LicenseServiceInfo?licenseURL=" + licenseURL
 
-    response = sendHTTPRequest(licenseServiceInfoReq).decode("utf-8")
+    try: 
+        response = sendHTTPRequest(licenseServiceInfoReq).decode("utf-8")
+    except: 
+        return False, "HTTP download for the licenseServiceInfo failed ... why?"
 
     if "<error" in response: 
         return False, "Looks like that failed: %s" % response
