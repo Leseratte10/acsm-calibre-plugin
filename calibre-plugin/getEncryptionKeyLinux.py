@@ -3,7 +3,7 @@
 
 #@@CALIBRE_COMPAT_CODE@@
 
-import sys, binascii
+import sys, binascii, traceback
 
 def GetMasterKey(wineprefix): 
     import subprocess, os, re
@@ -63,6 +63,35 @@ def GetMasterKey(wineprefix):
     except: 
         import os
         moddir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "keyextract")
+
+    
+    # extract the EXE file from Python code:
+    # EXE files are obfuscated with base64 so that stupid AV programs
+    # don't flag this whole plugin as malicious. 
+    # See keyextractDecryptor.py and the folder "keyextract" for more information.
+
+    try: 
+        print("Extracting WINE key tools ...")
+        from keyextractDecryptor import get_win32_data, get_win64_data
+
+        if winearch == "win32":
+            file32 = os.path.join(moddir, "decrypt_win32.exe")
+            f = open(file32, "wb")
+            f.write(get_win32_data())
+            f.close()
+
+        elif winearch == "win64":
+            file64 = os.path.join(moddir, "decrypt_win64.exe")
+            f = open(file64, "wb")
+            f.write(get_win64_data())   
+            f.close()
+        
+        else: 
+            print("Invalid winearch: " + str(winearch))
+            
+    except:
+        print("Error while extracting packed WINE ADE key extraction EXE files ")
+        traceback.print_exc()
 
     # calls decrypt_win32.exe or decrypt_win64.exe
     proc = subprocess.Popen(["wine", "decrypt_" + winearch + ".exe"], shell=False, cwd=moddir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

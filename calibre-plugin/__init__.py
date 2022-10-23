@@ -61,7 +61,7 @@ __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
 
 
 from calibre.utils.config import config_dir         # type: ignore
-from calibre.constants import isosx, iswindows, islinux                 # type: ignore
+from calibre.constants import islinux                 # type: ignore
 
 import os, shutil, traceback, sys, time, io, random
 import zipfile
@@ -71,7 +71,7 @@ from lxml import etree
 
 class ACSMInput(FileTypePlugin):
     name                        = PLUGIN_NAME
-    description                 = "ACSM Input Plugin - Takes an Adobe ACSM file and converts that into a useable EPUB or PDF file. Python reimplementation of libgourou by Grégory Soutadé"
+    description                 = "Takes an Adobe ACSM file and converts that into a useable EPUB or PDF file. Formerly known as DeACSM. Based on the libgourou library by Grégory Soutadé"
     supported_platforms         = ['linux', 'osx', 'windows']
     author                      = "Leseratte10"
     version                     = PLUGIN_VERSION_TUPLE
@@ -229,32 +229,8 @@ class ACSMInput(FileTypePlugin):
                         print("{0} v{1}: Exception when copying needed library files".format(PLUGIN_NAME, PLUGIN_VERSION))
                         traceback.print_exc()
                         pass           
-                
 
-                if islinux: 
-                    # Also extract EXE files needed for WINE ADE key extraction
-                    # EXE files are obfuscated with base64 so that stupid AV programs
-                    # don't flag this whole plugin as malicious. 
-                    # See keyextractDecryptor.py and the folder "keyextract" for more information.
 
-                    try: 
-                        print("{0} v{1}: Extracting WINE key tools ...".format(PLUGIN_NAME, PLUGIN_VERSION))
-                        from keyextractDecryptor import get_win32_data, get_win64_data
-
-                        file32 = os.path.join(rand_path, "decrypt_win32.exe")
-                        f = open(file32, "wb")
-                        f.write(get_win32_data())
-                        f.close()
-
-                        file64 = os.path.join(rand_path, "decrypt_win64.exe")
-                        f = open(file64, "wb")
-                        f.write(get_win64_data())   
-                        f.close()
-                    except:
-                        print("{0} v{1}: Error while extracting packed WINE ADE key extraction EXE files ".format(PLUGIN_NAME, PLUGIN_VERSION))
-                        traceback.print_exc()
-
-                
                 # Write module ID
                 if id_plugin is not None: 
                     mod_file = os.path.join(rand_path, "module_id.txt")
@@ -296,9 +272,6 @@ class ACSMInput(FileTypePlugin):
         config_widget.save_settings()
 
     def ADE_sanity_check(self):
-        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-        deacsmprefs = prefs.ACSMInput_Prefs()
-
         from libadobe import get_activation_xml_path
 
         container = None
@@ -343,7 +316,6 @@ class ACSMInput(FileTypePlugin):
 
 
         adobe_fulfill_response = etree.fromstring(replyData)
-        NSMAP = { "adept" : "http://ns.adobe.com/adept" }
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
         
@@ -409,7 +381,6 @@ class ACSMInput(FileTypePlugin):
         elif filetype == ".pdf":
             adobe_fulfill_response = etree.fromstring(rights_xml_str)
 
-            NSMAP = { "adept" : "http://ns.adobe.com/adept" }
             adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
             resource = adobe_fulfill_response.find("./%s/%s" % (adNS("licenseToken"), adNS("resource"))).text
 
@@ -456,10 +427,6 @@ class ACSMInput(FileTypePlugin):
             return path_to_ebook
 
         print("{0} v{1}: Try to fulfill ...".format(PLUGIN_NAME, PLUGIN_VERSION))
-
-        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-        deacsmprefs = prefs.ACSMInput_Prefs()
-
 
         success, replyData = fulfill(path_to_ebook, deacsmprefs["notify_fulfillment"])
 

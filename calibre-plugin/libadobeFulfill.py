@@ -574,6 +574,7 @@ def addLoanRecordToConfigFile(new_loan_record):
 
     error_counter = 0
     last_token = None
+    random_identifier = None
 
     while True: 
 
