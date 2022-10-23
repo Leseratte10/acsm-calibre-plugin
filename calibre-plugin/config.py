@@ -55,6 +55,7 @@ class ConfigWidget(QWidget):
         self.tempdeacsmprefs['notify_fulfillment'] = self.deacsmprefs['notify_fulfillment']
         self.tempdeacsmprefs['detailed_logging'] = self.deacsmprefs['detailed_logging']
         self.tempdeacsmprefs['delete_acsm_after_fulfill'] = self.deacsmprefs['delete_acsm_after_fulfill']
+        self.tempdeacsmprefs['allow_parallel_fulfillment'] = self.deacsmprefs['allow_parallel_fulfillment']
 
         self.tempdeacsmprefs['list_of_rented_books'] = self.deacsmprefs['list_of_rented_books']
 
@@ -175,6 +176,11 @@ class ConfigWidget(QWidget):
         self.chkDeleteAfterFulfill.setChecked(self.tempdeacsmprefs["delete_acsm_after_fulfill"])
         self.chkDeleteAfterFulfill.toggled.connect(self.toggle_acsm_delete)
         layout.addWidget(self.chkDeleteAfterFulfill)
+
+        self.chkParallelFulfill = QtGui.QCheckBox("Allow parallel fulfillment")
+        self.chkParallelFulfill.setToolTip("Default: True\n\nIf this is enabled (which was the default in previous versions), \nthe plugin will import multiple ACSM files simultaneously when you add more than one.\n\nIf this is disabled, it will add them one after another like ADE.")
+        self.chkParallelFulfill.setChecked(self.tempdeacsmprefs["allow_parallel_fulfillment"])
+        layout.addWidget(self.chkParallelFulfill)
 
         # Key shortcut Ctrl+Shift+D / Cmd+Shift+D to remove authorization, just like in ADE.
         self.deauthShortcut = QShortcut(QKeySequence("Ctrl+Shift+D"), self)
@@ -1269,6 +1275,7 @@ class ConfigWidget(QWidget):
         self.deacsmprefs.set('notify_fulfillment', self.chkNotifyFulfillment.isChecked())
         self.deacsmprefs.set('detailed_logging', self.chkDetailedLogging.isChecked())
         self.deacsmprefs.set('delete_acsm_after_fulfill', self.chkDeleteAfterFulfill.isChecked())
+        self.deacsmprefs.set('allow_parallel_fulfillment', self.chkParallelFulfill.isChecked())
         self.deacsmprefs.writeprefs()
 
     def load_resource(self, name):

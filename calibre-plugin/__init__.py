@@ -47,10 +47,13 @@
 #          rename plugin from "DeACSM" to "ACSM Input". BETA build, not a normal release!!
 #
 # v0.1.0:  Continue work on renaming from "DeACSM" to "ACSM Input". 
-#          The big version number jump is to make that name change clearer.
+#          The big version number jump is to make that name change clearer,
+#          and to support the "migration plugin" to rename the plugin.
 #          Print useful warning if LicenseServiceCertificate download fails,
 #          fix error with the loan list not being updated when importing multiple ACSMs at once,
 #          fix bug with the GUI extension in non-English environments,
+#          add setting to choose between simultaneous (faster) or sequencial (more ADE-like) 
+#          import of multiple ACSM files
 
 
 
@@ -63,7 +66,6 @@ __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
 
 
 from calibre.utils.config import config_dir         # type: ignore
-from calibre.constants import islinux                 # type: ignore
 
 import os, shutil, traceback, sys, time, io, random
 import zipfile
@@ -406,146 +408,217 @@ class ACSMInput(FileTypePlugin):
             print("{0} v{1}: Error: Unsupported file type ...".format(PLUGIN_NAME, PLUGIN_VERSION))
             return None
 
+    def is_blocked(self):
+        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
+        deacsmprefs = prefs.ACSMInput_Prefs()
+        return deacsmprefs['fulfillment_block_token'] != 0
+    
+    def unblock(self):      
+        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
+        deacsmprefs = prefs.ACSMInput_Prefs()
+
+        my_token = deacsmprefs["fulfillment_block_token"]
+        deacsmprefs.refresh()
+        if (my_token == deacsmprefs["fulfillment_block_token"]):
+            # Only unlock if this is my own lock
+
+            deacsmprefs.set("fulfillment_block_token", 0)
+            deacsmprefs.set("fulfillment_block_time", 0)
+            deacsmprefs.commit()
+
+
+    def wait_and_block(self):
+        random_identifier = None
+
+        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
+        deacsmprefs = prefs.ACSMInput_Prefs()
+
+        while True: 
+            deacsmprefs.refresh()
+            if deacsmprefs["fulfillment_block_token"] == 0:
+                random_identifier = random.getrandbits(64)
+                #print("setting block token to %s" % (str(random_identifier)))
+                deacsmprefs.set("fulfillment_block_token", random_identifier)
+                deacsmprefs.commit()
+                deacsmprefs.refresh()
+                if random_identifier != deacsmprefs["fulfillment_block_token"]:
+                    # print("we broke another thread's global token")
+                    continue
+
+                deacsmprefs.set("fulfillment_block_time", int(time.time() * 1000))
+                #print("Obtained lock!")
+                return True
+            
+            else: 
+                # Token already exists, wait for it to finish ...
+                current_time = int(time.time() * 1000)
+                saved_time = deacsmprefs["fulfillment_block_time"]
+                if saved_time + 60000 < current_time:
+                    # Already locked since 60s, assume error
+                    print("{0} v{1}: Looks like the lock was stuck, removing lock {2} ...".format(PLUGIN_NAME, PLUGIN_VERSION, deacsmprefs["fulfillment_block_token"]))
+                    self.unblock()
+                
+                time.sleep(0.02)
+                continue
+
+
+
+
     def run(self, path_to_ebook):
         # type: (str) -> str
+        try: 
+            # This code gets called by Calibre with a path to the new book file. 
+            # We need to check if it's an ACSM file
 
-        # This code gets called by Calibre with a path to the new book file. 
-        # We need to check if it's an ACSM file
+            import calibre_plugins.deacsm.prefs as prefs     # type: ignore
+            deacsmprefs = prefs.ACSMInput_Prefs()
 
-        print("{0} v{1}: Trying to parse file {2}".format(PLUGIN_NAME, PLUGIN_VERSION, os.path.basename(path_to_ebook)))
-
-        ext = os.path.splitext(path_to_ebook)[1].lower()
-
-        if (ext != ".acsm"):
-            print("{0} v{1}: That's not an ACSM, returning (is {2} instead)... ".format(PLUGIN_NAME, PLUGIN_VERSION, ext))
-            return path_to_ebook
-
-        # That's an ACSM.
-        # We would fulfill this now, but first perform some sanity checks ...
-
-        if not self.ADE_sanity_check(): 
-            print("{0} v{1}: ADE auth is missing or broken ".format(PLUGIN_NAME, PLUGIN_VERSION))
-            return path_to_ebook
+            if deacsmprefs['allow_parallel_fulfillment'] == False:
+                self.wait_and_block()
 
 
-        from libadobe import are_ade_version_lists_valid
-        from libadobeFulfill import fulfill
+            print("{0} v{1}: Trying to parse file {2}".format(PLUGIN_NAME, PLUGIN_VERSION, os.path.basename(path_to_ebook)))
 
-        if not are_ade_version_lists_valid():
-            print("{0} v{1}: ADE version list mismatch, please open a bug report.".format(PLUGIN_NAME, PLUGIN_VERSION))
-            return path_to_ebook
+            ext = os.path.splitext(path_to_ebook)[1].lower()
 
-        print("{0} v{1}: Try to fulfill ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+            if (ext != ".acsm"):
+                print("{0} v{1}: That's not an ACSM, returning (is {2} instead)... ".format(PLUGIN_NAME, PLUGIN_VERSION, ext))
+                self.unblock()
+                return path_to_ebook
 
-        success, replyData = fulfill(path_to_ebook, deacsmprefs["notify_fulfillment"])
+            # That's an ACSM.
+            # We would fulfill this now, but first perform some sanity checks ...
 
-        if (success is False):
-            print("{0} v{1}: Hey, that didn't work: \n".format(PLUGIN_NAME, PLUGIN_VERSION) + replyData)
-        else: 
-            print("{0} v{1}: Downloading book ...".format(PLUGIN_NAME, PLUGIN_VERSION))
-            rpl = self.download(replyData)
-            if (rpl is not None):
-                # Got a file
-
-                # Because Calibre still thinks this is an ACSM file (not an EPUB)
-                # it will not run other FileTypePlugins that handle EPUB (or PDF) files.
-                # Loop through all plugins (the list is already sorted by priority), 
-                # then execute all of them that can handle EPUB / PDF.
-
-                # if the source file is supposed to be deleted after successful fulfillment,
-                # this is set to True
-                # If there's any errors whatsoever during export / plugin execution,
-                # this will be set back to False to prevent deletion.
-                delete_src_file = deacsmprefs["delete_acsm_after_fulfill"]
-
-                try: 
-                    from calibre.customize.ui import _initialized_plugins, is_disabled
-                    from calibre.customize import FileTypePlugin
-
-                    original_file_for_plugins = rpl
-
-                    oo, oe = sys.stdout, sys.stderr
-
-                    for plugin in _initialized_plugins:
-
-                        #print("{0} v{1}: Plugin '{2}' has prio {3}".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name, plugin.priority))
-
-                        # Check if this is a FileTypePlugin
-                        if not isinstance(plugin, FileTypePlugin):
-                            #print("{0} v{1}: Plugin '{2}' is no FileTypePlugin, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
-                            continue
-
-                        # Check if it's disabled
-                        if is_disabled(plugin):
-                            #print("{0} v{1}: Plugin '{2}' is disabled, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
-                            continue
-
-                        if plugin.name == self.name:
-                            #print("{0} v{1}: Plugin '{2}' is me - skipping".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
-                            continue
-
-                        # Check if it's supposed to run on import:
-                        if not plugin.on_import:
-                            #print("{0} v{1}: Plugin '{2}' isn't supposed to run during import, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
-                            continue
-
-                        # Check filetype
-                        # If neither the book file extension nor "*" is in the plugin,
-                        # don't execute it.
-                        my_file_type = os.path.splitext(rpl)[-1].lower().replace('.', '')
-                        if (not my_file_type in plugin.file_types):
-                            #print("{0} v{1}: Plugin '{2}' doesn't support {3} files, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name, my_file_type))
-                            continue
-
-                        if ("acsm" in plugin.file_types or "*" in plugin.file_types):
-                            #print("{0} v{1}: Plugin '{2}' would run anyways, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name, my_file_type))
-                            continue
-
-                        print("{0} v{1}: Executing plugin {2} ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
-
-                        plugin.original_path_to_file = original_file_for_plugins
-
-                        try: 
-                            plugin_ret = None
-                            plugin_ret = plugin.run(rpl)
-                        except: 
-                            delete_src_file = False
-                            print("{0} v{1}: Running file type plugin failed with traceback:".format(PLUGIN_NAME, PLUGIN_VERSION))
-                            traceback.print_exc(file=oe)
-
-                        # Restore stdout and stderr, in case a plugin broke them.
-                        sys.stdout, sys.stderr = oo, oe
+            if not self.ADE_sanity_check(): 
+                print("{0} v{1}: ADE auth is missing or broken ".format(PLUGIN_NAME, PLUGIN_VERSION))
+                self.unblock()
+                return path_to_ebook
 
 
-                        if plugin_ret is not None:
-                            # If the plugin returned a new path, update that.
-                            print("{0} v{1}: Plugin returned path '{2}', updating.".format(PLUGIN_NAME, PLUGIN_VERSION, plugin_ret))
-                            rpl = plugin_ret
-                        else: 
-                            print("{0} v{1}: Plugin returned nothing - skipping".format(PLUGIN_NAME, PLUGIN_VERSION))
+            from libadobe import are_ade_version_lists_valid
+            from libadobeFulfill import fulfill
 
-                            
+            if not are_ade_version_lists_valid():
+                print("{0} v{1}: ADE version list mismatch, please open a bug report.".format(PLUGIN_NAME, PLUGIN_VERSION))
+                self.unblock()
+                return path_to_ebook
 
-                except: 
-                    delete_src_file = False
-                    print("{0} v{1}: Error while executing other plugins".format(PLUGIN_NAME, PLUGIN_VERSION))
-                    traceback.print_exc()
-                    pass
+            print("{0} v{1}: Try to fulfill ...".format(PLUGIN_NAME, PLUGIN_VERSION))
 
-                # If enabled, and if we didn't encounter any errors, delete the source ACSM file.
-                if delete_src_file:
+            success, replyData = fulfill(path_to_ebook, deacsmprefs["notify_fulfillment"])
+
+            if (success is False):
+                print("{0} v{1}: Hey, that didn't work: \n".format(PLUGIN_NAME, PLUGIN_VERSION) + replyData)
+            else: 
+                print("{0} v{1}: Downloading book ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+                rpl = self.download(replyData)
+                if (rpl is not None):
+                    # Got a file
+
+                    # Because Calibre still thinks this is an ACSM file (not an EPUB)
+                    # it will not run other FileTypePlugins that handle EPUB (or PDF) files.
+                    # Loop through all plugins (the list is already sorted by priority), 
+                    # then execute all of them that can handle EPUB / PDF.
+
+                    # if the source file is supposed to be deleted after successful fulfillment,
+                    # this is set to True
+                    # If there's any errors whatsoever during export / plugin execution,
+                    # this will be set back to False to prevent deletion.
+                    delete_src_file = deacsmprefs["delete_acsm_after_fulfill"]
+
                     try: 
-                        if os.path.exists(path_to_ebook):
-                            print("{0} v{1}: Deleting existing ACSM file {2} ...".format(PLUGIN_NAME, PLUGIN_VERSION, path_to_ebook))
-                            os.remove(path_to_ebook)
+                        from calibre.customize.ui import _initialized_plugins, is_disabled
+                        from calibre.customize import FileTypePlugin
+
+                        original_file_for_plugins = rpl
+
+                        oo, oe = sys.stdout, sys.stderr
+
+                        for plugin in _initialized_plugins:
+
+                            #print("{0} v{1}: Plugin '{2}' has prio {3}".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name, plugin.priority))
+
+                            # Check if this is a FileTypePlugin
+                            if not isinstance(plugin, FileTypePlugin):
+                                #print("{0} v{1}: Plugin '{2}' is no FileTypePlugin, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
+                                continue
+
+                            # Check if it's disabled
+                            if is_disabled(plugin):
+                                #print("{0} v{1}: Plugin '{2}' is disabled, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
+                                continue
+
+                            if plugin.name == self.name:
+                                #print("{0} v{1}: Plugin '{2}' is me - skipping".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
+                                continue
+
+                            # Check if it's supposed to run on import:
+                            if not plugin.on_import:
+                                #print("{0} v{1}: Plugin '{2}' isn't supposed to run during import, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
+                                continue
+
+                            # Check filetype
+                            # If neither the book file extension nor "*" is in the plugin,
+                            # don't execute it.
+                            my_file_type = os.path.splitext(rpl)[-1].lower().replace('.', '')
+                            if (not my_file_type in plugin.file_types):
+                                #print("{0} v{1}: Plugin '{2}' doesn't support {3} files, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name, my_file_type))
+                                continue
+
+                            if ("acsm" in plugin.file_types or "*" in plugin.file_types):
+                                #print("{0} v{1}: Plugin '{2}' would run anyways, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name, my_file_type))
+                                continue
+
+                            print("{0} v{1}: Executing plugin {2} ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
+
+                            plugin.original_path_to_file = original_file_for_plugins
+
+                            try: 
+                                plugin_ret = None
+                                plugin_ret = plugin.run(rpl)
+                            except: 
+                                delete_src_file = False
+                                print("{0} v{1}: Running file type plugin failed with traceback:".format(PLUGIN_NAME, PLUGIN_VERSION))
+                                traceback.print_exc(file=oe)
+
+                            # Restore stdout and stderr, in case a plugin broke them.
+                            sys.stdout, sys.stderr = oo, oe
+
+
+                            if plugin_ret is not None:
+                                # If the plugin returned a new path, update that.
+                                print("{0} v{1}: Plugin returned path '{2}', updating.".format(PLUGIN_NAME, PLUGIN_VERSION, plugin_ret))
+                                rpl = plugin_ret
+                            else: 
+                                print("{0} v{1}: Plugin returned nothing - skipping".format(PLUGIN_NAME, PLUGIN_VERSION))
+
+                                
+
                     except: 
-                        print("{0} v{1}: Failed to delete source ACSM after fulfillment.".format(PLUGIN_NAME, PLUGIN_VERSION))
-                
-                
-                # Return path - either the original one or the one modified by the other plugins.
-                return rpl
+                        delete_src_file = False
+                        print("{0} v{1}: Error while executing other plugins".format(PLUGIN_NAME, PLUGIN_VERSION))
+                        traceback.print_exc()
+                        pass
 
+                    # If enabled, and if we didn't encounter any errors, delete the source ACSM file.
+                    if delete_src_file:
+                        try: 
+                            if os.path.exists(path_to_ebook):
+                                print("{0} v{1}: Deleting existing ACSM file {2} ...".format(PLUGIN_NAME, PLUGIN_VERSION, path_to_ebook))
+                                os.remove(path_to_ebook)
+                        except: 
+                            print("{0} v{1}: Failed to delete source ACSM after fulfillment.".format(PLUGIN_NAME, PLUGIN_VERSION))
+                    
+                    
+                    # Return path - either the original one or the one modified by the other plugins.
+                    self.unblock()
+                    return rpl
 
-        return path_to_ebook
+            self.unblock()
+            return path_to_ebook
+        except: 
+            self.unblock()
+            traceback.print_exc()
+            return path_to_ebook
         
 
