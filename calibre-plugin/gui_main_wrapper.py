@@ -10,6 +10,7 @@ try:
 except:
     pass
 
+from calibre_plugins.deacsm.__init__ import ACSMInput
 
 
 #@@CALIBRE_COMPAT_CODE@@
@@ -25,7 +26,7 @@ class ACSMInputGUIExtension(InterfaceActionBase):
     # This plugin will be auto-loaded from the ACSM Input plugin. It doesn't make sense for the user
     # to disable it. If necessary, the menu bar button can be removed through the Calibre settings.
 
-    type = "File type"
+    type = ACSMInput.type
     # Just so that the GUI extension shows up at the same place as the actual ACSM Input plugin.
 
     try: 

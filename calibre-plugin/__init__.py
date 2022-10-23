@@ -48,7 +48,9 @@
 #
 # v0.1.0:  Continue work on renaming from "DeACSM" to "ACSM Input". 
 #          The big version number jump is to make that name change clearer.
-#          Print useful warning if LicenseServiceCertificate download fails.
+#          Print useful warning if LicenseServiceCertificate download fails,
+#          fix error with the loan list not being updated when importing multiple ACSMs at once,
+#          fix bug with the GUI extension in non-English environments,
 
 
 
@@ -138,8 +140,15 @@ class ACSMInput(FileTypePlugin):
             if os.path.exists(os.path.join(self.pluginsdir, "DeACSM.zip")):
                 os.rename(os.path.join(self.pluginsdir, "DeACSM.zip"), os.path.join(self.pluginsdir, "DeACSM.BAK"))
                     
-            # Make sure the GUI extension is loaded:
-            self.init_embedded_plugins()    
+            
+            try: 
+                # Make sure the GUI extension is loaded:
+                self.init_embedded_plugins()    
+            except: 
+                # Apparently this can fail - if it does, ignore errors so the rest of the plugin still works.
+                print("{0} v{1}: Couldn't initialize GUI plugin:".format(PLUGIN_NAME, PLUGIN_VERSION))
+                traceback.print_exc()
+                pass
                 
             self.maindir_old = os.path.join(self.pluginsdir,"DeACSM")
             self.maindir = os.path.join(self.pluginsdir,"ACSMInput")
