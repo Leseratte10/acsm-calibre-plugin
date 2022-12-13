@@ -128,9 +128,16 @@ def find_enc(filename_in):
 
     for line in br.readlines():
         i = i + 1
-        if "R/Encrypt" in line and "R/ID" in line:
+        is_encrypt_normal = "R/Encrypt" in line and "R/ID" in line
+        is_encrypt_odd = "R" in line and "/Encrypt" in line and "/ID" in line
+        if is_encrypt_normal or is_encrypt_odd:
+
             find_enc_end = int(time.time() * 1000)
             print("Found ENC after %d attempts - took %d ms" % (i, find_enc_end - find_enc_start))
+            if is_encrypt_odd:
+                print("Odd formatting of encryption blob?")
+                print("If this doesn't work correctly please open a bug report.")
+                
             return line
     
     find_enc_end = int(time.time() * 1000)
@@ -186,7 +193,7 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
     line_split = encrypt.split(' ')
     next = 0
     for element in line_split:
-        if element == "R/Encrypt":
+        if element == "R/Encrypt" or element == "/Encrypt":
             next = 2
             continue
         if next == 2:
