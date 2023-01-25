@@ -47,6 +47,17 @@ body:
       placeholder: "v0.0.16"
     validations: 
       required: true
+  - type: dropdown
+    id: importtype
+    attributes:
+      label: Import type
+      description: If the error occurs during an ACSM file import, please choose the method you used to add the file to Calibre. If not, please leave this empty.
+      multiple: true
+      options:
+        - "Clicking the 'Add books' button in the menu bar"
+        - "Dragging-and-Dropping the ACSM file into the Calibre window"
+        - "Using an auto-add folder (Preferences -> Adding books -> Automatic adding)"
+        - "Using the Calibre web server"
   - type: textarea
     id: anything-else
     attributes:
