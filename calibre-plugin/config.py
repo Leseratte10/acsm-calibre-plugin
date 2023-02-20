@@ -1416,7 +1416,11 @@ class RentedBooksDialog(QDialog):
 
             info = "(" + self.td_format(timestamp - currenttime) + " remaining)"
 
-            item = QListWidgetItem(book["book_name"] + " " + info)
+            book_name = book["book_name"]
+            if book_name is None: 
+                book_name = "(unknown book)"
+
+            item = QListWidgetItem(book_name + " " + info)
             item.setData(QtCore.Qt.UserRole, book["loanID"])
             self.listy.addItem(item)
 
