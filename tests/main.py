@@ -120,13 +120,14 @@ class TestAdobe(unittest.TestCase):
 
 
     
-    @freeze_time("2031-07-19 22:15:22.074860")
-    def test_verifyNonceCalculationFuture(self): 
-        '''Check if the nonce calculation is still correct in the future'''
+
+    @freeze_time("2038-04-27 03:34:32.543157")
+    def test_verifyNonceCalculationYk38(self): 
+        '''Check if the nonce calculation works after 2038'''
 
         nonce_return = libadobe.addNonce()
-        expected_return = "<adept:nonce>2lQTp046AAAAAAAA</adept:nonce><adept:expiration>2031-07-19T22:25:22Z</adept:expiration>"
-        self.assertEqual(nonce_return, expected_return, "Invalid nonce calculation in 2031")
+        expected_return = "<adept:nonce>X0fGZ4A6AAAAAAAA</adept:nonce><adept:expiration>2038-04-27T03:44:32Z</adept:expiration>"
+        self.assertEqual(nonce_return, expected_return, "Invalid nonce calculation in 2038, 2k38 problem")
 
 
     

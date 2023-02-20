@@ -5,12 +5,12 @@ It is a full Python reimplementation of libgourou by Grégory Soutadé (http://i
 extended by more and more features.
 
 <details>
-  <summary>ACSM Input Plugin for Calibre - Copyright (c) 2021-2022 Leseratte10</summary>
+  <summary>ACSM Input Plugin for Calibre - Copyright (c) 2021-2023 Leseratte10</summary>
 
 ```
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 Formerly known as "DeACSM"
-Copyright (c) 2021-2022 Leseratte10
+Copyright (c) 2021-2023 Leseratte10
 
 This software is based on a Python reimplementation of the C++ library 
 "libgourou" by Grégory Soutadé which is under the LGPLv3 or later 

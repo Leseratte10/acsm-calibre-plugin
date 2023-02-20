@@ -486,7 +486,6 @@ class ACSMInput(FileTypePlugin):
                 self.unblock()
                 return path_to_ebook
 
-            # That's an ACSM.
             # We would fulfill this now, but first perform some sanity checks ...
 
             if not self.ADE_sanity_check(): 
