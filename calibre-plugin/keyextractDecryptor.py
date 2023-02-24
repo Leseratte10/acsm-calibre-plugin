@@ -1,4 +1,13 @@
 
+'''
+Copyright (c) 2021-2023 Leseratte10
+This file is part of the ACSM Input Plugin by Leseratte10
+ACSM Input Plugin for Calibre / acsm-calibre-plugin
+
+For more information, see: 
+https://github.com/Leseratte10/acsm-calibre-plugin
+'''
+
 # NOTE: 
 # This file contains the two Windows executables "decrypt_win32.exe" and "decrypt_win64.exe"
 # in base64-encoded form. The source code for these files can be found inside the main.c file

@@ -4,6 +4,14 @@
 # Migration plugin from "DeACSM" to "ACSM Input"
 # See README.md for details.
 
+'''
+Copyright (c) 2021-2023 Leseratte10
+This file is part of the ACSM Input Plugin by Leseratte10
+ACSM Input Plugin for Calibre / acsm-calibre-plugin
+
+For more information, see: 
+https://github.com/Leseratte10/acsm-calibre-plugin
+'''
 
 # Revision history: 
 # v0.0.20: First version of the migration plugin, released under the old name.

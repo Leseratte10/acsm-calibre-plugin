@@ -3,6 +3,39 @@
 
 # Calibre plugin for ACSM files.
 
+'''
+Copyright (c) 2021-2023 Leseratte10
+This file is part of the ACSM Input Plugin by Leseratte10
+https://github.com/Leseratte10/acsm-calibre-plugin
+
+ACSM Input Plugin for Calibre / acsm-calibre-plugin
+Formerly known as "DeACSM"
+
+This software is based on a Python reimplementation of the C++ library 
+"libgourou" by Grégory Soutadé which is under the LGPLv3 or later 
+license (http://indefero.soutade.fr/p/libgourou/).
+
+I have no idea whether a reimplementation in another language counts 
+as "derivative use", so just in case it does, I'm putting this project 
+under the GPLv3 (which is allowed in the LGPLv3 license) to prevent any 
+licensing issues. 
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+See the "LICENSE" file for a full copy of the GNU GPL v3.
+
+'''
 
 # Revision history: 
 # v0.0.1: First version.

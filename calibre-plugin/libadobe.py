@@ -2,6 +2,15 @@
 # -*- coding: utf-8 -*-
 
 '''
+Copyright (c) 2021-2023 Leseratte10
+This file is part of the ACSM Input Plugin by Leseratte10
+ACSM Input Plugin for Calibre / acsm-calibre-plugin
+
+For more information, see: 
+https://github.com/Leseratte10/acsm-calibre-plugin
+'''
+
+'''
 Helper library with code needed for Adobe stuff.
 '''
 

@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+'''
+Copyright (c) 2021-2023 Leseratte10
+This file is part of the ACSM Input Plugin by Leseratte10
+ACSM Input Plugin for Calibre / acsm-calibre-plugin
+
+For more information, see: 
+https://github.com/Leseratte10/acsm-calibre-plugin
+'''
+
 # Most of the code in this file has been taken from adobekey.pyw written by i♥cabbages
 # adobekey.pyw, version 7.0
 # Copyright © 2009-2020 i♥cabbages, Apprentice Harper et al.

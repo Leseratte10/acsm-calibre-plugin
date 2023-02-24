@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Copyright (c) 2021-2023 Leseratte10
+# This file is part of the ACSM Input Plugin by Leseratte10
+# ACSM Input Plugin for Calibre / acsm-calibre-plugin
+#
+# For more information, see: 
+# https://github.com/Leseratte10/acsm-calibre-plugin
+
 pushd calibre-plugin
 
 # As the latest oscrypto release (1.3.0) does not yet support OpenSSL3, we'll have to download a forked version ...
