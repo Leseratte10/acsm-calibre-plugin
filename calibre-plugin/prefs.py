@@ -15,7 +15,6 @@ import os
 import traceback
 
 from calibre.utils.config import JSONConfig, config_dir  # type: ignore
-from calibre.constants import iswindows                  # type: ignore
 
 
 class ACSMInput_Prefs():
@@ -54,8 +53,18 @@ class ACSMInput_Prefs():
                 success = True
                 break
 
-        
         if not success:
+            # We did not find an account folder. See if we can create one ...
+            for f in ["DeACSM", "ACSMInput"]:
+                self.__maindir = os.path.join(self.__pluginsdir, f)
+                self.__accountdir = os.path.join(self.__maindir,"account")
+                if os.path.exists(self.__maindir):
+                    os.mkdir(self.__accountdir)
+                    self.deacsmprefs.defaults['path_to_account_data'] = self.__accountdir
+                    success = True
+                    break
+
+        if not success:        
             raise Exception("Why does the account folder not exist?")
             
 

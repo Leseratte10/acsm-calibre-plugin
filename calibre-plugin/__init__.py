@@ -85,8 +85,10 @@ See the "LICENSE" file for a full copy of the GNU GPL v3.
 #          Print useful warning if LicenseServiceCertificate download fails,
 #          fix error with the loan list not being updated when importing multiple ACSMs at once,
 #          fix bug with the GUI extension in non-English environments,
-#          add setting to choose between simultaneous (faster) or sequencial (more ADE-like) 
-#          import of multiple ACSM files
+#          fix softlock when importing a large number of ACSM files at once,
+#          fix "account folder not found" error message on some clean installations,
+#          add experimental support for Calibre 3.48. 
+
 
 
 
@@ -99,7 +101,12 @@ __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
 
 
 from calibre.utils.config import config_dir         # type: ignore
-from calibre.utils.lock import SingleInstance, singleinstance       # type: ignore
+from calibre.utils.lock import singleinstance       # type: ignore
+
+try:
+    from calibre.utils.lock import SingleInstance       # type: ignore
+except:
+    from calibre_plugins.deacsm.singleinstance_helper import SingleInstance
 
 import os, shutil, traceback, sys, time, io, random
 import zipfile
@@ -113,7 +120,7 @@ class ACSMInput(FileTypePlugin):
     supported_platforms         = ['linux', 'osx', 'windows']
     author                      = "Leseratte10"
     version                     = PLUGIN_VERSION_TUPLE
-    minimum_calibre_version     = (4, 0, 0)
+    minimum_calibre_version     = (3, 48, 0)
     file_types                  = set(['acsm'])
     on_import                   = True
     on_preprocess               = True

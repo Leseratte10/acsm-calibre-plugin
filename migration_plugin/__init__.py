@@ -28,11 +28,9 @@ class DeACSMMigrationPlugin(InterfaceActionBase):
     version                     = (0, 0, 20)
 
     can_be_disabled = False
-    # This plugin will be auto-loaded from the ACSM Input plugin. It doesn't make sense for the user
-    # to disable it. If necessary, the menu bar button can be removed through the Calibre settings.
 
     type = "File type"
-    # Just so that the GUI extension shows up at the same place as the actual ACSM Input plugin.
+    # Just so that the migration extension shows up at the same place as the actual ACSM Input plugin.
 
     try: 
         from calibre.customize import PluginInstallationType

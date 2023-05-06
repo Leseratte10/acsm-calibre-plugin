@@ -70,7 +70,12 @@ def create_menu_action_unique(ia, parent_menu, menu_text, image=None, tooltip=No
 class ActualACSMInputGUIExtension(InterfaceAction):
     name                        = "ACSM Input Plugin GUI Extension"
     
-    popup_type = QToolButton.ToolButtonPopupMode.InstantPopup
+    try: 
+        popup_type = QToolButton.ToolButtonPopupMode.InstantPopup
+    except AttributeError:
+        # Needed for Calibre 3
+        popup_type = 2
+
     action_type = 'global'
     action_spec = ("ACSM Input", None, "ACSM Input Plugin by Leseratte10", None)
     # Text, icon, tooltip, keyboard shortcut
