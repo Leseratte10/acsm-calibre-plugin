@@ -35,12 +35,6 @@ class ACSMInput_Prefs():
         self.deacsmprefs.defaults['notify_fulfillment'] = True
         self.deacsmprefs.defaults['detailed_logging'] = False
         self.deacsmprefs.defaults['delete_acsm_after_fulfill'] = False
-        self.deacsmprefs.defaults['allow_parallel_fulfillment'] = True
-
-        self.deacsmprefs.defaults['loan_identifier_token'] = 0
-        self.deacsmprefs.defaults['fulfillment_block_token'] = 0
-        self.deacsmprefs.defaults['fulfillment_block_time'] = 0
-
 
         self.deacsmprefs.defaults['list_of_rented_books'] = []
 

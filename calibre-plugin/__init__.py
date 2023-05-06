@@ -99,6 +99,7 @@ __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
 
 
 from calibre.utils.config import config_dir         # type: ignore
+from calibre.utils.lock import SingleInstance, singleinstance       # type: ignore
 
 import os, shutil, traceback, sys, time, io, random
 import zipfile
@@ -171,9 +172,10 @@ class ACSMInput(FileTypePlugin):
                 os.mkdir(self.pluginsdir)
 
             
-            # If the old DeACSM plugin still exists, rename it to BAK or something so it doesn't load.
-            if os.path.exists(os.path.join(self.pluginsdir, "DeACSM.zip")):
-                os.rename(os.path.join(self.pluginsdir, "DeACSM.zip"), os.path.join(self.pluginsdir, "DeACSM.BAK"))
+            if singleinstance("__acsm_rename_old_plugin"):
+                # If the old DeACSM plugin still exists, rename it to BAK or something so it doesn't load.
+                if os.path.exists(os.path.join(self.pluginsdir, "DeACSM.zip")):
+                    os.rename(os.path.join(self.pluginsdir, "DeACSM.zip"), os.path.join(self.pluginsdir, "DeACSM.BAK"))
                     
             
             try: 
@@ -237,54 +239,39 @@ class ACSMInput(FileTypePlugin):
                 print("Module update from \"{0}\" to \"{1}\", extracting ...".format(id, id_plugin))
                 # Something changed, extract modules.
 
+                if not singleinstance("__acsm_extracting modules"):
+                    print("Skipping because another instance is already doing that.")
+                else:
+                    if os.path.exists(self.moddir):
+                        shutil.rmtree(self.moddir, ignore_errors=True)
 
-                if os.path.exists(self.moddir):
-                    shutil.rmtree(self.moddir, ignore_errors=True)
+                    os.mkdir(self.moddir)
 
-                rand_path = self.moddir + str(random.randint(0, 1000000000))
-                
-                ctr = 0
-                while os.path.exists(rand_path):
-                    # None of this code should be necessary since a random number between 0 and a billion should be unique
-                    # enough, but apparently not. Make new ones until we find one that's not in use.
-                    # Should be using Calibre's TemporaryFile class but then I can't be certain it's on the same drive...
-                    ctr += 1
-                    if (ctr > 1000):
-                        print("{0} v{1}: Tried a thousand times to get a temp dir ...".format(PLUGIN_NAME, PLUGIN_VERSION))
-                        raise Exception("Hey!")
+                    names = ["oscrypto.zip", "asn1crypto.zip"]
 
-                    rand_path = self.moddir + str(random.randint(0, 1000000000))
+                    # oscrypto is needed to parse the pkcs12 data from Adobe.
+                    # asn1crypto is a dependency of oscrypto.
+                        
+                    lib_dict = self.load_resources(names)
 
-                os.mkdir(rand_path)
+                    for entry, data in lib_dict.items():
+                        try:
+                            with zipfile.ZipFile(io.BytesIO(data), 'r') as ref:
+                                ref.extractall(self.moddir)
 
-                names = ["oscrypto.zip", "asn1crypto.zip"]
-
-                # oscrypto is needed to parse the pkcs12 data from Adobe.
-                # asn1crypto is a dependency of oscrypto.
-                    
-                lib_dict = self.load_resources(names)
-
-                for entry, data in lib_dict.items():
-                    try:
-                        with zipfile.ZipFile(io.BytesIO(data), 'r') as ref:
-                            ref.extractall(rand_path)
-
-                    except:
-                        print("{0} v{1}: Exception when copying needed library files".format(PLUGIN_NAME, PLUGIN_VERSION))
-                        traceback.print_exc()
-                        pass           
+                        except:
+                            print("{0} v{1}: Exception when copying needed library files".format(PLUGIN_NAME, PLUGIN_VERSION))
+                            traceback.print_exc()
+                            pass           
 
 
-                # Write module ID
-                if id_plugin is not None: 
-                    mod_file = os.path.join(rand_path, "module_id.txt")
-                    f = open(mod_file, "w")
-                    f.write(id_plugin)
-                    f.close()
+                    # Write module ID
+                    if id_plugin is not None: 
+                        mod_file = os.path.join(self.moddir, "module_id.txt")
+                        f = open(mod_file, "w")
+                        f.write(id_plugin)
+                        f.close()
 
-                
-                # Rename temporary path to actual module path so this will be used next time.
-                os.rename(rand_path, self.moddir)
 
             sys.path.insert(0, os.path.join(self.moddir, "oscrypto"))
             sys.path.insert(0, os.path.join(self.moddir, "asn1crypto"))
@@ -441,74 +428,49 @@ class ACSMInput(FileTypePlugin):
             print("{0} v{1}: Error: Unsupported file type ...".format(PLUGIN_NAME, PLUGIN_VERSION))
             return None
 
-    def is_blocked(self):
-        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-        deacsmprefs = prefs.ACSMInput_Prefs()
-        return deacsmprefs['fulfillment_block_token'] != 0
-    
-    def unblock(self):      
-        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-        deacsmprefs = prefs.ACSMInput_Prefs()
-
-        my_token = deacsmprefs["fulfillment_block_token"]
-        deacsmprefs.refresh()
-        if (my_token == deacsmprefs["fulfillment_block_token"]):
-            # Only unlock if this is my own lock
-
-            deacsmprefs.set("fulfillment_block_token", 0)
-            deacsmprefs.set("fulfillment_block_time", 0)
-            deacsmprefs.commit()
-
-
-    def wait_and_block(self):
-        random_identifier = None
-
-        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-        deacsmprefs = prefs.ACSMInput_Prefs()
-
-        while True: 
-            deacsmprefs.refresh()
-            if deacsmprefs["fulfillment_block_token"] == 0:
-                random_identifier = random.getrandbits(64)
-                #print("setting block token to %s" % (str(random_identifier)))
-                deacsmprefs.set("fulfillment_block_token", random_identifier)
-                deacsmprefs.commit()
-                deacsmprefs.refresh()
-                if random_identifier != deacsmprefs["fulfillment_block_token"]:
-                    # print("we broke another thread's global token")
-                    continue
-
-                deacsmprefs.set("fulfillment_block_time", int(time.time() * 1000))
-                #print("Obtained lock!")
-                return True
-            
-            else: 
-                # Token already exists, wait for it to finish ...
-                current_time = int(time.time() * 1000)
-                saved_time = deacsmprefs["fulfillment_block_time"]
-                if saved_time + 60000 < current_time:
-                    # Already locked since 60s, assume error
-                    print("{0} v{1}: Looks like the lock was stuck, removing lock {2} ...".format(PLUGIN_NAME, PLUGIN_VERSION, deacsmprefs["fulfillment_block_token"]))
-                    self.unblock()
-                
-                time.sleep(0.02)
-                continue
-
-
-
-
     def run(self, path_to_ebook):
         # type: (str) -> str
+
+
+        # This code gets called by Calibre with a path to the new book file. 
+
+        # Make sure there's only a single instance of this function running ever. 
+        # Calibre loves to run these in parallel when many ACSM files are being imported.
+        # However that A) messes with the loan records written to a file, and B) that behaviour
+        # is significantly different from ADE so Adobe could use that to detect this plugin. 
+        
+        # So, we're trying to use Calibre's singleinstance feature to prevent that. 
+
+
+        counter = 0
+        thread_id = -1
+
         try: 
-            # This code gets called by Calibre with a path to the new book file. 
+            import threading
+            thread_id = threading.current_thread().ident
+        except:
+            pass
+
+        while True:
+            with SingleInstance("__acsm_plugin_execute_run_acsm_file") as si:
+                if si:
+                    return self.run_single(path_to_ebook)
+                else:
+                    counter += 1
+                    if (counter % 100 == 0):
+                        print("Thread {0} still waiting for lock, attempt {1}".format(thread_id, counter))
+                    time.sleep(0.1)
+
+
+
+    def run_single(self, path_to_ebook):
+        # type: (str) -> str
+        try: 
+
             # We need to check if it's an ACSM file
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
             deacsmprefs = prefs.ACSMInput_Prefs()
-
-            if deacsmprefs['allow_parallel_fulfillment'] == False:
-                self.wait_and_block()
-
 
             print("{0} v{1}: Trying to parse file {2}".format(PLUGIN_NAME, PLUGIN_VERSION, os.path.basename(path_to_ebook)))
 
@@ -516,14 +478,12 @@ class ACSMInput(FileTypePlugin):
 
             if (ext != ".acsm"):
                 print("{0} v{1}: That's not an ACSM, returning (is {2} instead)... ".format(PLUGIN_NAME, PLUGIN_VERSION, ext))
-                self.unblock()
                 return path_to_ebook
 
             # We would fulfill this now, but first perform some sanity checks ...
 
             if not self.ADE_sanity_check(): 
                 print("{0} v{1}: ADE auth is missing or broken ".format(PLUGIN_NAME, PLUGIN_VERSION))
-                self.unblock()
                 return path_to_ebook
 
 
@@ -532,7 +492,6 @@ class ACSMInput(FileTypePlugin):
 
             if not are_ade_version_lists_valid():
                 print("{0} v{1}: ADE version list mismatch, please open a bug report.".format(PLUGIN_NAME, PLUGIN_VERSION))
-                self.unblock()
                 return path_to_ebook
 
             print("{0} v{1}: Try to fulfill ...".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -643,13 +602,10 @@ class ACSMInput(FileTypePlugin):
                     
                     
                     # Return path - either the original one or the one modified by the other plugins.
-                    self.unblock()
                     return rpl
 
-            self.unblock()
             return path_to_ebook
         except: 
-            self.unblock()
             traceback.print_exc()
             return path_to_ebook
         
