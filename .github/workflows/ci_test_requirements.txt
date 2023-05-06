@@ -1,0 +1,11 @@
+freezegun
+mock ; python_version < '3.0'
+lxml
+pycryptodome
+rsa ; python_version >= '3.0'
+rsa <= 4.3 ; python_version < '3.0'
+oscrypto
+
+# Require cryptography >= 3.1 because in 3.0 and below, the backend param in load_key_and_certificates was still required.
+cryptography==3.1 ; python_version < '3.0'
+cryptography>=3.1 ; python_version >= '3.0'
