@@ -579,7 +579,8 @@ def addLoanRecordToConfigFile(new_loan_record):
     except: 
         print("Exception while reading config file")
         return False
-
+    
+    deacsmprefs.refresh()
 
     # Check if that exact loan is already in the list, and if so, delete it:
     done = False
@@ -597,6 +598,7 @@ def addLoanRecordToConfigFile(new_loan_record):
     # books, and can then return them.
     # Also, the config widget is responsible for cleaning up that list once a book's validity period is up.
     deacsmprefs["list_of_rented_books"].append(new_loan_record)
+    deacsmprefs.commit()
 
     return True
 
