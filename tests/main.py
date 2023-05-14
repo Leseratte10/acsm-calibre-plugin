@@ -77,6 +77,10 @@ class TestAdobe(unittest.TestCase):
         self.assertEqual((len(libadobe.makeSerial(False))), 40, "SHA1 hash for device serial invalid (device-based)")
         self.assertEqual((len(libadobe.makeSerial(True))), 40,  "SHA1 hash for device serial invalid (random)")
         self.assertEqual(libadobe.makeSerial(False), libadobe.makeSerial(False), "Two non-random serials not identical")
+        self.assertNotEqual(libadobe.makeSerial(True), libadobe.makeSerial(True), "Two random serials are identical ...")
+
+        self.assertIsInstance(libadobe.makeSerial(True), str, "Serial must be a string, not bytes!")
+        self.assertIsInstance(libadobe.makeSerial(False), str, "Serial must be a string, not bytes!")
 
     def test_fingerprintGeneration(self): 
         '''Check if fingerprint generation works'''

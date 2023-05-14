@@ -217,8 +217,8 @@ def makeSerial(random):
             
         sha_out = hashlib.sha1(dataToHash.encode('latin-1')).hexdigest().lower()
     else: 
-        import binascii
-        sha_out = binascii.hexlify(Random.get_random_bytes(20)).lower()
+        # SHA1 of a bunch of random bytes
+        sha_out = hashlib.sha1(Random.get_random_bytes(256)).hexdigest().lower()
 
     return sha_out
 
