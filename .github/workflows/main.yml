@@ -29,18 +29,29 @@ jobs:
             calibre-plugin.zip
             calibre-migration-plugin.zip
 
-  test-all-python-versions:
+  test-python3:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python-version: ["2.7", "3.5", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11"]
-        # 3.12-dev doesn't work yet due to lxml
+        python-version: ["3.5", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12-dev"]
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install python requirements
+        run: pip install -r ./.github/workflows/ci_test_requirements.txt
+      - name: Run tests
+        run: |
+          cd tests && python --version && PYTHONWARNINGS=ignore python ./main.py
+
+  test-python2:
+    runs-on: ubuntu-20.04
+    container: python:2.7
+    steps:
+      - uses: actions/checkout@v3
+
       - name: Install python requirements
         run: pip install -r ./.github/workflows/ci_test_requirements.txt
       - name: Run tests
@@ -107,13 +118,13 @@ jobs:
         run: |
           # Require cryptography >= 3.1 because in 3.0 and below, the backend param in load_key_and_certificates was still required.
           # Installing a forked version of oscrypto to fix OpenSSL 3 issues
-          pip3 install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_fe39273cc5020.zip
+          pip3 install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_fe39273cc5020_new.zip
           pip3 install -r ./.github/workflows/ci_test_requirements.txt
           # Install Python2 stuff
           curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
           sudo apt install python2
           python2 get-pip.py
-          pip2 --no-python-version-warning install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_fe39273cc5020.zip
+          pip2 --no-python-version-warning install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_fe39273cc5020_new.zip
           pip2 --no-python-version-warning install -r ./.github/workflows/ci_test_requirements.txt
 
       - name: Run tests (Python 3)
@@ -139,21 +150,6 @@ jobs:
       - name: Run tests (Python 3)
         run: |
           cd tests && python3 ./main.py && cd ..
-        shell: bash
-      
-      - name: Setup Python 2
-        uses: actions/setup-python@v3
-        with: 
-          python-version: '2.x'
-      
-      - name: Install deps for Python 2
-        run: |
-          # Install Python2 stuff
-          pip2 --no-python-version-warning install -r ./.github/workflows/ci_test_requirements.txt
-
-      - name: Run tests (Python 2)
-        run: |
-          cd tests && PYTHONWARNINGS=ignore python ./main.py && cd ..
         shell: bash
 
 
