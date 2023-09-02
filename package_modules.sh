@@ -13,7 +13,7 @@ pushd calibre-plugin
 # See https://github.com/wbond/oscrypto/pull/61 for more information.
 
 wget https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/asn1crypto_1.5.1.zip -O asn1crypto.zip
-wget https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_fe39273cc5020.zip -O oscrypto.zip
+wget https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_fe39273cc5020_new.zip -O oscrypto.zip
 
 popd
 
