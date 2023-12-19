@@ -45,7 +45,7 @@ rm -r __pycache__
 rm *.pyc
 
 # Set module ID. This needs to be changed if any of the module ZIPs change.
-echo -n "2022-07-31-01" > module_id.txt
+echo -n "2023-12-19-01" > module_id.txt
 
 # Copy LICENSE and README.md so it'll be included in the ZIP.
 cp ../LICENSE LICENSE
