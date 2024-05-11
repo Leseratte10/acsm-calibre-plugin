@@ -282,7 +282,10 @@ class ACSMInput(FileTypePlugin):
 
             sys.path.insert(0, os.path.join(self.moddir, "oscrypto"))
             sys.path.insert(0, os.path.join(self.moddir, "asn1crypto"))
-            
+
+            # Sometimes, we don't seem to automatically have our dir in sys.path, add it
+            sys.path.insert(0, os.path.dirname(__file__))
+
             # Okay, now all the modules are available, import the Adobe modules.
 
             from libadobe import createDeviceKeyFile, update_account_path, sendHTTPRequest

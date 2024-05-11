@@ -12,7 +12,7 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-import os, base64, traceback
+import os, base64, sys, traceback
 from PyQt5.QtGui import QKeySequence
 
 from lxml import etree
