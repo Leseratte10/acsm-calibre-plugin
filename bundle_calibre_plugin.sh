@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Copyright (c) 2021-2023 Leseratte10
 # This file is part of the ACSM Input Plugin by Leseratte10
@@ -6,6 +6,14 @@
 #
 # For more information, see: 
 # https://github.com/Leseratte10/acsm-calibre-plugin
+
+sed_i() {
+    script="$1"
+    path="$2"
+    tmpfile="$path.tmp"
+    sed "$script" "$path" > "$tmpfile"
+    mv "$tmpfile" "$path"
+}
 
 
 [ ! -f calibre-plugin/asn1crypto.zip ] && ./package_modules.sh
@@ -25,15 +33,15 @@ base64 decrypt_win32.exe > decrypt_win32_b64.txt
 base64 decrypt_win64.exe > decrypt_win64_b64.txt
 
 # Base64-encode binaries and place them inside decryptor.py: 
-sed "/@@@CALIBRE_DECRYPTOR_WIN32_B64@@@/ {
+sed_i "/@@@CALIBRE_DECRYPTOR_WIN32_B64@@@/ {
     r decrypt_win32_b64.txt
     d
-}" -i ../keyextractDecryptor.py
+}" ../keyextractDecryptor.py
 
-sed "/@@@CALIBRE_DECRYPTOR_WIN64_B64@@@/ {
+sed_i "/@@@CALIBRE_DECRYPTOR_WIN64_B64@@@/ {
     r decrypt_win64_b64.txt
     d
-}" -i ../keyextractDecryptor.py
+}" ../keyextractDecryptor.py
 
 rm decrypt_win32_b64.txt decrypt_win64_b64.txt
 rm decrypt_win32.exe decrypt_win64.exe
@@ -57,10 +65,10 @@ for file in **/*.py;
 do
     #echo $file
     # Inject Python2 compat code:
-    sed '/#@@CALIBRE_COMPAT_CODE@@/ {
+    sed_i '/#@@CALIBRE_COMPAT_CODE@@/ {
         r __calibre_compat_code.py
         d
-    }' -i $file
+    }' $file
 
 done
 
