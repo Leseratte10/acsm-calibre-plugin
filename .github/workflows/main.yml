@@ -167,18 +167,3 @@ jobs:
       - name: Run tests (Python 3)
         run: |
           cd tests && python3 ./main.py && cd ..
-
-      - name: Set up Python 2
-        uses: actions/setup-python@v5
-        with:
-          python-version: "2.7"
-
-      - name: Install dependencies
-        run: |
-          curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
-          python2 get-pip.py
-          python2 -m pip --no-python-version-warning install -r ./.github/workflows/ci_test_requirements.txt
-
-      - name: Run tests (Python 2)
-        run: |
-          cd tests && PYTHONWARNINGS=ignore python2 ./main.py && cd ..
