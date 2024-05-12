@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-20.04
     steps: 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install compilers
         run: |
@@ -35,9 +35,9 @@ jobs:
       matrix:
         python-version: ["3.5", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12"] # 3.13-dev currently broken due to lxml
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install python requirements
@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-20.04
     container: python:2.7
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install python requirements
         run: pip install -r ./.github/workflows/ci_test_requirements.txt
@@ -62,7 +62,7 @@ jobs:
   test-ubuntu-2004:
     runs-on: ubuntu-20.04
     steps: 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -83,7 +83,7 @@ jobs:
   test-ubuntu-2204-oscrypto:
     runs-on: ubuntu-22.04
     steps: 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@4
 
       - name: Install dependencies
         id: pip-stuff
@@ -112,7 +112,7 @@ jobs:
   test-ubuntu-2204-oscrypto-fork:
     runs-on: ubuntu-22.04
     steps: 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -139,7 +139,7 @@ jobs:
   test-windows:
     runs-on: windows-2022
     steps: 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Install dependencies
         run: |
@@ -154,9 +154,9 @@ jobs:
 
 
   test-mac:
-    runs-on: macos-11
+    runs-on: macos-12
     steps: 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Install dependencies
         run: |
