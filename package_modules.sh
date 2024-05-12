@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Copyright (c) 2021-2023 Leseratte10
 # This file is part of the ACSM Input Plugin by Leseratte10
