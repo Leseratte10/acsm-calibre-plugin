@@ -33,7 +33,9 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python-version: ["3.5", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12"] # 3.13-dev currently broken due to lxml
+        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12"] 
+        # 3.5 is broken due to SSL issues? Todo.
+        # 3.13-dev currently broken due to lxml
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
@@ -83,7 +85,7 @@ jobs:
   test-ubuntu-2204-oscrypto:
     runs-on: ubuntu-22.04
     steps: 
-      - uses: actions/checkout@4
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         id: pip-stuff
@@ -161,14 +163,21 @@ jobs:
       - name: Install dependencies
         run: |
           pip3 install -r ./.github/workflows/ci_test_requirements.txt
-          # Install Python2 stuff
-          curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
-          python2 get-pip.py
-          python2 -m pip --no-python-version-warning install -r ./.github/workflows/ci_test_requirements.txt
 
       - name: Run tests (Python 3)
         run: |
           cd tests && python3 ./main.py && cd ..
+
+      - name: Set up Python 2
+        uses: actions/setup-python@v5
+        with:
+          python-version: "2.7"
+
+      - name: Install dependencies
+        run: |
+          curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
+          python2 get-pip.py
+          python2 -m pip --no-python-version-warning install -r ./.github/workflows/ci_test_requirements.txt
 
       - name: Run tests (Python 2)
         run: |
