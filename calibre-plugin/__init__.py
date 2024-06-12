@@ -285,6 +285,20 @@ class ACSMInput(FileTypePlugin):
             
             # Okay, now all the modules are available, import the Adobe modules.
 
+            # Crucial to import first, as libadobe imports oscrypto as well
+
+            libcrypto_path = os.environ["ACSM_LIBCRYPTO"]
+            libssl_path = os.environ["ACSM_LIBSSL"]
+
+            if os.path.exists(libcrypto_path) and os.path.exists(libssl_path):
+                import oscrypto
+
+                oscrypto.use_openssl(
+                    libcrypto_path = libcrypto_path,
+                    libssl_path = libssl_path,
+                )
+
+
             from libadobe import createDeviceKeyFile, update_account_path, sendHTTPRequest
             from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
             from libadobeFulfill import buildRights, fulfill
