@@ -202,7 +202,7 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
     line_split = encrypt.split(' ')
     next = 0
     for element in line_split:
-        if element == "R/Encrypt" or element == "/Encrypt":
+        if element == "R/Encrypt" or element == "/Encrypt" or element == "null/Encrypt":
             next = 2
             continue
         if next == 2:
