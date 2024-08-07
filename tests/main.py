@@ -367,7 +367,7 @@ class TestAdobe(unittest.TestCase):
 
     
     def test_Account_loginCredentialEncryption(self):
-        '''Check if we can properly encrypt login credentials'''
+        '''Check if we can properly encrypt login credentials (ASCII)'''
 
         # This cert is not the actual Adobe auth cert. 
         # I added a fake one in here so we can also test if the encrypted data is valid
@@ -388,15 +388,36 @@ class TestAdobe(unittest.TestCase):
         cipher_engine = PKCS1_v1_5.new(pkey)
         msg = cipher_engine.decrypt(encrypted, bytes([0x00] * 16))
 
-        import struct
+        self.assertEqual(binascii.hexlify(msg), b'f87afc8c7525dc4b83ec0ce2ab4bef5108757365726e616d6512756e69742d746573742d70617373776f7264', "devkey encryption returned wrong result")
 
-        expected_msg = bytearray(libadobe.devkey_bytes)
-        expected_msg.extend(bytearray(struct.pack("B", len(user))))
-        expected_msg.extend(bytearray(user.encode("latin-1")))
-        expected_msg.extend(bytearray(struct.pack("B", len(passwd))))
-        expected_msg.extend(bytearray(passwd.encode("latin-1")))
+    def test_Account_loginCredentialEncryptionWithUTF8(self):
+        '''Check if we can properly encrypt login credentials (UTF-8)'''
 
-        self.assertEqual(binascii.hexlify(msg), binascii.hexlify(expected_msg), "devkey encryption returned invalid result")
+        # This cert is not the actual Adobe auth cert. 
+        # I added a fake one in here so we can also test if the encrypted data is valid
+        # by just decrypting it again.
+        # Also, I don't think I'd be allowed to redistribute the Adobe cert anyways.
+        mock_auth_certificate = "MIICLjCCAZegAwIBAgIUPo11NtzZuIdqNySSJhG9ntZEpy0wDQYJKoZIhvcNAQEFBQAwKTELMAkGA1UEBhMCVVMxGjAYBgNVBAMMEURlQUNTTSB1bml0IHRlc3RzMB4XDTIxMTIxODIwNDYwMVoXDTIxMTIyODIwNDYwMVowKTELMAkGA1UEBhMCVVMxGjAYBgNVBAMMEURlQUNTTSB1bml0IHRlc3RzMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC/NkUXHTEYAyQzm6BHekzyAM8EfjBvWCLAvOVBs/eTqKwrOfqkuT+TuIYfvBx/GuWx9szMi/sTL1R0vCLxhO6FxnZH+OW4OC8mi5oyfWQxiZe41Mo7o6FYnyMA+fuwz9TyeL2BmObH9HewVhTwmVesdTNOAwaH+neC/IJ5/yGDMwIDAQABo1MwUTAdBgNVHQ4EFgQUYlO/CiLaNR2Mlmg64KALHq3jq18wHwYDVR0jBBgwFoAUYlO/CiLaNR2Mlmg64KALHq3jq18wDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQUFAAOBgQAzF75pKA2lzNxM+kPWErvJmOmP1aAWGZfbAG7naiC32pPHwNfKjUTQ1vpqoYxydvsmHzVhF1Z/czBdLMR8/PtSv+cGrhhLrc7c5uzp2YDZU4TiGaGz7jiD5C0rp3IpyEP3IN0SNeYwEZtKMph+pv3k5zcgsIPOsHIS0gwV3U70HA=="
+        mock_auth_cert_private_key = "LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlDWEFJQkFBS0JnUUMvTmtVWEhURVlBeVF6bTZCSGVrenlBTThFZmpCdldDTEF2T1ZCcy9lVHFLd3JPZnFrCnVUK1R1SVlmdkJ4L0d1V3g5c3pNaS9zVEwxUjB2Q0x4aE82RnhuWkgrT1c0T0M4bWk1b3lmV1F4aVplNDFNbzcKbzZGWW55TUErZnV3ejlUeWVMMkJtT2JIOUhld1ZoVHdtVmVzZFROT0F3YUgrbmVDL0lKNS95R0RNd0lEQVFBQgpBb0dBSUxCaWQyVWlNM3kxLzZ5blpoRGVmckRzczFQdmE5bWhkMW5UeDd2QW81bStkVlZnS0RFVFVXbkdaRDZBCmtLcEVnbnd5M3ZVL1l6UkFPQVRCNUpCWlJuSEpzeHBmUk9sVHBZRHJBaXFoZ0dlZGNkSHozb1NhSk8zZVVZNzcKUEt6NDZ0VTNUTVZvMFdndmV0d3FKWXNEencxcHREa2Nqb2xxVGNYSWxhdTBGYUVDUVFEbERTTnNzWTM2VmlzSwpma0hNblJEd1FJdHFPNGlrZEtFRGNqTzU0Q3RXYVpjK2lGZ1FsMjFzUk1ueW91SVBzT3RBTG96V0wwMzJ2NTRHCk5XQUI1emkvQWtFQTFiVndJV1lzeVh6aHp5Wko4bWhmTGYvY2kydmQyY2RTK3lBTEwrbUpJQmJSejMvNFdHSFgKdUxXMWwxWGVLYWVmRnFob1JpTzdxUWpNWCthb3ZqYytqUUpCQU1TQ2F4djdrTlZ2UytucXZFVHhrL0NyVDNESwp0c1p4RVJyRnhiNzRwZld6RFlFbXRIYzNremRLSlFBMzRqNllDSnk5MHpLR3p4cWM5dFJZd28rZmNqMENRRWptCmY3Mms4Um82YzMwS2ZxY21XM0dCbW1ZbEFhVE1qYzRFZkV4M3ljTWNoYTNXNVl5Z3M4bmFrbnR4V3p1eVpsNkEKVERIQTlyOE90VWp4a2haeEdmRUNRRndVZlhEVncwNjlOaUdJRUpWRWVTRkp6TCszb1JSWCsrZ0krb3AwNlRBaApCcTFjemVZMWFOMllTWGIveDZ4TEI5amFYSXg1UElIM1Uyc3VhZHdETnNVPQotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo="
+
+        user = "username"
+        passwd = "unit-test-¶Āssword🜂"
+
+        # P = ¶ = U+00B6
+        # A = Ā = U+0100
+        # Triangle = 🜂 = U+1F702
+
+        libadobe.devkey_bytes = bytearray([0xf8, 0x7a, 0xfc, 0x8c, 0x75, 0x25, 0xdc, 0x4b, 0x83, 0xec, 0x0c, 0xe2, 0xab, 0x4b, 0xef, 0x51])
+        encrypted = libadobeAccount.encryptLoginCredentials(user, passwd, mock_auth_certificate)
+
+        # Okay, now try to decrypt this again: 
+
+        pkey = RSA.import_key(base64.b64decode(mock_auth_cert_private_key))
+        cipher_engine = PKCS1_v1_5.new(pkey)
+        msg = cipher_engine.decrypt(encrypted, bytes([0x00] * 16))
+
+        self.assertEqual(binascii.hexlify(msg), b'f87afc8c7525dc4b83ec0ce2ab4bef5108757365726e616d6518756e69742d746573742dc2b6c4807373776f7264f09f9c82', "devkey encryption returned wrong result")
+
 
 
 class TestPluginInterface(unittest.TestCase): 

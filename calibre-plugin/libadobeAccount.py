@@ -238,10 +238,14 @@ def encryptLoginCredentials(username, password, authenticationCertificate):
     # Build buffer <devkey_bytes> <len username> <username> <len password> <password>
 
     ar = bytearray(devkey_bytes)
-    ar.extend(bytearray(struct.pack("B", len(username))))
-    ar.extend(bytearray(username.encode("latin-1")))
-    ar.extend(bytearray(struct.pack("B", len(password))))
-    ar.extend(bytearray(password.encode("latin-1")))
+
+    username_bytes = bytearray(username.encode("utf-8"))
+    password_bytes = bytearray(password.encode("utf-8"))
+
+    ar.extend(bytearray(struct.pack("B", len(username_bytes))))
+    ar.extend(username_bytes)
+    ar.extend(bytearray(struct.pack("B", len(password_bytes))))
+    ar.extend(password_bytes)
 
     # Crypt code from https://stackoverflow.com/a/12921889/4991648
     cert = DerSequence()
