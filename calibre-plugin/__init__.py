@@ -285,18 +285,23 @@ class ACSMInput(FileTypePlugin):
             
             # Okay, now all the modules are available, import the Adobe modules.
 
+            
+            # On some systems, like NixOS, the path to libcrypto and libssl 
+            # isn't autodetected correctly. To fix this, allow overriding
+            # these paths using environment variables.
             # Crucial to import first, as libadobe imports oscrypto as well
 
-            libcrypto_path = os.environ["ACSM_LIBCRYPTO"]
-            libssl_path = os.environ["ACSM_LIBSSL"]
+            libcrypto_path = os.getenv("ACSM_LIBCRYPTO", None)
+            libssl_path = os.getenv("ACSM_LIBSSL", None)
 
-            if os.path.exists(libcrypto_path) and os.path.exists(libssl_path):
-                import oscrypto
+            if libcrypto_path is not None and libssl_path is not None:
+                if os.path.exists(libcrypto_path) and os.path.exists(libssl_path):
+                    import oscrypto     # type: ignore
 
-                oscrypto.use_openssl(
-                    libcrypto_path = libcrypto_path,
-                    libssl_path = libssl_path,
-                )
+                    oscrypto.use_openssl(
+                        libcrypto_path = libcrypto_path,
+                        libssl_path = libssl_path,
+                    )
 
 
             from libadobe import createDeviceKeyFile, update_account_path, sendHTTPRequest
