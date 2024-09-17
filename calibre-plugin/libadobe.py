@@ -252,8 +252,26 @@ def sendHTTPRequest_DL2FILE(URL, outputfile):
         "User-Agent": "book2png",
         # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
     }
+
+    # Ignore SSL:
+    # It appears as if lots of book distributors have either invalid or expired certs ...
+    # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
+    # Not the best solution, but it works.
+    try: 
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+        # This is needed due to an Adobe change. 
+        # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
+        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
+        # just enforce TLSv1.2 here.
+    except:
+        ctx = ssl.create_default_context()
+
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+
     req = ulib.Request(url=URL, headers=headers)
-    handler = ulib.urlopen(req)
+    handler = ulib.urlopen(req, context=ctx)
 
     chunksize = 16 * 1024
 
@@ -298,6 +316,8 @@ def sendHTTPRequest_getSimple(URL):
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
         # This is needed due to an Adobe change. 
         # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
+        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
+        # just enforce TLSv1.2 here.
     except:
         ctx = ssl.create_default_context()
 
@@ -338,6 +358,8 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
         # This is needed due to an Adobe change. 
         # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
+        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
+        # just enforce TLSv1.2 here.
     except:
         ctx = ssl.create_default_context()
 
