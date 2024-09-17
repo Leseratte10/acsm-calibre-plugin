@@ -235,7 +235,7 @@ def makeFingerprint(serial):
         devkey_bytes = f.read()
         f.close()
 
-    str_to_hash = serial + devkey_bytes.decode('latin-1')
+    str_to_hash = serial.decode('latin-1') + devkey_bytes.decode('latin-1')
     hashed_str = hashlib.sha1(str_to_hash.encode('latin-1')).digest()
     b64str = base64.b64encode(hashed_str)
 
