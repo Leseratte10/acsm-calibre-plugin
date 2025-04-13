@@ -29,37 +29,20 @@ jobs:
             calibre-plugin.zip
             calibre-migration-plugin.zip
 
-  test-python3:
+  test-python:
     runs-on: ubuntu-24.04
-    container: ubuntu:focal
+    container: python:${{ matrix.python-version }}
     strategy:
       matrix:
-        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13"] 
+        python-version: ["2.7", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13"] 
         # 3.5 is broken due to SSL issues? Todo.
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
       - name: Install python requirements
         run: pip install -r ./.github/workflows/ci_test_requirements.txt
       - name: Run tests
         run: |
           cd tests && python --version && PYTHONWARNINGS=ignore python ./main.py
-
-  test-python2:
-    runs-on: ubuntu-24.04
-    container: python:2.7
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install python requirements
-        run: pip install -r ./.github/workflows/ci_test_requirements.txt
-      - name: Run tests
-        run: |
-          cd tests && python --version && PYTHONWARNINGS=ignore python ./main.py
-      
 
   test-ubuntu-2004:
     runs-on: ubuntu-24.04
@@ -69,6 +52,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt update && sudo apt install -y python3 python3-pip python2
           pip3 install -r ./.github/workflows/ci_test_requirements.txt
           # Install Python2 stuff
           curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
