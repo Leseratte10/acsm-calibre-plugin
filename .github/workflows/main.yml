@@ -6,7 +6,7 @@ on:
 
 jobs: 
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps: 
       - uses: actions/checkout@v4
 
@@ -30,12 +30,11 @@ jobs:
             calibre-migration-plugin.zip
 
   test-python3:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
-        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12"] 
+        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13"] 
         # 3.5 is broken due to SSL issues? Todo.
-        # 3.13-dev currently broken due to lxml
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
@@ -49,7 +48,7 @@ jobs:
           cd tests && python --version && PYTHONWARNINGS=ignore python ./main.py
 
   test-python2:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     container: python:2.7
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +61,8 @@ jobs:
       
 
   test-ubuntu-2004:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
+    container: ubuntu:focal
     steps: 
       - uses: actions/checkout@v4
 
