@@ -39,7 +39,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install python requirements
-        run: pip install -r ./.github/workflows/ci_test_requirements.txt
+        run: |
+          pip2 --no-python-version-warning install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_2023-12-19.zip
+          pip2 --no-python-version-warning install -r ./.github/workflows/ci_test_requirements.txt
+
       - name: Run tests
         run: |
           cd tests && python --version && PYTHONWARNINGS=ignore python ./main.py
@@ -49,10 +52,9 @@ jobs:
     container: ubuntu:focal
     steps: 
       - uses: actions/checkout@v4
-
       - name: Install dependencies
         run: |
-          sudo apt update && sudo apt install -y python3 python3-pip python2
+          apt update && apt install -y python3 python3-pip python2
           pip3 install -r ./.github/workflows/ci_test_requirements.txt
           # Install Python2 stuff
           curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
