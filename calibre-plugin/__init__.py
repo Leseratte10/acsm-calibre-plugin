@@ -291,18 +291,41 @@ class ACSMInput(FileTypePlugin):
             # these paths using environment variables.
             # Crucial to import first, as libadobe imports oscrypto as well
 
-            libcrypto_path = os.getenv("ACSM_LIBCRYPTO", None)
-            libssl_path = os.getenv("ACSM_LIBSSL", None)
+
+
+            import platform
+
+            # Check if Homebrew's OpenSSL is linked and warn if it might cause issues
+            check_homebrew_openssl()
+
+            if platform.system() == "Darwin":
+                # For macOS, use our special detection function to avoid Homebrew conflicts
+                libcrypto_path, libssl_path = setup_macos_crypto_paths()
+            else:
+                # For other platforms, use environment variables
+                libcrypto_path = os.getenv("ACSM_LIBCRYPTO", None)
+                libssl_path = os.getenv("ACSM_LIBSSL", None)
 
             if libcrypto_path is not None and libssl_path is not None:
-                if os.path.exists(libcrypto_path) and os.path.exists(libssl_path):
-                    import oscrypto     # type: ignore
+                try:
+                    import oscrypto  # type: ignore
 
                     oscrypto.use_openssl(
-                        libcrypto_path = libcrypto_path,
-                        libssl_path = libssl_path,
+                        libcrypto_path=libcrypto_path,
+                        libssl_path=libssl_path,
                     )
-
+                    print(
+                        "{0} v{1}: Configured crypto libraries: {2}, {3}".format(
+                            PLUGIN_NAME, PLUGIN_VERSION, libcrypto_path, libssl_path
+                        )
+                    )
+                except Exception as e:
+                    print(
+                        "{0} v{1}: Failed to configure crypto libraries: {2}".format(
+                            PLUGIN_NAME, PLUGIN_VERSION, str(e)
+                        )
+                    )
+                    traceback.print_exc()
 
             from libadobe import createDeviceKeyFile, update_account_path, sendHTTPRequest
             from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
@@ -636,3 +659,99 @@ class ACSMInput(FileTypePlugin):
             return path_to_ebook
         
 
+def setup_macos_crypto_paths():
+    """
+    Configure the plugin to work with macOS crypto libraries regardless of
+    whether Homebrew's openssl is linked or not.
+    """
+    import os
+    import platform
+    import traceback
+
+    try:
+        # Only run on macOS
+        if platform.system() != "Darwin":
+            return None, None
+
+        print(
+            "{0} v{1}: Configuring for macOS crypto libraries...".format(
+                PLUGIN_NAME, PLUGIN_VERSION
+            )
+        )
+
+        # First try environment variables if set
+        libcrypto_path = os.getenv("ACSM_LIBCRYPTO", None)
+        libssl_path = os.getenv("ACSM_LIBSSL", None)
+
+        if (
+            libcrypto_path
+            and libssl_path
+            and os.path.exists(libcrypto_path)
+            and os.path.exists(libssl_path)
+        ):
+            print(
+                "{0} v{1}: Using environment-specified crypto libraries".format(
+                    PLUGIN_NAME, PLUGIN_VERSION
+                )
+            )
+            return libcrypto_path, libssl_path
+
+        # Use the Security framework which is properly signed by Apple
+        security_path = "/System/Library/Frameworks/Security.framework/Security"
+        if os.path.exists(security_path):
+            print(
+                "{0} v{1}: Using macOS Security framework for SSL".format(
+                    PLUGIN_NAME, PLUGIN_VERSION
+                )
+            )
+            return security_path, security_path
+
+        # If Security framework isn't available, look for system libraries
+        # These might not be directly visible but the system can still access them
+        print(
+            "{0} v{1}: Security framework not found, trying system libraries".format(
+                PLUGIN_NAME, PLUGIN_VERSION
+            )
+        )
+        return "/usr/lib/libcrypto.46.dylib", "/usr/lib/libssl.46.dylib"
+
+    except Exception as e:
+        print(
+            "{0} v{1}: Error in setup_macos_crypto_paths: {2}".format(
+                PLUGIN_NAME, PLUGIN_VERSION, str(e)
+            )
+        )
+        traceback.print_exc()
+        return None, None
+
+
+def check_homebrew_openssl():
+    """Check if Homebrew's OpenSSL is linked and might cause issues"""
+    try:
+        import platform
+        import os
+
+        if platform.system() != "Darwin":
+            return
+
+        brew_openssl_link = "/usr/local/lib/libcrypto.dylib"
+        if os.path.exists(brew_openssl_link) and os.path.islink(brew_openssl_link):
+            link_target = os.readlink(brew_openssl_link)
+            if "openssl@3" in link_target:
+                print(
+                    "{0} v{1}: Warning: Homebrew's OpenSSL@3 is linked and may cause conflicts.".format(
+                        PLUGIN_NAME, PLUGIN_VERSION
+                    )
+                )
+                print(
+                    "{0} v{1}: If you encounter SSL errors, try running: brew unlink openssl@3".format(
+                        PLUGIN_NAME, PLUGIN_VERSION
+                    )
+                )
+
+    except Exception as e:
+        print(
+            "{0} v{1}: Error checking Homebrew OpenSSL status: {2}".format(
+                PLUGIN_NAME, PLUGIN_VERSION, str(e)
+            )
+        )
