@@ -34,7 +34,7 @@ jobs:
     container: python:${{ matrix.python-version }}
     strategy:
       matrix:
-        python-version: ["2.7", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13"] 
+        python-version: ["2.7", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"] 
         # 3.5 is broken due to SSL issues? Todo.
     steps:
       - uses: actions/checkout@v4
@@ -144,8 +144,21 @@ jobs:
         shell: bash
 
 
-  test-mac:
-    runs-on: macos-13
+  test-mac-arm64:
+    runs-on: macos-14
+    steps: 
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          pip3 install -r ./.github/workflows/ci_test_requirements.txt
+
+      - name: Run tests (Python 3)
+        run: |
+          cd tests && python3 ./main.py && cd ..
+
+  test-mac-intel:
+    runs-on: macos-15-intel
     steps: 
       - uses: actions/checkout@v4
       
