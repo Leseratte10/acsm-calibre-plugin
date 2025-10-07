@@ -20,4 +20,9 @@ if "calibre" in sys.modules:
             if __zip_path not in sys.path and os.path.exists(__zip_path):
                 sys.path.insert(0, __zip_path)
 
+            if os.path.exists(__zip_path):
+                # If we already included the new ZIP, don't also include the new one. 
+                # Maybe that helps with the update issues?
+                continue
+
 #@@CALIBRE_COMPAT_CODE_END@@

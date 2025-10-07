@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2024 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -45,6 +45,7 @@ class ACSMInput_Prefs():
         self.__pluginsdir = os.path.join(config_dir,"plugins")
 
         success = False
+        # Try to find an existing account folder; first in DeACSM, then in ACSMInput
         for f in ["DeACSM", "ACSMInput"]:
             self.__maindir = os.path.join(self.__pluginsdir, f)
             self.__accountdir = os.path.join(self.__maindir,"account")
@@ -55,14 +56,12 @@ class ACSMInput_Prefs():
 
         if not success:
             # We did not find an account folder. See if we can create one ...
-            for f in ["DeACSM", "ACSMInput"]:
-                self.__maindir = os.path.join(self.__pluginsdir, f)
-                self.__accountdir = os.path.join(self.__maindir,"account")
-                if os.path.exists(self.__maindir):
-                    os.mkdir(self.__accountdir)
-                    self.deacsmprefs.defaults['path_to_account_data'] = self.__accountdir
-                    success = True
-                    break
+            self.__maindir = os.path.join(self.__pluginsdir, "ACSMInput")
+            self.__accountdir = os.path.join(self.__maindir,"account")
+            if os.path.exists(self.__maindir):
+                os.mkdir(self.__accountdir)
+                self.deacsmprefs.defaults['path_to_account_data'] = self.__accountdir
+                success = True
 
         if not success:        
             raise Exception("Why does the account folder not exist?")

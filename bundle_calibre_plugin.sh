@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2021-2023 Leseratte10
+# Copyright (c) 2021-2024 Leseratte10
 # This file is part of the ACSM Input Plugin by Leseratte10
 # ACSM Input Plugin for Calibre / acsm-calibre-plugin
 #
@@ -8,6 +8,8 @@
 # https://github.com/Leseratte10/acsm-calibre-plugin
 
 sed_i() {
+    # Added by @vasi in PR #88 because MacOS and FreeBSD don't support "sed -i".
+
     script="$1"
     path="$2"
     tmpfile="$path.tmp"

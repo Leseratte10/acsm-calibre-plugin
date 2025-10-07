@@ -4,7 +4,7 @@
 # pyright: reportUndefinedVariable=false
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2024 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -17,7 +17,7 @@ from PyQt5.QtGui import QKeySequence
 
 from lxml import etree
 
-import time, datetime
+import sys, time, datetime
 
 
 from PyQt5.Qt import (Qt, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit,
@@ -37,7 +37,6 @@ from calibre.gui2 import (question_dialog, error_dialog, info_dialog,        # t
 # modules from this plugin's zipfile.
 from calibre_plugins.deacsm.__init__ import PLUGIN_NAME, PLUGIN_VERSION      # type: ignore
 import calibre_plugins.deacsm.prefs as prefs                                 # type: ignore
-from calibre.utils.config import config_dir         # type: ignore
 from calibre.constants import isosx, iswindows, islinux                 # type: ignore
 
 

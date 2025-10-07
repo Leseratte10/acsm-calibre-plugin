@@ -1,8 +1,7 @@
 # Calibre ACSM Input plugin
 
 This is a Calibre plugin that allows you to turn ACSM files into EPUB or PDF files without the need for Adobe Digital Editions. 
-It is a full Python reimplementation of libgourou by Grégory Soutadé (http://indefero.soutade.fr/p/libgourou/), and has since been
-extended by more and more features.
+It is a full Python reimplementation of libgourou by Grégory Soutadé (http://indefero.soutade.fr/p/libgourou/), and has since been extended by more and more features.
 
 <details>
   <summary>ACSM Input Plugin for Calibre - Copyright (c) 2021-2025 Leseratte10</summary>
@@ -42,6 +41,8 @@ See the "LICENSE" file for a full copy of the GNU GPL v3.
 
 ## Known bugs
 
+- Updating from 0.0.16 to the beta version of 0.1.0 doesn't always work seamlessly, sometimes it's necessary to restart Calibre once or twice, or even to uninstall 0.0.16 before installing the beta version - this is the reason why 0.1.0 is still not released as a proper update yet, sadly.
+
 - Versions 0.0.16 and below did sometimes return the wrong eBook (or none at all) when trying to return a book to the library through the "Loaned books" list, if you had multiple active loans from the same distributor / library. This will be fixed with the next release. 
 
 ## Setup
@@ -61,11 +62,10 @@ Once that's done, download an ACSM file from Adobe's test library and see if you
 
 IMPORTANT: 
 
-- I would suggest creating a new dummy AdobeID to use for Calibre so just in case Adobe detects this and bans you, you don't lose your main AdobeID. 
-- Combined with that I suggest using the DeDRM plugin to make sure that losing your AdobeID doesn't also mean you'll lose access to all your eBooks. 
+- Since I created this plugin back in 2021, there have been absolutely no reports of Adobe taking any action against users of this plugin, like banning or deleting accounts. Still, this is software not approved by Adobe and I am not responsible if Adobe does decide to ban people using this plugin in the future. 
+- If losing your main AdobeID account would cause issues for you (because you have other Adobe products or something linked to it or you have DRMed books linked to your main account), I would suggest creating a new dummy AdobeID to use for Calibre, combined with the DeDRM plugin, so just in case Adobe decides to ban you in the future you can just make a new account.
 - If you use an anonymous authorization, make sure you make backups of the activation data. 
 - If you use an anonymous authorization, you have the ability to copy that authorization into an AdobeID account at a later time (by clicking "Connect anonymous auth to ADE account"). This is useful if you have books linked to your authorization that you want to read elsewhere. Same restrictions as with ADE apply - you can only do this ONCE per AdobeID, and only if the AdobeID hasn't been in use elsewhere yet.
-- This software is not approved by Adobe. I am not responsible if Adobe detects that you're using nonstandard software and bans your account. Do not complain to me if Adobe bans your main ADE account - you have been warned. 
 
 ## Returning books
 
@@ -74,7 +74,7 @@ Just open the plugin settings, click "Show loaned books" (the option is only vis
 
 This makes the book available for someone else again, but it does not automatically get deleted from your Calibre library - you are responsible for doing that after returning a book.
 
-Note: You can only return books that you downloaded with version 0.0.9 (or newer) of this plugin. You cannot return books downloaded with ADE or with earlier versions of this plugin.
+Note: You can only return books that you downloaded with this plugin. You cannot return books downloaded with ADE or other tools.
 
 ## Authorizing eReaders
 
@@ -94,13 +94,20 @@ In the folder "calibre-plugin" in this repo (or inside the Calibre plugin ZIP fi
 
 Though, generally it's recommended to use the Calibre plugin instead of these standalone scripts. Except for maybe the `get_key_from_Adobe.py` script if you want to remove DRM from existing eBooks without having to extract the key from ADE.
 
-## To-Do list for the future?
+## Building from source
+
+If you want to run this plugin from source code (because you want to modify something or run a newer version from the master branch), it is not enough to simply ZIP up the "calibre-plugin" folder. You need to checkout the repository, then execute the "bundle_calibre_plugin.sh" script (which currently probably only works properly on Linux). 
+
+This will create the "calibre-plugin.zip" file which you can import into Calibre as a plugin.
+
+## To-Do list for the future (in no particular order)
 
 - Support to copy an authorization from the plugin to an ADE install
 - Support for multiple independant authorizations (with an easy way to switch between them)
 - Import a JoinedAccount authorization from ADE (ADE2.0+)
 - Import multiple account authorizations from ADE (ADE2.0+)
 - Support to add an AdobeID to an eReader without replacing the existing one
+- Support to return books loaned with other tools (like ADE)
 - Support for Adobe's "auth" download method instead of the "simple" method (ADE2.0+)
 - Support the JoinAccounts, ActivateLinkedAccounts and GetCredentialList functions to allow for merged AdobeIDs (ADE2.0+)
 - Support the SyncToDevice function to auto-download new books from ADE into Calibre (ADE4.0+)
