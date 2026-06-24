@@ -2,11 +2,11 @@ name: Build binaries
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, 'fix-ci' ]
 
 jobs: 
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps: 
       - uses: actions/checkout@v4
 
@@ -30,11 +30,11 @@ jobs:
             calibre-migration-plugin.zip
 
   test-python:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container: python:${{ matrix.python-version }}
     strategy:
       matrix:
-        python-version: ["2.7", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14-rc"] 
+        python-version: ["2.7", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15-rc"] 
         # 3.5 is broken due to SSL issues? Todo.
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
           cd tests && python --version && PYTHONWARNINGS=ignore python ./main.py
 
   test-ubuntu-2004:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container: ubuntu:focal
     steps: 
       - uses: actions/checkout@v4
@@ -69,8 +69,39 @@ jobs:
         run: |
           cd tests && PYTHONWARNINGS=ignore python2 ./main.py && cd ..
 
+  test-ubuntu-2604-oscrypto-fork:
+    runs-on: ubuntu-26.04
+    steps: 
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          apt update && apt install -y curl python3 python3-pip
+          pip3 install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_2023-12-19.zip
+          pip3 install -r ./.github/workflows/ci_test_requirements.txt
+
+      - name: Run tests (Python 3)
+        run: |
+          cd tests && python3 ./main.py && cd ..
+
+  test-ubuntu-2604arm-oscrypto-fork:
+    runs-on: ubuntu-26.04-arm
+    steps: 
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          apt update && apt install -y curl python3 python3-pip
+          pip3 install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_2023-12-19.zip
+          pip3 install -r ./.github/workflows/ci_test_requirements.txt
+
+      - name: Run tests (Python 3)
+        run: |
+          cd tests && python3 ./main.py && cd ..
+
+
   test-ubuntu-2204-oscrypto:
-    runs-on: ubuntu-22.04
+    if: false
+    runs-on: ubuntu-26.04
+    container: ubuntu:jammy
     steps: 
       - uses: actions/checkout@v4
 
@@ -78,13 +109,14 @@ jobs:
         id: pip-stuff
         continue-on-error: true
         run: |
-          sudo apt update
+          apt update
+          apt install -y python3-pip
           # Require oscrypto > 1.3.0 because all versions until 1.3.0 had no (or broken) OpenSSL 3 support.
           pip3 install "oscrypto>1.3.0"
           pip3 install -r ./.github/workflows/ci_test_requirements.txt
           # Install Python2 stuff
           curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
-          sudo apt install python2
+          apt install -y python2
           python2 get-pip.py
           pip2 --no-python-version-warning install "oscrypto>1.3.0"
           pip2 --no-python-version-warning install -r ./.github/workflows/ci_test_requirements.txt
@@ -100,20 +132,22 @@ jobs:
           cd tests && PYTHONWARNINGS=ignore python2 ./main.py && cd ..
 
   test-ubuntu-2204-oscrypto-fork:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
+    container: ubuntu:jammy
     steps: 
       - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
-          sudo apt update
+          apt update
+          apt install -y python3-pip curl
           # Require cryptography >= 3.1 because in 3.0 and below, the backend param in load_key_and_certificates was still required.
           # Installing a forked version of oscrypto to fix OpenSSL 3 issues
           pip3 install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_2023-12-19.zip
           pip3 install -r ./.github/workflows/ci_test_requirements.txt
           # Install Python2 stuff
           curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
-          sudo apt install python2
+          apt install -y python2
           python2 get-pip.py
           pip2 --no-python-version-warning install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_2023-12-19.zip
           pip2 --no-python-version-warning install -r ./.github/workflows/ci_test_requirements.txt
@@ -128,7 +162,7 @@ jobs:
 
 
   test-windows:
-    runs-on: windows-2022
+    runs-on: windows-2025
     steps: 
       - uses: actions/checkout@v4
       
@@ -145,7 +179,7 @@ jobs:
 
 
   test-mac-arm64:
-    runs-on: macos-14
+    runs-on: macos-26
     steps: 
       - uses: actions/checkout@v4
       
@@ -164,7 +198,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip3 install -r ./.github/workflows/ci_test_requirements.txt
+          pip3 install --break-system-packages -r ./.github/workflows/ci_test_requirements.txt
 
       - name: Run tests (Python 3)
         run: |
