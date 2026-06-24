@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-26.04
     steps: 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install compilers
         run: |
@@ -22,9 +22,10 @@ jobs:
           ./bundle_migration_plugin.sh
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with: 
           name: calibre-plugins
+          compression-level: 0
           path: |
             calibre-plugin.zip
             calibre-migration-plugin.zip
@@ -37,7 +38,7 @@ jobs:
         python-version: ["2.7", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15-rc"] 
         # 3.5 is broken due to SSL issues? Todo.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install python requirements
         run: |
           pip --no-python-version-warning install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_2023-12-19.zip
@@ -51,7 +52,7 @@ jobs:
     runs-on: ubuntu-26.04
     container: ubuntu:focal
     steps: 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install dependencies
         run: |
           apt update && apt install -y curl python3 python3-pip python2
@@ -72,7 +73,7 @@ jobs:
   test-ubuntu-2604-oscrypto-fork:
     runs-on: ubuntu-26.04
     steps: 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install dependencies
         run: |
           apt update && apt install -y curl python3 python3-pip
@@ -86,7 +87,7 @@ jobs:
   test-ubuntu-2604arm-oscrypto-fork:
     runs-on: ubuntu-26.04-arm
     steps: 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install dependencies
         run: |
           apt update && apt install -y curl python3 python3-pip
@@ -103,7 +104,7 @@ jobs:
     runs-on: ubuntu-26.04
     container: ubuntu:jammy
     steps: 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         id: pip-stuff
@@ -135,7 +136,7 @@ jobs:
     runs-on: ubuntu-26.04
     container: ubuntu:jammy
     steps: 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
@@ -164,7 +165,7 @@ jobs:
   test-windows:
     runs-on: windows-2025
     steps: 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Install dependencies
         run: |
@@ -181,7 +182,7 @@ jobs:
   test-mac-arm64:
     runs-on: macos-26
     steps: 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Install dependencies
         run: |
@@ -194,7 +195,7 @@ jobs:
   test-mac-intel:
     runs-on: macos-15-intel
     steps: 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Install dependencies
         run: |
