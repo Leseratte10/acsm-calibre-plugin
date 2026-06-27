@@ -433,7 +433,6 @@ class TestPluginInterface(unittest.TestCase):
         self.assertEqual(1, 2, "force fail")
 
     @unittest.skipIf(sys.platform.startswith("win"), "Does not work on Windows due to file permissions.")
-    @unittest.skipIf(sys.version_info < (3, 8, 0), "Doesn't support strict_timestamps")
     @unittest.skipIf(sys.version_info >= (3, 14, 0), "This is currently buggy, see cpython bug #152445")
     def test_addFileToZipIn1970(self):
         '''Check if ZIP file writing works in 1970'''
@@ -448,7 +447,10 @@ class TestPluginInterface(unittest.TestCase):
         import zipfile, tempfile, struct
         try: 
             tf = tempfile.NamedTemporaryFile(suffix='.zip')
-            zf = zipfile.ZipFile(tf.name, "w", strict_timestamps=False)
+            if sys.version_info < (3, 8, 0):
+                zf = zipfile.ZipFile(tf.name, "w")
+            else: 
+                zf = zipfile.ZipFile(tf.name, "w", strict_timestamps=False)
             zf.writestr("test.xml", "Hallo Welt")
             zf.close()
         except struct.error:
