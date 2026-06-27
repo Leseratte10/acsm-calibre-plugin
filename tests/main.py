@@ -432,10 +432,15 @@ class TestPluginInterface(unittest.TestCase):
     def forcefail(self):
         self.assertEqual(1, 2, "force fail")
 
-    @unittest.expectedFailure
-    @freeze_time("1970-04-01 00:00:00.000000")
     def test_addFileToZipIn1970(self):
         '''Check if ZIP file writing works in 1970'''
+
+        source_date_epoch_old = None
+
+        if 'SOURCE_DATE_EPOCH' in os.environ:
+            source_date_epoch_old = os.environ['SOURCE_DATE_EPOCH']
+        
+        os.environ['SOURCE_DATE_EPOCH'] = '1'
 
         import zipfile, tempfile, struct
         try: 
@@ -445,6 +450,9 @@ class TestPluginInterface(unittest.TestCase):
             zf.close()
         except struct.error:
             self.fail("Failed to add file to ZIP archive")
+        finally: 
+            if source_date_epoch_old is not None: 
+                os.environ['SOURCE_DATE_EPOCH'] = source_date_epoch_old
 
 
     def test_loanReturnFulfillmentID(self): 
