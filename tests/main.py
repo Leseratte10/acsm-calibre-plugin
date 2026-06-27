@@ -432,6 +432,21 @@ class TestPluginInterface(unittest.TestCase):
     def forcefail(self):
         self.assertEqual(1, 2, "force fail")
 
+    @unittest.expectedFailure
+    @freeze_time("1970-04-01 00:00:00.000000")
+    def test_addFileToZipIn1970(self):
+        '''Check if ZIP file writing works in 1970'''
+
+        import zipfile, tempfile, struct
+        try: 
+            tf = tempfile.NamedTemporaryFile(suffix='.zip')
+            zf = zipfile.ZipFile(tf.name, "w", strict_timestamps=False)
+            zf.writestr("test.xml", "Hallo Welt")
+            zf.close()
+        except struct.error:
+            self.fail("Failed to add file to ZIP archive")
+
+
     def test_loanReturnFulfillmentID(self): 
         '''Check if proper ID is used for the loan token'''
 
