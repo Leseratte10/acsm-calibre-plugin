@@ -26,7 +26,8 @@ body:
       description: Which OS are you running Calibre on?
       multiple: true
       options:
-        - Linux
+        - Linux (Calibre installed through OS package manager)
+        - Linux (Calibre downloaded from official website)
         - Windows
         - MacOS
     validations:
