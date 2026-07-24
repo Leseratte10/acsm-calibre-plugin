@@ -9,6 +9,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 from lxml import etree
 import base64
+import os
 import random
 import time
 
@@ -457,6 +458,21 @@ def fulfill(acsm_file, do_notify = False):
     adobe_fulfill_response = etree.fromstring(replyData)
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    # Persist the signed loanToken returned by the operator so it can later be embedded into a
+    # tethered eReader's activation.xml (see exportProxyAuth). A device authorization alone is
+    # enough for purchased books, but library loans additionally require this token on the device
+    # or the reader shows "not authorized to open this book". The operator returns a single
+    # loanToken that covers all of the user's currently-active loans, so we simply overwrite the
+    # stored copy on every fulfillment.
+    try:
+        loanTokenNode = adobe_fulfill_response.find("./%s" % (adNS("loanToken")))
+        if loanTokenNode is not None:
+            loanTokenPath = os.path.join(os.path.dirname(get_activation_xml_path()), "loantoken.xml")
+            with open(loanTokenPath, "wb") as loanTokenFile:
+                loanTokenFile.write(etree.tostring(loanTokenNode))
+    except Exception:
+        pass
 
     licenseURL = adobe_fulfill_response.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("licenseURL"))).text
 

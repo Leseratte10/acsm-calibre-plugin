@@ -10,6 +10,8 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 from lxml import etree
 import base64
+import os
+import re
 import locale, platform
 
 try:
@@ -550,6 +552,33 @@ def exportProxyAuth(act_xml_path, activationToken):
     activationToken = activationToken.replace(' xmlns="http://ns.adobe.com/adept"', '')
 
     ret += activationToken
+
+    # A device authorization (activationToken) on its own is enough to open *purchased* ADEPT
+    # books, but a library LOAN additionally requires a signed loanToken (bound to user+loan,
+    # NOT to a device) plus the operator's licenseServices to be present in the target device's
+    # activation.xml. Without them the reader refuses loaned content (e.g. a Kobo shows
+    # "Your eReader is not authorized to open this book") even though the device is authorized.
+    # The loanToken returned by the operator during fulfillment covers all of the user's
+    # currently-active loans; fulfill() stores it as "loantoken.xml" next to the account data.
+    def _embed_adept(node):
+        s = etree.tostring(node, encoding="unicode")
+        s = re.sub(r'\s+xmlns(:ns\d+)?="http://ns\.adobe\.com/adept"', '', s)
+        s = re.sub(r'(</?)ns\d+:', r'\1', s)
+        return s
+
+    try:
+        loanTokenPath = os.path.join(os.path.dirname(get_activation_xml_path()), "loantoken.xml")
+        if os.path.exists(loanTokenPath):
+            ret += _embed_adept(etree.parse(loanTokenPath).getroot())
+    except Exception:
+        pass
+
+    try:
+        account_ls = etree.parse(get_activation_xml_path()).find("./{http://ns.adobe.com/adept}licenseServices")
+        if account_ls is not None:
+            ret += _embed_adept(account_ls)
+    except Exception:
+        pass
 
     ret += "</activationInfo>"
 
