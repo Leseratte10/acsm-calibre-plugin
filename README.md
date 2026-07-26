@@ -47,7 +47,7 @@ See the "LICENSE" file for a full copy of the GNU GPL v3.
 
 ## Setup
 
-Download the plugin and import it into Calibre, then open the plugin settings. The plugin should display "Not authorized for any ADE ID". You now have multiple options to authorize the plugin: 
+Download the plugin's zip file from Releases and import it into Calibre. You must import the plugin as a zip file. Do not import with extracted files. Once imported, open the plugin settings by selecting Customize plugin. The plugin should display "Not authorized for any ADE ID". You now have multiple options to authorize the plugin: 
 
 - You can click on "Link to ADE account" and enter your AdobeID credentials to link your Calibre installation to your AdobeID account. This uses up one of your available activations. 
 - You can click on "Create anonymous authorization" to create an anonymous authorization. Make sure to create backups of that authorization. 
