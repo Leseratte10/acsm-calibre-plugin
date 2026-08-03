@@ -10,7 +10,6 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 from lxml import etree
 import base64
-import os
 import re
 import locale, platform
 
@@ -29,7 +28,7 @@ except ImportError:
 
 from libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
 from libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key
-from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+from libadobe import get_devkey_path, get_device_path, get_activation_xml_path, get_loan_tokens
 from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
 from libadobe import VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO, VAR_VER_SUPP_VERSIONS, VAR_ACS_SERVER_HTTP
 from libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
@@ -558,8 +557,7 @@ def exportProxyAuth(act_xml_path, activationToken):
     # NOT to a device) plus the operator's licenseServices to be present in the target device's
     # activation.xml. Without them the reader refuses loaned content (e.g. a Kobo shows
     # "Your eReader is not authorized to open this book") even though the device is authorized.
-    # The loanToken returned by the operator during fulfillment covers all of the user's
-    # currently-active loans; fulfill() stores it as "loantoken.xml" next to the account data.
+    # Every operator the user has borrowed from has its own loanToken, so they all get written.
     def _embed_adept(node):
         s = etree.tostring(node, encoding="unicode")
         s = re.sub(r'\s+xmlns(:ns\d+)?="http://ns\.adobe\.com/adept"', '', s)
@@ -567,9 +565,8 @@ def exportProxyAuth(act_xml_path, activationToken):
         return s
 
     try:
-        loanTokenPath = os.path.join(os.path.dirname(get_activation_xml_path()), "loantoken.xml")
-        if os.path.exists(loanTokenPath):
-            ret += _embed_adept(etree.parse(loanTokenPath).getroot())
+        for loanToken in get_loan_tokens():
+            ret += _embed_adept(loanToken)
     except Exception:
         pass
 
