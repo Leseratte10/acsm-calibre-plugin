@@ -16,6 +16,8 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 # GPLv3, Copyright 2011, Grant Drake <grant.drake@gmail.com>
 
 
+import os
+
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.actions import menu_action_unique_name
 try: 
@@ -103,6 +105,7 @@ class ActualACSMInputGUIExtension(InterfaceAction):
 
         create_menu_action_unique(self, m, "ACSM Input configuration", None, shortcut=None, shortcut_name="Open ACSM Input plugin settings dialog", triggered=self.trigger_config_dialog)
         create_menu_action_unique(self, m, "Show loaned books", None, shortcut=None, shortcut_name="ACSM: Open list of loaned books", triggered=self.trigger_loan_dialog)
+        create_menu_action_unique(self, m, "Refresh loans on eReader", None, shortcut=None, shortcut_name="ACSM: Refresh loans on eReader", triggered=self.trigger_refresh_loans)
 
     
     def trigger_loan_dialog(self):
@@ -122,6 +125,47 @@ class ActualACSMInputGUIExtension(InterfaceAction):
         
 
     
+    def connected_reader_folder(self):
+        # The ADE folder of the eReader calibre currently has mounted, if it has one.
+        try:
+            prefix = self.gui.device_manager.connected_device._main_prefix
+        except:
+            return None
+
+        if not prefix:
+            return None
+
+        adobe_path = os.path.join(prefix, ".adobe-digital-editions")
+        if not os.path.isdir(adobe_path):
+            return None
+
+        return adobe_path
+
+
+    def trigger_refresh_loans(self):
+        from calibre.gui2 import choose_dir, error_dialog, info_dialog
+        from calibre_plugins.deacsm.linked_readers import find_adobe_folder, refresh_reader    # type: ignore
+
+        title = "Refresh loans on eReader"
+
+        adobe_path = self.connected_reader_folder()
+        if adobe_path is None:
+            # calibre doesn't see the eReader (or doesn't support it), ask where it is.
+            root = choose_dir(self.gui, "acsm-input-refresh-loans-reader", "Select the eReader")
+            if not root:
+                return
+
+            adobe_path = find_adobe_folder(root)
+            if adobe_path is None:
+                return error_dialog(self.gui, title, "Didn't find an ADE-compatible eReader in that location.", show=True, show_copy_button=False)
+
+        ret, msg = refresh_reader(adobe_path)
+        if not ret:
+            return error_dialog(self.gui, title, "Couldn't refresh the loans on the eReader: " + msg, show=True, show_copy_button=False)
+
+        return info_dialog(self.gui, title, "The loans on the eReader are up to date.", show=True, show_copy_button=False)
+
+
     def trigger_config_dialog(self): 
         from calibre.customize.ui import _initialized_plugins
         from calibre_plugins.deacsm.__init__ import PLUGIN_NAME
