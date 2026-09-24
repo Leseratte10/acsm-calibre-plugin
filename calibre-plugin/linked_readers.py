@@ -55,3 +55,48 @@ def refresh_reader(adobe_path):
 
     update_account_path(prefs.ACSMInput_Prefs()["path_to_account_data"])
     return refreshLoanTokensOnDevice(os.path.join(adobe_path, "activation.xml"))
+
+
+def get_reader_name(adobe_path):
+    try:
+        return etree.parse(os.path.join(adobe_path, "device.xml")).find("./%s" % (adNS("deviceName"))).text
+    except:
+        return "eReader"
+
+
+def get_linked_readers():
+    return list(prefs.ACSMInput_Prefs()["linked_readers"])
+
+
+def is_linked_reader(device):
+    return device in [r["device"] for r in get_linked_readers()]
+
+
+def is_declined_reader(device):
+    return device in prefs.ACSMInput_Prefs()["declined_readers"]
+
+
+def link_reader(device, name):
+    p = prefs.ACSMInput_Prefs()
+    p.set("linked_readers", [r for r in p["linked_readers"] if r["device"] != device] + [{ "device": device, "name": name }])
+    p.set("declined_readers", [d for d in p["declined_readers"] if d != device])
+
+
+def decline_reader(device):
+    p = prefs.ACSMInput_Prefs()
+    if device not in p["declined_readers"]:
+        p.set("declined_readers", p["declined_readers"] + [device])
+
+
+def forget_reader(device):
+    # Also counts as declined, so plugging it in again doesn't bring the question back.
+    p = prefs.ACSMInput_Prefs()
+    p.set("linked_readers", [r for r in p["linked_readers"] if r["device"] != device])
+    if device not in p["declined_readers"]:
+        p.set("declined_readers", p["declined_readers"] + [device])
+
+
+def forget_all_readers():
+    p = prefs.ACSMInput_Prefs()
+    p.set("linked_readers", [])
+    p.set("declined_readers", [])

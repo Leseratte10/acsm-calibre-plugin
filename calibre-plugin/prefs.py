@@ -37,6 +37,12 @@ class ACSMInput_Prefs():
 
         self.deacsmprefs.defaults['list_of_rented_books'] = []
 
+        # eReaders authorized through USB whose loan data is kept up to date, and the ones the
+        # user didn't want that for. Identified by the device UUID of their Adobe authorization,
+        # which stays the same when the eReader is authorized again, unlike its mount path.
+        self.deacsmprefs.defaults['linked_readers'] = []
+        self.deacsmprefs.defaults['declined_readers'] = []
+
         if self.deacsmprefs['list_of_rented_books'] == []:
             self.deacsmprefs['list_of_rented_books'] = []
 

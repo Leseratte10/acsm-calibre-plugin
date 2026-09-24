@@ -133,6 +133,12 @@ class ConfigWidget(QWidget):
                 self.button_manage_ext_device.clicked.connect(self.manage_ext_device)
                 ua_group_box_layout.addWidget(self.button_manage_ext_device)
 
+                self.button_forget_reader = QtGui.QPushButton(self)
+                self.button_forget_reader.setText(_("Forget an authorized eReader"))
+                self.button_forget_reader.clicked.connect(self.forget_reader)
+                ua_group_box_layout.addWidget(self.button_forget_reader)
+                self.update_forget_reader_button()
+
             self.button_switch_ade_version = QtGui.QPushButton(self)
             self.button_switch_ade_version.setText(_("Change ADE version"))
             self.button_switch_ade_version.clicked.connect(self.switch_ade_version)
@@ -449,11 +455,49 @@ class ConfigWidget(QWidget):
             if not ret: 
                 return error_dialog(None, "Authorize eReader", "Error while writing activation to device.", show=True, det_msg=data, show_copy_button=False)
 
+            # Remember the eReader, so its loans can be kept up to date from now on.
+            try:
+                from calibre_plugins.deacsm.linked_readers import get_reader_authorization, link_reader
+                act_user, act_device = get_reader_authorization(adobe_path)
+                if act_device is not None:
+                    link_reader(act_device, devName)
+                self.update_forget_reader_button()
+            except:
+                traceback.print_exc()
+
 
             return info_dialog(None, "Authorize eReader", "Reader authorized successfully.", show=True, show_copy_button=False)
             
         
         
+    def update_forget_reader_button(self):
+        if not hasattr(self, "button_forget_reader"):
+            return
+        from calibre_plugins.deacsm.linked_readers import get_linked_readers
+        self.button_forget_reader.setEnabled(len(get_linked_readers()) > 0)
+
+
+    def forget_reader(self):
+        from calibre_plugins.deacsm.linked_readers import get_linked_readers, forget_reader
+
+        readers = get_linked_readers()
+        if len(readers) == 0:
+            return
+
+        items = ["%s (%s)" % (r["name"], r["device"]) for r in readers]
+
+        msg = "The loans on these eReaders are kept up to date automatically.\n"
+        msg += "Select the one to forget. It will stay authorized, but new loans\n"
+        msg += "won't be added to it until you authorize it again."
+
+        item, ok = QInputDialog.getItem(self, "Forget an authorized eReader", msg, items, 0, False)
+        if not ok:
+            return
+
+        forget_reader(readers[items.index(item)]["device"])
+        self.update_forget_reader_button()
+
+
     def delete_ade_auth(self): 
         # This function can only be triggered with the key combination Ctrl+Shift+D.
         # There is no easy-to-access button to trigger that to prevent people from 
@@ -500,6 +544,14 @@ class ConfigWidget(QWidget):
             os.remove(os.path.join(self.deacsmprefs["path_to_account_data"], "devicesalt"))
         except:
             error_dialog(None, "Remove ADE account", "There was an error while removing the authorization.", show=True, show_copy_button=False)
+
+        # The eReaders were authorized with that account, there's nothing to keep up to date anymore.
+        try:
+            from calibre_plugins.deacsm.linked_readers import forget_all_readers
+            forget_all_readers()
+            self.update_forget_reader_button()
+        except:
+            traceback.print_exc()
 
         
         # Show success, then close:
@@ -1275,6 +1327,9 @@ class ConfigWidget(QWidget):
 
 
     def save_settings(self):
+        # Pick up what changed while the dialog was open (a loan, an authorized eReader)
+        # instead of overwriting it with the copy loaded when the dialog opened.
+        self.deacsmprefs.refresh()
         self.deacsmprefs.set('notify_fulfillment', self.chkNotifyFulfillment.isChecked())
         self.deacsmprefs.set('detailed_logging', self.chkDetailedLogging.isChecked())
         self.deacsmprefs.set('delete_acsm_after_fulfill', self.chkDeleteAfterFulfill.isChecked())
