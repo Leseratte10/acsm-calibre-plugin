@@ -690,6 +690,17 @@ class TestPluginInterface(unittest.TestCase):
                 ["https://acs.example.com/licensesign"],
                 "licenseServices missing from the device authorization")
 
+            # The loan data inherits the device file's default namespace, like ADE writes it,
+            # instead of carrying its own declarations or generated prefixes along.
+            f = open(device_xml_path, "r")
+            raw = f.read()
+            f.close()
+            self.assertEqual(raw.count('xmlns="http://ns.adobe.com/adept"'), 1,
+                "Redundant namespace declarations in the device authorization")
+            self.assertNotIn("ns0:", raw, "Generated namespace prefix in the device authorization")
+            for token in written.findall("./%s" % (adNS("loanToken"))):
+                self.assertIsNone(token.prefix, "loanToken written with a namespace prefix")
+
             # An account that has never borrowed anything (only purchased books) has no loan
             # tokens at all - that has to keep producing a valid device authorization.
             no_loans = etree.parse(libadobe.get_activation_xml_path())
