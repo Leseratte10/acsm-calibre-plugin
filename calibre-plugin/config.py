@@ -63,6 +63,7 @@ class ConfigWidget(QWidget):
         self.tempdeacsmprefs['notify_fulfillment'] = self.deacsmprefs['notify_fulfillment']
         self.tempdeacsmprefs['detailed_logging'] = self.deacsmprefs['detailed_logging']
         self.tempdeacsmprefs['delete_acsm_after_fulfill'] = self.deacsmprefs['delete_acsm_after_fulfill']
+        self.tempdeacsmprefs['refresh_loans_on_readers'] = self.deacsmprefs['refresh_loans_on_readers']
 
         self.tempdeacsmprefs['list_of_rented_books'] = self.deacsmprefs['list_of_rented_books']
 
@@ -189,6 +190,11 @@ class ConfigWidget(QWidget):
         self.chkDeleteAfterFulfill.setChecked(self.tempdeacsmprefs["delete_acsm_after_fulfill"])
         self.chkDeleteAfterFulfill.toggled.connect(self.toggle_acsm_delete)
         layout.addWidget(self.chkDeleteAfterFulfill)
+
+        self.chkRefreshLoansOnReaders = QtGui.QCheckBox("Keep loans up to date on authorized eReaders")
+        self.chkRefreshLoansOnReaders.setToolTip("Default: True\n\nIf this is enabled, new loans are added to the eReaders authorized with \"Authorize eReader over USB\" whenever they are connected to calibre. \nWithout that, a book borrowed after the eReader was authorized won't open on it until the eReader is authorized again or \"Refresh loans on eReader\" is used.")
+        self.chkRefreshLoansOnReaders.setChecked(self.tempdeacsmprefs["refresh_loans_on_readers"])
+        layout.addWidget(self.chkRefreshLoansOnReaders)
 
 
         # Key shortcut Ctrl+Shift+D / Cmd+Shift+D to remove authorization, just like in ADE.
@@ -1333,6 +1339,7 @@ class ConfigWidget(QWidget):
         self.deacsmprefs.set('notify_fulfillment', self.chkNotifyFulfillment.isChecked())
         self.deacsmprefs.set('detailed_logging', self.chkDetailedLogging.isChecked())
         self.deacsmprefs.set('delete_acsm_after_fulfill', self.chkDeleteAfterFulfill.isChecked())
+        self.deacsmprefs.set('refresh_loans_on_readers', self.chkRefreshLoansOnReaders.isChecked())
         self.deacsmprefs.writeprefs()
 
     def load_resource(self, name):

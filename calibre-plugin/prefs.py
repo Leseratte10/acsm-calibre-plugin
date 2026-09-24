@@ -42,6 +42,7 @@ class ACSMInput_Prefs():
         # which stays the same when the eReader is authorized again, unlike its mount path.
         self.deacsmprefs.defaults['linked_readers'] = []
         self.deacsmprefs.defaults['declined_readers'] = []
+        self.deacsmprefs.defaults['refresh_loans_on_readers'] = True
 
         if self.deacsmprefs['list_of_rented_books'] == []:
             self.deacsmprefs['list_of_rented_books'] = []

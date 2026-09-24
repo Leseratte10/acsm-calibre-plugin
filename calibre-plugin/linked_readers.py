@@ -38,6 +38,14 @@ def find_adobe_folder(path):
     return None
 
 
+def get_account_user():
+    try:
+        act = etree.parse(os.path.join(prefs.ACSMInput_Prefs()["path_to_account_data"], "activation.xml"))
+        return act.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
+    except:
+        return None
+
+
 def get_reader_authorization(adobe_path):
     # Returns (user, device) of the reader's Adobe authorization, or (None, None).
     try:
