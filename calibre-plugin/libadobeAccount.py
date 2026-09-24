@@ -11,6 +11,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 from lxml import etree
 import base64
 import locale, platform
+import os
 
 try:
     from Cryptodome.PublicKey import RSA
@@ -512,7 +513,7 @@ def _copy_adept_node(parent, node):
     return el
 
 
-def _append_loan_data(root):
+def _append_loan_data(root, loanTokens = None):
     # A device authorization (activationToken) on its own is enough to open *purchased* ADEPT
     # books, but a library LOAN additionally requires a signed loanToken (bound to user+loan,
     # NOT to a device) plus the operator's licenseServices to be present in the target device's
@@ -521,7 +522,9 @@ def _append_loan_data(root):
     # Every operator the user has borrowed from has its own loanToken, so they all get written.
 
     try:
-        for loanToken in get_loan_tokens():
+        if loanTokens is None:
+            loanTokens = get_loan_tokens()
+        for loanToken in loanTokens:
             _copy_adept_node(root, loanToken)
     except Exception:
         pass
@@ -614,6 +617,93 @@ def exportProxyAuth(act_xml_path, activationToken):
 
 
 
+
+
+def refreshLoanTokensOnDevice(act_xml_path):
+    # Brings the loan data of an eReader that is already authorized with this account up to
+    # date, so a book borrowed after the authorization opens without authorizing it again.
+    # ret, msg = refreshLoanTokensOnDevice(act_xml_path)
+    # Only the loanTokens and licenseServices are replaced; the device authorization itself
+    # (activationServiceInfo, credentials, activationToken) is left exactly as it is.
+
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    try:
+        f = open(act_xml_path, "rb")
+        old_content = f.read()
+        f.close()
+        device = etree.fromstring(old_content)
+    except:
+        return False, "The eReader is not authorized"
+
+    try:
+        account_user = etree.parse(get_activation_xml_path()).find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
+        device_user = device.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
+    except:
+        return False, "Can't read the authorizations"
+
+    if account_user != device_user:
+        return False, "The eReader is authorized with a different account"
+
+    def operator(token):
+        try:
+            return token.find("./%s" % (adNS("operatorURL"))).text.strip()
+        except:
+            return None
+
+    def issued(token):
+        try:
+            return token.find("./%s" % (adNS("time"))).text.strip()
+        except:
+            return ""
+
+    # A loanToken covers all of its operator's active loans, so the newest one per operator is
+    # all the device needs. The device may hold tokens this account never saw (a loan fulfilled
+    # in ADE, for example), and those have to survive the refresh.
+    loanTokens = get_loan_tokens()
+    for deviceToken in device.findall("./%s" % (adNS("loanToken"))):
+        device.remove(deviceToken)
+        known = [t for t in loanTokens if operator(t) == operator(deviceToken)]
+        if len(known) == 0:
+            loanTokens.append(deviceToken)
+        elif issued(deviceToken) > issued(known[0]):
+            loanTokens[loanTokens.index(known[0])] = deviceToken
+
+    for licenseServices in device.findall("./%s" % (adNS("licenseServices"))):
+        device.remove(licenseServices)
+
+    _append_loan_data(device, loanTokens)
+    new_content = ("<?xml version=\"1.0\"?>" + etree.tostring(device, encoding="unicode")).encode("utf-8")
+
+    if new_content == old_content:
+        return True, "Already up to date"
+
+    # Write next to the file and swap it in, so an eReader that gets unplugged halfway through
+    # keeps its previous authorization instead of ending up with a truncated one.
+    tmp_path = act_xml_path + ".tmp"
+    try:
+        f = open(tmp_path, "wb")
+        f.write(new_content)
+        f.flush()
+        os.fsync(f.fileno())
+        f.close()
+        try:
+            os.replace(tmp_path, act_xml_path)
+        except AttributeError:
+            # Python 2 has no os.replace, and on Windows os.rename can't overwrite.
+            try:
+                os.rename(tmp_path, act_xml_path)
+            except OSError:
+                os.remove(act_xml_path)
+                os.rename(tmp_path, act_xml_path)
+    except:
+        try:
+            os.remove(tmp_path)
+        except:
+            pass
+        return False, "Can't write file"
+
+    return True, "Done"
 
 
 def buildActivateReqProxy(useVersionIndex = 0, proxyData = None):
