@@ -294,8 +294,39 @@ class ACSMInput(FileTypePlugin):
             libcrypto_path = os.getenv("ACSM_LIBCRYPTO", None)
             libssl_path = os.getenv("ACSM_LIBSSL", None)
 
+            import platform
+            if platform.system() == "Darwin":
+                # if MacOS and running in a terminal, the environment variables
+                # set by a LaunchAgent .plist file are not available in the
+                # same way as they are when launched by the GUI.
+                if libcrypto_path is None:
+                    libcrypto_path = self.get_launchctl_env("ACSM_LIBCRYPTO")
+                if libssl_path is None:
+                    libssl_path = self.get_launchctl_env("ACSM_LIBSSL")
+
+            if (
+                libcrypto_path
+                and libssl_path
+                and (
+                    (os.path.exists(libcrypto_path) and os.path.exists(libssl_path))
+                    or platform.system() == "Darwin"
+                )
+            ):
+                # Use paths if set, but files may not exist on MacOS (may be
+                # in the dyld shared cache)
+                print(
+                    "{0} v{1}: Using environment-specified crypto libraries {2} {3}".format(
+                        PLUGIN_NAME, PLUGIN_VERSION, libcrypto_path, libssl_path
+                    )
+                )
+            elif platform.system() == "Darwin" and self.check_homebrew_openssl():
+                # MacOS with Homebrew must specify Apple signed libraries instead
+                libcrypto_path, libssl_path = self.get_mac_crypto_libs()
+
             if libcrypto_path is not None and libssl_path is not None:
-                if os.path.exists(libcrypto_path) and os.path.exists(libssl_path):
+                if (
+                    os.path.exists(libcrypto_path) and os.path.exists(libssl_path)
+                ) or platform.system() == "Darwin":
                     import oscrypto     # type: ignore
 
                     oscrypto.use_openssl(
@@ -635,4 +666,145 @@ class ACSMInput(FileTypePlugin):
             traceback.print_exc()
             return path_to_ebook
         
+    def check_homebrew_openssl(self):
+        """Check if Homebrew's OpenSSL is linked and might cause issues"""
+        import platform
+        import os
+
+        if platform.system() != "Darwin":
+            return False
+
+        brew_openssl_link = "/usr/local/lib/libcrypto.dylib"
+        if os.path.exists(brew_openssl_link) and os.path.islink(brew_openssl_link):
+            link_target = os.readlink(brew_openssl_link)
+            if "openssl@3" in link_target:
+                return True
+        return False
+
+
+    def test_libs(self,l_crypto, l_ssl):
+        self.wipe_crypto()  # because might not have restarted calibre
+        try:
+            if l_crypto is not None and l_ssl is not None:
+                # if None args, we are trying to load the default (homebrew) libraries
+                import oscrypto  # type: ignore
+
+                oscrypto.use_openssl(
+                    libcrypto_path=l_crypto,
+                    libssl_path=l_ssl,
+                )
+
+            from libadobe import createDeviceKeyFile
+
+            # print(
+            #    "{0} v{1}: successful load for {2} {3}".format(
+            #        PLUGIN_NAME, PLUGIN_VERSION, l_crypto, l_ssl
+            #    )
+            # )
+            return True
+        except Exception as e:
+            print(
+                "{0} v{1}: failed to load {2} {3} error: {4}".format(
+                    PLUGIN_NAME, PLUGIN_VERSION, l_crypto, l_ssl, str(e)
+                )
+            )
+            self.wipe_crypto()  # because bad load
+            return False
+
+
+    def wipe_crypto(self):
+        # Aggressively clear all oscrypto and libadobe modules
+        for name in list(sys.modules.keys()):
+            if (
+                name == "oscrypto"
+                or name.startswith("oscrypto.")
+                or name == "asn1crypto"
+                or name.startswith("asn1crypto.")
+                or name == "libadobe"
+                or name.startswith("libadobe.")
+                or name == "libadobeAccount"
+                or name.startswith("libadobeAccount.")
+                or name == "libadobeFulfill"
+                or name.startswith("libadobeFulfill.")
+            ):
+                try:
+                    del sys.modules[name]
+                    # debug_log(f"Deleted module: {name}")
+                except:
+                    pass
+
+        # Explicitly delete all functions imported from libadobe modules
+        try:
+            del createDeviceKeyFile
+            del update_account_path
+            del sendHTTPRequest
+            del createDeviceFile
+            del createUser
+            del signIn
+            del activateDevice
+            del buildRights
+            del fulfill
+            del getDecryptedCert
+            del are_ade_version_lists_valid
+            del get_activation_xml_path
+            del sendHTTPRequest_DL2FILE
+        except:
+            pass
+
+
+    def get_mac_crypto_libs(self):
+        # if on MacOS and homebrew is installed, its openssl library will
+        # not work because it is not signed, but that is what libadobe
+        # will load by default.
+        #
+        # MacOS finds specific signed libraries in its 'dyld shared cache', but
+        # attempting to load a generic lib like "/usr/lib/libssl.dylib" will HARD
+        # crash calibre with error "Invalid dylib load. Clients should not load
+        # the unversioned libcrypto dylib as it does not have a stable ABI."
+        #
+        # N.B. the files in the dyld shared cache do not exist in the file system
+        # so do not test path.exists().
+
+        libs_loaded = False
+
+        # this is tried for every acsm file load, so skip the test failing
+        # as the homebrew libraries are unlikely to be signed for some time
+        # if not libs_loaded:
+        #    # try the default (homebrew) libraries, maybe they are signed in the future
+        #    libcrypto_path = None
+        #    libssl_path = None
+        #    libs_loaded = test_libs(libcrypto_path, libssl_path)
+        if not libs_loaded:
+            # this version has been present since ca. 2020
+            libcrypto_path = "/usr/lib/libcrypto.46.dylib"
+            libssl_path = "/usr/lib/libssl.46.dylib"
+            libs_loaded = self.test_libs(libcrypto_path, libssl_path)
+        if not libs_loaded:
+            # this version has been present since ca. 2015
+            libcrypto_path = "/usr/lib/libcrypto.35.dylib"
+            libssl_path = "/usr/lib/libssl.35.dylib"
+            libs_loaded = self.test_libs(libcrypto_path, libssl_path)
+
+        if not libs_loaded:
+            print(
+                "{0} v{1}: Unable to find Mac crypto/ssl libraries that work".format(
+                    PLUGIN_NAME, PLUGIN_VERSION
+                )
+            )
+            print("{0} v{1}: Try 'brew unlink openssl'".format(PLUGIN_NAME, PLUGIN_VERSION))
+
+        return libcrypto_path, libssl_path
+
+
+    def get_launchctl_env(self, var_name):
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                ["launchctl", "getenv", var_name], capture_output=True, text=True
+            )
+            value = result.stdout.strip()
+            return value if value else None
+        except Exception:
+            return None
 
