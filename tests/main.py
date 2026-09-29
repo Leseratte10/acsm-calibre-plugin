@@ -528,8 +528,371 @@ class TestPluginInterface(unittest.TestCase):
         self.assertEqual(extracted_token, expected_token, "Loan record generator broken")
 
 
+    def test_loanTokenStorageIsPerOperator(self):
+        '''Check if loan tokens are stored one per operator'''
 
-class TestOther(unittest.TestCase): 
+        # Each operator signs its own loanToken, covering only the loans that operator issued.
+        # Storing just the most recent one would silently break the loans of every other operator
+        # the user has borrowed from, which is exactly what happens once a single library platform
+        # routes different books through different operators.
+
+        import tempfile, shutil
+
+        def make_token(operator, loans):
+            return etree.fromstring("""
+            <loanToken xmlns="http://ns.adobe.com/adept">
+                <time>2022-07-03T01:14:42Z</time>
+                <user>urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa</user>
+                <operatorURL>%s</operatorURL>
+                <licenseURL>https://acs.example.com/licensesign</licenseURL>
+                %s
+                <signature>c2lnbmF0dXJl</signature>
+            </loanToken>
+            """ % (operator, "".join(["<loan>%s</loan>" % (l) for l in loans])))
+
+        def stored():
+            return [(t.find("{http://ns.adobe.com/adept}operatorURL").text,
+                     [l.text for l in t.iter("{http://ns.adobe.com/adept}loan")])
+                    for t in libadobe.get_loan_tokens()]
+
+        old_account_path = os.path.dirname(libadobe.get_activation_xml_path())
+        tmpdir = tempfile.mkdtemp()
+
+        try:
+            libadobe.update_account_path(tmpdir)
+
+            f = open(libadobe.get_activation_xml_path(), "w")
+            f.write('<?xml version="1.0"?>\n')
+            f.write('<activationInfo xmlns="http://ns.adobe.com/adept"></activationInfo>\n')
+            f.close()
+
+            libadobe.store_loan_token(make_token("https://acs-a.example.com/fulfillment", ["a-1"]))
+            self.assertEqual(stored(),
+                [("https://acs-a.example.com/fulfillment", ["a-1"])],
+                "First loan token wasn't stored")
+
+            # A second operator must not evict the first one.
+            libadobe.store_loan_token(make_token("https://acs-b.example.com/fulfillment", ["b-1"]))
+            self.assertEqual(sorted(stored()),
+                [("https://acs-a.example.com/fulfillment", ["a-1"]),
+                 ("https://acs-b.example.com/fulfillment", ["b-1"])],
+                "Second operator's loan token evicted the first operator's")
+
+            # A newer token from an operator we already know replaces only that operator's entry.
+            libadobe.store_loan_token(make_token("https://acs-a.example.com/fulfillment", ["a-1", "a-2"]))
+            self.assertEqual(sorted(stored()),
+                [("https://acs-a.example.com/fulfillment", ["a-1", "a-2"]),
+                 ("https://acs-b.example.com/fulfillment", ["b-1"])],
+                "Updating one operator's loan token didn't leave the other operator alone")
+
+        finally:
+            libadobe.update_account_path(old_account_path)
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+    def test_tetheredDeviceAuthorizationIncludesLoanData(self):
+        '''Check if authorizing a tethered eReader includes the loan data'''
+
+        # An activationToken on its own is enough for a purchased book, but a loaned book also
+        # needs the operator's signed loanToken and its licenseServices entry on the device -
+        # without them the reader refuses loaned content even though it is properly authorized.
+
+        import tempfile, shutil
+
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+        account_xml = """<?xml version="1.0"?>
+        <activationInfo xmlns="http://ns.adobe.com/adept">
+            <activationServiceInfo>
+                <authURL>https://adeactivate.example.com/adept</authURL>
+                <userInfoURL>https://adeactivate.example.com/adept</userInfoURL>
+                <activationURL>https://adeactivate.example.com/adept</activationURL>
+                <certificate>Y2VydGlmaWNhdGU=</certificate>
+            </activationServiceInfo>
+            <credentials>
+                <user>urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa</user>
+                <username method="AdobeID">test@example.com</username>
+                <licenseCertificate>bGljZW5zZUNlcnQ=</licenseCertificate>
+                <privateLicenseKey>cHJpdmF0ZUtleQ==</privateLicenseKey>
+                <authenticationCertificate>YXV0aENlcnQ=</authenticationCertificate>
+            </credentials>
+            <licenseServices>
+                <licenseServiceInfo>
+                    <licenseURL>https://acs.example.com/licensesign</licenseURL>
+                    <certificate>bGljZW5zZVNlcnZpY2VDZXJ0</certificate>
+                </licenseServiceInfo>
+            </licenseServices>
+            <loanToken>
+                <time>2022-07-03T01:14:42Z</time>
+                <user>urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa</user>
+                <operatorURL>https://acs-a.example.com/fulfillment</operatorURL>
+                <licenseURL>https://acs.example.com/licensesign</licenseURL>
+                <loan>a-1</loan>
+                <signature>c2lnbmF0dXJlQQ==</signature>
+            </loanToken>
+            <loanToken>
+                <time>2022-07-03T01:14:42Z</time>
+                <user>urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa</user>
+                <operatorURL>https://acs-b.example.com/fulfillment</operatorURL>
+                <licenseURL>https://acs.example.com/licensesign</licenseURL>
+                <loan>b-1</loan>
+                <signature>c2lnbmF0dXJlQg==</signature>
+            </loanToken>
+        </activationInfo>
+        """
+
+        activation_token = b"""<activationToken xmlns="http://ns.adobe.com/adept">
+            <device>urn:uuid:83681cbb-b6df-44a3-a423-c2b37ba66e84</device>
+            <fingerprint>ZmluZ2VycHJpbnQ=</fingerprint>
+            <deviceType>mobile</deviceType>
+            <activationURL>https://adeactivate.example.com/adept</activationURL>
+            <user>urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa</user>
+            <signature>c2lnbmF0dXJl</signature>
+        </activationToken>"""
+
+        old_account_path = os.path.dirname(libadobe.get_activation_xml_path())
+        tmpdir = tempfile.mkdtemp()
+
+        try:
+            libadobe.update_account_path(tmpdir)
+
+            f = open(libadobe.get_activation_xml_path(), "w")
+            f.write(account_xml)
+            f.close()
+
+            device_xml_path = os.path.join(tmpdir, "device_activation.xml")
+            ret, msg = libadobeAccount.exportProxyAuth(device_xml_path, activation_token)
+            self.assertTrue(ret, "Writing the device authorization failed: %s" % (msg))
+
+            written = etree.parse(device_xml_path)
+
+            # The device authorization itself - this already worked before.
+            self.assertIsNotNone(written.find("./%s" % (adNS("activationToken"))),
+                "No activationToken written to the device")
+            self.assertIsNotNone(written.find("./%s" % (adNS("credentials"))),
+                "No credentials written to the device")
+
+            # The loan data - this is what loaned books need.
+            written_loans = dict([
+                (t.find("./%s" % (adNS("operatorURL"))).text,
+                 [l.text for l in t.iter(adNS("loan"))])
+                for t in written.findall("./%s" % (adNS("loanToken")))])
+
+            self.assertEqual(written_loans, {
+                "https://acs-a.example.com/fulfillment": ["a-1"],
+                "https://acs-b.example.com/fulfillment": ["b-1"],
+            }, "Loan tokens missing from the device authorization")
+
+            written_license_services = written.findall("./%s/%s/%s" % (
+                adNS("licenseServices"), adNS("licenseServiceInfo"), adNS("licenseURL")))
+
+            self.assertEqual([e.text for e in written_license_services],
+                ["https://acs.example.com/licensesign"],
+                "licenseServices missing from the device authorization")
+
+            # The loan data inherits the device file's default namespace, like ADE writes it,
+            # instead of carrying its own declarations or generated prefixes along.
+            f = open(device_xml_path, "r")
+            raw = f.read()
+            f.close()
+            self.assertEqual(raw.count('xmlns="http://ns.adobe.com/adept"'), 1,
+                "Redundant namespace declarations in the device authorization")
+            self.assertNotIn("ns0:", raw, "Generated namespace prefix in the device authorization")
+            for token in written.findall("./%s" % (adNS("loanToken"))):
+                self.assertIsNone(token.prefix, "loanToken written with a namespace prefix")
+
+            # An account that has never borrowed anything (only purchased books) has no loan
+            # tokens at all - that has to keep producing a valid device authorization.
+            no_loans = etree.parse(libadobe.get_activation_xml_path())
+            for token in no_loans.findall("./%s" % (adNS("loanToken"))):
+                no_loans.getroot().remove(token)
+            f = open(libadobe.get_activation_xml_path(), "wb")
+            f.write(etree.tostring(no_loans, encoding="utf-8", xml_declaration=True))
+            f.close()
+
+            ret, msg = libadobeAccount.exportProxyAuth(device_xml_path, activation_token)
+            self.assertTrue(ret, "Writing the device authorization without loans failed: %s" % (msg))
+
+            written = etree.parse(device_xml_path)
+            self.assertIsNotNone(written.find("./%s" % (adNS("activationToken"))),
+                "Device authorization broken for an account with no loans")
+            self.assertEqual(written.findall("./%s" % (adNS("loanToken"))), [],
+                "Loan tokens written for an account that has none")
+
+        finally:
+            libadobe.update_account_path(old_account_path)
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+    def test_refreshLoanTokensOnDevice(self):
+        '''Check if the loan data on an authorized eReader can be refreshed'''
+
+        # The loanToken on the eReader is a snapshot of the loans at the time it was written, so
+        # a book borrowed later doesn't open until the loan data on the device is refreshed.
+
+        import tempfile, shutil
+
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+        user = "urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa"
+
+        def make_token(operator, time, loans):
+            return etree.fromstring("""<loanToken xmlns="http://ns.adobe.com/adept">
+                <time>%s</time>
+                <user>%s</user>
+                <operatorURL>%s</operatorURL>
+                <licenseURL>https://acs.example.com/licensesign</licenseURL>
+                %s
+                <signature>c2lnbmF0dXJl</signature>
+            </loanToken>""" % (time, user, operator, "".join(["<loan>%s</loan>" % (l) for l in loans])))
+
+        account_xml = """<?xml version="1.0"?>
+        <activationInfo xmlns="http://ns.adobe.com/adept">
+            <activationServiceInfo>
+                <authURL>https://adeactivate.example.com/adept</authURL>
+                <userInfoURL>https://adeactivate.example.com/adept</userInfoURL>
+                <activationURL>https://adeactivate.example.com/adept</activationURL>
+                <certificate>Y2VydGlmaWNhdGU=</certificate>
+            </activationServiceInfo>
+            <credentials>
+                <user>%s</user>
+                <username method="AdobeID">test@example.com</username>
+                <licenseCertificate>bGljZW5zZUNlcnQ=</licenseCertificate>
+                <privateLicenseKey>cHJpdmF0ZUtleQ==</privateLicenseKey>
+                <authenticationCertificate>YXV0aENlcnQ=</authenticationCertificate>
+            </credentials>
+            <licenseServices>
+                <licenseServiceInfo>
+                    <licenseURL>https://acs.example.com/licensesign</licenseURL>
+                    <certificate>bGljZW5zZVNlcnZpY2VDZXJ0</certificate>
+                </licenseServiceInfo>
+            </licenseServices>
+        </activationInfo>
+        """ % (user)
+
+        activation_token = b"""<activationToken xmlns="http://ns.adobe.com/adept">
+            <device>urn:uuid:83681cbb-b6df-44a3-a423-c2b37ba66e84</device>
+            <fingerprint>ZmluZ2VycHJpbnQ=</fingerprint>
+            <deviceType>mobile</deviceType>
+            <activationURL>https://adeactivate.example.com/adept</activationURL>
+            <user>%s</user>
+            <signature>c2lnbmF0dXJl</signature>
+        </activationToken>""" % (user.encode("ascii"))
+
+        def read(path):
+            f = open(path, "rb")
+            data = f.read()
+            f.close()
+            return data
+
+        def device_loans(path):
+            return dict([
+                (t.find("./%s" % (adNS("operatorURL"))).text,
+                 [l.text for l in t.iter(adNS("loan"))])
+                for t in etree.parse(path).findall("./%s" % (adNS("loanToken")))])
+
+        op_a = "https://acs-a.example.com/fulfillment"
+        op_b = "https://acs-b.example.com/fulfillment"
+        op_c = "https://acs-c.example.com/fulfillment"
+
+        old_account_path = os.path.dirname(libadobe.get_activation_xml_path())
+        tmpdir = tempfile.mkdtemp()
+
+        try:
+            libadobe.update_account_path(tmpdir)
+
+            f = open(libadobe.get_activation_xml_path(), "w")
+            f.write(account_xml)
+            f.close()
+
+            device_xml_path = os.path.join(tmpdir, "device_activation.xml")
+            fresh_xml_path = os.path.join(tmpdir, "fresh_activation.xml")
+
+            # A device that was never authorized must not get a half-made activation.
+            ret, msg = libadobeAccount.refreshLoanTokensOnDevice(device_xml_path)
+            self.assertFalse(ret, "Refreshed an eReader that isn't authorized")
+            self.assertFalse(os.path.exists(device_xml_path), "Wrote to an eReader that isn't authorized")
+
+            libadobe.store_loan_token(make_token(op_a, "2022-07-03T01:14:42Z", ["a-1"]))
+            libadobe.store_loan_token(make_token(op_b, "2022-07-03T01:14:42Z", ["b-1"]))
+            libadobeAccount.exportProxyAuth(device_xml_path, activation_token)
+
+            # Nothing changed since the authorization: the file is left alone.
+            before = read(device_xml_path)
+            ret, msg = libadobeAccount.refreshLoanTokensOnDevice(device_xml_path)
+            self.assertTrue(ret, "Refresh failed: %s" % (msg))
+            self.assertEqual(read(device_xml_path), before, "Rewrote an eReader that was up to date")
+
+            # A new loan from operator A: the device gets the new token, B stays.
+            libadobe.store_loan_token(make_token(op_a, "2022-07-04T01:14:42Z", ["a-1", "a-2"]))
+            ret, msg = libadobeAccount.refreshLoanTokensOnDevice(device_xml_path)
+            self.assertTrue(ret, "Refresh failed: %s" % (msg))
+            self.assertEqual(device_loans(device_xml_path), {op_a: ["a-1", "a-2"], op_b: ["b-1"]},
+                "New loan missing from the eReader after a refresh")
+
+            # Refreshing has to produce exactly what a new authorization would write.
+            libadobeAccount.exportProxyAuth(fresh_xml_path, activation_token)
+            self.assertEqual(read(device_xml_path), read(fresh_xml_path),
+                "Refreshed eReader differs from a newly authorized one")
+            self.assertFalse(os.path.exists(device_xml_path + ".tmp"), "Temporary file left behind")
+
+            # Tokens the account doesn't have (e.g. loans fulfilled in ADE) and tokens newer than
+            # the account's must survive a refresh.
+            device = etree.parse(device_xml_path)
+            for token in device.findall("./%s" % (adNS("loanToken"))):
+                if token.find("./%s" % (adNS("operatorURL"))).text == op_b:
+                    device.getroot().remove(token)
+            device.getroot().append(make_token(op_b, "2022-07-09T01:14:42Z", ["b-1", "b-2"]))
+            device.getroot().append(make_token(op_c, "2022-07-09T01:14:42Z", ["c-1"]))
+            f = open(device_xml_path, "wb")
+            f.write(etree.tostring(device, encoding="utf-8", xml_declaration=True))
+            f.close()
+
+            ret, msg = libadobeAccount.refreshLoanTokensOnDevice(device_xml_path)
+            self.assertTrue(ret, "Refresh failed: %s" % (msg))
+            self.assertEqual(device_loans(device_xml_path),
+                {op_a: ["a-1", "a-2"], op_b: ["b-1", "b-2"], op_c: ["c-1"]},
+                "Refresh dropped loan data that only the eReader had")
+
+            written = etree.parse(device_xml_path)
+            self.assertEqual(len(written.findall("./%s" % (adNS("licenseServices")))), 1,
+                "licenseServices duplicated by the refresh")
+            self.assertIsNotNone(written.find("./%s" % (adNS("activationToken"))),
+                "Refresh removed the device authorization")
+
+            # Times are compared as instants: this device token reads as older than the account's
+            # one, but it was issued later, on the other side of a daylight saving time change.
+            libadobe.store_loan_token(make_token(op_c, "2022-11-06T01:30:00-04:00", ["c-1"]))
+            device = etree.parse(device_xml_path)
+            for token in device.findall("./%s" % (adNS("loanToken"))):
+                if token.find("./%s" % (adNS("operatorURL"))).text == op_c:
+                    device.getroot().remove(token)
+            device.getroot().append(make_token(op_c, "2022-11-06T01:10:00-05:00", ["c-1", "c-2"]))
+            f = open(device_xml_path, "wb")
+            f.write(etree.tostring(device, encoding="utf-8", xml_declaration=True))
+            f.close()
+
+            ret, msg = libadobeAccount.refreshLoanTokensOnDevice(device_xml_path)
+            self.assertTrue(ret, "Refresh failed: %s" % (msg))
+            self.assertEqual(device_loans(device_xml_path)[op_c], ["c-1", "c-2"],
+                "Refresh replaced a newer token because of its time zone")
+
+            # An eReader authorized with a different AdobeID is none of our business.
+            other = read(device_xml_path).replace(user.encode("ascii"), b"urn:uuid:00000000-0000-0000-0000-000000000000")
+            f = open(device_xml_path, "wb")
+            f.write(other)
+            f.close()
+            libadobe.store_loan_token(make_token(op_a, "2022-07-10T01:14:42Z", ["a-1", "a-2", "a-3"]))
+            ret, msg = libadobeAccount.refreshLoanTokensOnDevice(device_xml_path)
+            self.assertFalse(ret, "Refreshed an eReader authorized with another account")
+            self.assertEqual(read(device_xml_path), other, "Wrote to an eReader authorized with another account")
+
+        finally:
+            libadobe.update_account_path(old_account_path)
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+
+class TestOther(unittest.TestCase):
 
     def setUp(self):
         pass

@@ -11,6 +11,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 from lxml import etree
 import base64
 import locale, platform
+import os, re, calendar
 
 try:
     from Cryptodome.PublicKey import RSA
@@ -27,7 +28,7 @@ except ImportError:
 
 from libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
 from libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key
-from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+from libadobe import get_devkey_path, get_device_path, get_activation_xml_path, get_loan_tokens
 from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
 from libadobe import VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO, VAR_VER_SUPP_VERSIONS, VAR_ACS_SERVER_HTTP
 from libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
@@ -495,6 +496,47 @@ def signIn(account_type, username, passwd):
 
     return True, "Done"
 
+def _copy_adept_node(parent, node):
+    # Rebuilds the node under parent instead of moving it over. Moving it would drag along the
+    # namespace declarations of the account file; rebuilding lets lxml reuse the ones already
+    # in scope on the device's <activationInfo>, keeping only the prefix the node was stored with.
+    nsmap = None
+    if node.prefix is not None and parent.nsmap.get(node.prefix) != etree.QName(node).namespace:
+        nsmap = { node.prefix : etree.QName(node).namespace }
+    el = etree.SubElement(parent, node.tag, attrib=dict(node.attrib), nsmap=nsmap)
+    el.text = node.text
+    el.tail = node.tail
+    for child in node:
+        # Skip comments and processing instructions, their tag is a function.
+        if not callable(child.tag):
+            _copy_adept_node(el, child)
+    return el
+
+
+def _append_loan_data(root, loanTokens = None):
+    # A device authorization (activationToken) on its own is enough to open *purchased* ADEPT
+    # books, but a library LOAN additionally requires a signed loanToken (bound to user+loan,
+    # NOT to a device) plus the operator's licenseServices to be present in the target device's
+    # activation.xml. Without them the reader refuses loaned content (e.g. a Kobo shows
+    # "Your eReader is not authorized to open this book") even though the device is authorized.
+    # Every operator the user has borrowed from has its own loanToken, so they all get written.
+
+    try:
+        if loanTokens is None:
+            loanTokens = get_loan_tokens()
+        for loanToken in loanTokens:
+            _copy_adept_node(root, loanToken)
+    except Exception:
+        pass
+
+    try:
+        account_ls = etree.parse(get_activation_xml_path()).find("./{http://ns.adobe.com/adept}licenseServices")
+        if account_ls is not None:
+            _copy_adept_node(root, account_ls)
+    except Exception:
+        pass
+
+
 def exportProxyAuth(act_xml_path, activationToken):
     # This authorizes a tethered device. 
     # ret, data = exportProxyAuth(act_xml_path, data)
@@ -550,8 +592,15 @@ def exportProxyAuth(act_xml_path, activationToken):
     activationToken = activationToken.replace(' xmlns="http://ns.adobe.com/adept"', '')
 
     ret += activationToken
-
     ret += "</activationInfo>"
+
+    try:
+        root = etree.fromstring(ret)
+        _append_loan_data(root)
+        ret = "<?xml version=\"1.0\"?>" + etree.tostring(root, encoding="unicode")
+    except Exception:
+        # Without the loan data the device can still open purchased books.
+        pass
 
     # Okay, now we can finally write this to the device. 
 
@@ -568,6 +617,101 @@ def exportProxyAuth(act_xml_path, activationToken):
 
 
 
+
+
+def refreshLoanTokensOnDevice(act_xml_path):
+    # Brings the loan data of an eReader that is already authorized with this account up to
+    # date, so a book borrowed after the authorization opens without authorizing it again.
+    # ret, msg = refreshLoanTokensOnDevice(act_xml_path)
+    # Only the loanTokens and licenseServices are replaced; the device authorization itself
+    # (activationServiceInfo, credentials, activationToken) is left exactly as it is.
+
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    try:
+        f = open(act_xml_path, "rb")
+        old_content = f.read()
+        f.close()
+        device = etree.fromstring(old_content)
+    except:
+        return False, "The eReader is not authorized"
+
+    try:
+        account_user = etree.parse(get_activation_xml_path()).find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
+        device_user = device.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
+    except:
+        return False, "Can't read the authorizations"
+
+    if account_user != device_user:
+        return False, "The eReader is authorized with a different account"
+
+    def operator(token):
+        try:
+            return token.find("./%s" % (adNS("operatorURL"))).text.strip()
+        except:
+            return None
+
+    def issued(token):
+        # Operators don't agree on a time zone ("...Z", "...+00:00", "...-04:00"), so the times
+        # have to be compared as instants, not as strings.
+        try:
+            m = re.match(r"(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.\d+)?(Z|([+-])(\d\d):?(\d\d))?$",
+                token.find("./%s" % (adNS("time"))).text.strip())
+            seconds = calendar.timegm(tuple(int(x) for x in m.groups()[0:6]))
+            if m.group(8) is not None:
+                offset = int(m.group(9)) * 3600 + int(m.group(10)) * 60
+                seconds -= offset if m.group(8) == "+" else -offset
+            return seconds
+        except:
+            return -1
+
+    # A loanToken covers all of its operator's active loans, so the newest one per operator is
+    # all the device needs. The device may hold tokens this account never saw (a loan fulfilled
+    # in ADE, for example), and those have to survive the refresh.
+    loanTokens = get_loan_tokens()
+    for deviceToken in device.findall("./%s" % (adNS("loanToken"))):
+        device.remove(deviceToken)
+        known = [t for t in loanTokens if operator(t) == operator(deviceToken)]
+        if len(known) == 0:
+            loanTokens.append(deviceToken)
+        elif issued(deviceToken) > issued(known[0]):
+            loanTokens[loanTokens.index(known[0])] = deviceToken
+
+    for licenseServices in device.findall("./%s" % (adNS("licenseServices"))):
+        device.remove(licenseServices)
+
+    _append_loan_data(device, loanTokens)
+    new_content = ("<?xml version=\"1.0\"?>" + etree.tostring(device, encoding="unicode")).encode("utf-8")
+
+    if new_content == old_content:
+        return True, "Already up to date"
+
+    # Write next to the file and swap it in, so an eReader that gets unplugged halfway through
+    # keeps its previous authorization instead of ending up with a truncated one.
+    tmp_path = act_xml_path + ".tmp"
+    try:
+        f = open(tmp_path, "wb")
+        f.write(new_content)
+        f.flush()
+        os.fsync(f.fileno())
+        f.close()
+        try:
+            os.replace(tmp_path, act_xml_path)
+        except AttributeError:
+            # Python 2 has no os.replace, and on Windows os.rename can't overwrite.
+            try:
+                os.rename(tmp_path, act_xml_path)
+            except OSError:
+                os.remove(act_xml_path)
+                os.rename(tmp_path, act_xml_path)
+    except:
+        try:
+            os.remove(tmp_path)
+        except:
+            pass
+        return False, "Can't write file"
+
+    return True, "Done"
 
 
 def buildActivateReqProxy(useVersionIndex = 0, proxyData = None):
