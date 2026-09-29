@@ -11,7 +11,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 from lxml import etree
 import base64
 import locale, platform
-import os
+import os, re, calendar
 
 try:
     from Cryptodome.PublicKey import RSA
@@ -652,10 +652,18 @@ def refreshLoanTokensOnDevice(act_xml_path):
             return None
 
     def issued(token):
+        # Operators don't agree on a time zone ("...Z", "...+00:00", "...-04:00"), so the times
+        # have to be compared as instants, not as strings.
         try:
-            return token.find("./%s" % (adNS("time"))).text.strip()
+            m = re.match(r"(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.\d+)?(Z|([+-])(\d\d):?(\d\d))?$",
+                token.find("./%s" % (adNS("time"))).text.strip())
+            seconds = calendar.timegm(tuple(int(x) for x in m.groups()[0:6]))
+            if m.group(8) is not None:
+                offset = int(m.group(9)) * 3600 + int(m.group(10)) * 60
+                seconds -= offset if m.group(8) == "+" else -offset
+            return seconds
         except:
-            return ""
+            return -1
 
     # A loanToken covers all of its operator's active loans, so the newest one per operator is
     # all the device needs. The device may hold tokens this account never saw (a loan fulfilled

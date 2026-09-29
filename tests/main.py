@@ -859,6 +859,23 @@ class TestPluginInterface(unittest.TestCase):
             self.assertIsNotNone(written.find("./%s" % (adNS("activationToken"))),
                 "Refresh removed the device authorization")
 
+            # Times are compared as instants: this device token reads as older than the account's
+            # one, but it was issued later, on the other side of a daylight saving time change.
+            libadobe.store_loan_token(make_token(op_c, "2022-11-06T01:30:00-04:00", ["c-1"]))
+            device = etree.parse(device_xml_path)
+            for token in device.findall("./%s" % (adNS("loanToken"))):
+                if token.find("./%s" % (adNS("operatorURL"))).text == op_c:
+                    device.getroot().remove(token)
+            device.getroot().append(make_token(op_c, "2022-11-06T01:10:00-05:00", ["c-1", "c-2"]))
+            f = open(device_xml_path, "wb")
+            f.write(etree.tostring(device, encoding="utf-8", xml_declaration=True))
+            f.close()
+
+            ret, msg = libadobeAccount.refreshLoanTokensOnDevice(device_xml_path)
+            self.assertTrue(ret, "Refresh failed: %s" % (msg))
+            self.assertEqual(device_loans(device_xml_path)[op_c], ["c-1", "c-2"],
+                "Refresh replaced a newer token because of its time zone")
+
             # An eReader authorized with a different AdobeID is none of our business.
             other = read(device_xml_path).replace(user.encode("ascii"), b"urn:uuid:00000000-0000-0000-0000-000000000000")
             f = open(device_xml_path, "wb")
