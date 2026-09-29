@@ -27,7 +27,7 @@ except ImportError:
 
 from libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
 from libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key
-from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+from libadobe import get_devkey_path, get_device_path, get_activation_xml_path, get_loan_tokens
 from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
 from libadobe import VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO, VAR_VER_SUPP_VERSIONS, VAR_ACS_SERVER_HTTP
 from libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
@@ -495,6 +495,45 @@ def signIn(account_type, username, passwd):
 
     return True, "Done"
 
+def _copy_adept_node(parent, node):
+    # Rebuilds the node under parent instead of moving it over. Moving it would drag along the
+    # namespace declarations of the account file; rebuilding lets lxml reuse the ones already
+    # in scope on the device's <activationInfo>, keeping only the prefix the node was stored with.
+    nsmap = None
+    if node.prefix is not None and parent.nsmap.get(node.prefix) != etree.QName(node).namespace:
+        nsmap = { node.prefix : etree.QName(node).namespace }
+    el = etree.SubElement(parent, node.tag, attrib=dict(node.attrib), nsmap=nsmap)
+    el.text = node.text
+    el.tail = node.tail
+    for child in node:
+        # Skip comments and processing instructions, their tag is a function.
+        if not callable(child.tag):
+            _copy_adept_node(el, child)
+    return el
+
+
+def _append_loan_data(root):
+    # A device authorization (activationToken) on its own is enough to open *purchased* ADEPT
+    # books, but a library LOAN additionally requires a signed loanToken (bound to user+loan,
+    # NOT to a device) plus the operator's licenseServices to be present in the target device's
+    # activation.xml. Without them the reader refuses loaned content (e.g. a Kobo shows
+    # "Your eReader is not authorized to open this book") even though the device is authorized.
+    # Every operator the user has borrowed from has its own loanToken, so they all get written.
+
+    try:
+        for loanToken in get_loan_tokens():
+            _copy_adept_node(root, loanToken)
+    except Exception:
+        pass
+
+    try:
+        account_ls = etree.parse(get_activation_xml_path()).find("./{http://ns.adobe.com/adept}licenseServices")
+        if account_ls is not None:
+            _copy_adept_node(root, account_ls)
+    except Exception:
+        pass
+
+
 def exportProxyAuth(act_xml_path, activationToken):
     # This authorizes a tethered device. 
     # ret, data = exportProxyAuth(act_xml_path, data)
@@ -550,8 +589,15 @@ def exportProxyAuth(act_xml_path, activationToken):
     activationToken = activationToken.replace(' xmlns="http://ns.adobe.com/adept"', '')
 
     ret += activationToken
-
     ret += "</activationInfo>"
+
+    try:
+        root = etree.fromstring(ret)
+        _append_loan_data(root)
+        ret = "<?xml version=\"1.0\"?>" + etree.tostring(root, encoding="unicode")
+    except Exception:
+        # Without the loan data the device can still open purchased books.
+        pass
 
     # Okay, now we can finally write this to the device. 
 

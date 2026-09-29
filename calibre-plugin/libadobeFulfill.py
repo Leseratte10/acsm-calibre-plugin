@@ -15,7 +15,7 @@ import time
 #@@CALIBRE_COMPAT_CODE@@
 
 from libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
-from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+from libadobe import get_devkey_path, get_device_path, get_activation_xml_path, store_loan_token
 from libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
 from libadobe import VAR_VER_BUILD_IDS, VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER
 
@@ -457,6 +457,17 @@ def fulfill(acsm_file, do_notify = False):
     adobe_fulfill_response = etree.fromstring(replyData)
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    # Persist the signed loanToken returned by the operator so it can later be embedded into a
+    # tethered eReader's activation.xml (see exportProxyAuth). A device authorization alone is
+    # enough for purchased books, but library loans additionally require this token on the device
+    # or the reader shows "not authorized to open this book".
+    try:
+        loanTokenNode = adobe_fulfill_response.find("./%s" % (adNS("loanToken")))
+        if loanTokenNode is not None:
+            store_loan_token(loanTokenNode)
+    except Exception:
+        pass
 
     licenseURL = adobe_fulfill_response.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("licenseURL"))).text
 
