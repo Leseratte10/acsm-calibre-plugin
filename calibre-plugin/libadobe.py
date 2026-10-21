@@ -15,14 +15,18 @@ Helper library with code needed for Adobe stuff.
 '''
 
 from uuid import getnode
+import shutil
 import sys, os, hashlib, base64
 import ssl
+import webbrowser
 try: 
     import urllib.request as ulib
     import urllib.error as uliberror
+    import urllib.parse as ulibparse
 except: 
     import urllib2 as ulib
     import urllib2 as uliberror
+    import urlparse as ulibparse
 
 from datetime import datetime, timedelta
 
@@ -269,29 +273,64 @@ def sendHTTPRequest_DL2FILE(URL, outputfile):
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
 
+    ret_code = 0
+    loc = None
 
     req = ulib.Request(url=URL, headers=headers)
-    handler = ulib.urlopen(req, context=ctx)
-
-    chunksize = 16 * 1024
-
-    ret_code = handler.getcode()
-
-
-    loc = None
     try: 
+        handler = ulib.urlopen(req, context=ctx)
         loc = req.headers.get("Location")
-    except:
+        ret_code = handler.getcode()
+    except uliberror.HTTPError as exp:
+        ret_code = exp.code
         pass
 
     if loc is not None: 
         return sendHTTPRequest_DL2FILE(loc)
+
+    if ret_code == 429:
+        path = ulibparse.urlsplit(URL).path
+        filename = ulibparse.unquote(path.rsplit("/", 1)[-1])
+        # Fallback if the URL doesn't contain a filename
+        if not filename:
+            filename = "download"
+
+        downloaded_file_path = os.path.join(os.path.expanduser("~"), "Downloads", filename)
+        if os.path.isfile(downloaded_file_path):
+            destination_path = outputfile
+            try:
+                # Ensure the destination directory exists before copying
+                parent_dir = os.path.dirname(destination_path)
+                if not os.path.isdir(parent_dir):
+                    try:
+                        os.makedirs(parent_dir)
+                    except OSError:
+                        if not os.path.isdir(parent_dir):
+                            raise
+                
+                # Copy the file (shutil.copy2 preserves file metadata like timestamps)
+                copied_path = shutil.copy2(downloaded_file_path, destination_path)
+                print(f"User downloaded file found: {downloaded_file_path}")
+                return 200
+            except FileNotFoundError:
+                print("Error: File not found.")
+                return ret_code
+            except PermissionError:
+                print("Error: Permission denied. Check permissions for user downloaded file folder.")
+        else:
+            print(f"Error: File could not be downloaded.")
+            print("Try manually downloading it with the browser and then retry importing a fresh new ACSM file.")
+            print(f"Expecting the downloaded file at: {downloaded_file_path}")
+            webbrowser.open(URL, new=2)
+            return ret_code
+        return
 
     if ret_code != 200:
         return ret_code
 
     with open(outputfile, "wb") as f:
         while True: 
+            chunksize = 16 * 1024
             chunk = handler.read(chunksize)
             if not chunk: 
                 break
