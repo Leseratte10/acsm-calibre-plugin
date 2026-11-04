@@ -7,6 +7,8 @@
 # For more information, see: 
 # https://github.com/Leseratte10/acsm-calibre-plugin
 
+set -e
+
 sed_i() {
     # Added by @vasi in PR #88 because MacOS and FreeBSD don't support "sed -i".
 
@@ -31,8 +33,8 @@ pushd keyextract
 # Compile C programs: 
 make
 
-base64 decrypt_win32.exe > decrypt_win32_b64.txt
-base64 decrypt_win64.exe > decrypt_win64_b64.txt
+base64 < decrypt_win32.exe > decrypt_win32_b64.txt
+base64 < decrypt_win64.exe > decrypt_win64_b64.txt
 
 # Base64-encode binaries and place them inside decryptor.py: 
 sed_i "/@@@CALIBRE_DECRYPTOR_WIN32_B64@@@/ {
@@ -51,8 +53,8 @@ rm decrypt_win32.exe decrypt_win64.exe
 popd
 
 # Delete cache
-rm -r __pycache__
-rm *.pyc
+rm -rf __pycache__
+rm -f *.pyc
 
 # Set module ID. This needs to be changed if any of the module ZIPs change.
 echo -n "2023-12-19-01" > module_id.txt
@@ -61,22 +63,22 @@ echo -n "2023-12-19-01" > module_id.txt
 cp ../LICENSE LICENSE
 cp ../README.md README.md
 
-shopt -s globstar
 echo "Injecting Python2 compat code ..."
-for file in **/*.py;
+find . -name '*.py' | while read -r file;
 do
     #echo $file
     # Inject Python2 compat code:
     sed_i '/#@@CALIBRE_COMPAT_CODE@@/ {
         r __calibre_compat_code.py
         d
-    }' $file
+    }' "$file"
 
 done
 
 
 
 # Create ZIP file from calibre-plugin folder.
+rm -f ../calibre-plugin.zip
 zip -r ../calibre-plugin.zip *
 
 popd
