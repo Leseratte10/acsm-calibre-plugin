@@ -4,7 +4,7 @@
 # Calibre plugin for ACSM files.
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 https://github.com/Leseratte10/acsm-calibre-plugin
 
@@ -305,13 +305,15 @@ class ACSMInput(FileTypePlugin):
 
 
             from libadobe import createDeviceKeyFile, update_account_path, sendHTTPRequest
-            from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+            from libadobeAccount import changeDeviceVersion
             from libadobeFulfill import buildRights, fulfill
 
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
             deacsmprefs = prefs.ACSMInput_Prefs()
             update_account_path(deacsmprefs["path_to_account_data"])
+            # This is needed to correctly update to an emulated ByteBooks Digital Edition 5.0 for older activations.
+            changeDeviceVersion(0)
 
         except Exception as e:
             traceback.print_exc()

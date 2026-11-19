@@ -120,9 +120,17 @@ def getAuthMethodsAndCert():
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
     try: 
-        authCert = None
+        authCert_bb = None
         authCert_bb = adobe_response_xml2.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
-        authCert_adobe = adobe_response_xml2.find("./%s[not(@ofByteBooks)]" % (adNS("certificate"))).text
+    except:
+        pass
+
+    try: 
+        authCert_adobe = None
+        authCert_adobe = next(
+                c.text for c in adobe_response_xml2.findall(adNS("certificate"))
+                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+            )
     except:
         pass
 
@@ -140,7 +148,7 @@ def getAuthMethodsAndCert():
             aid_ids.append(mid)
             aid_names.append(txt)
 
-    return [aid_ids, aid_names], authCert_bb
+    return [aid_ids, aid_names], authCert_bb, authCert_adobe
 
 
 
@@ -176,7 +184,10 @@ def createUser(useVersionIndex = 0, authCert = None):
     authURL = adobe_response_xml.find("./%s" % (adNS("authURL"))).text
     userInfoURL = adobe_response_xml.find("./%s" % (adNS("userInfoURL"))).text
     certificate_bb = adobe_response_xml.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
-    certificate_adobe = adobe_response_xml.find("./%s[not(@ofByteBooks)]" % (adNS("certificate"))).text
+    certificate_adobe = next(
+                c.text for c in adobe_response_xml.findall(adNS("certificate"))
+                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+            )
 
     if (authURL is None or userInfoURL is None or certificate_bb is None):
         return False, "Error: Unexpected reply from Adobe.", [[], []]
@@ -184,8 +195,13 @@ def createUser(useVersionIndex = 0, authCert = None):
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authURL")).text = authURL
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "userInfoURL")).text = userInfoURL
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "activationURL")).text = VAR_ACS_SERVER_HTTPS
-    etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "certificate"), "ofByteBooks", "true").text = certificate_bb
-    etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "certificate")).text = certificate_adobe
+    certbb = etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "certificate"))
+    certbb.set("ofByteBooks", "true")
+    certbb.text = certificate_bb
+    
+    certadobe = etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "certificate"))
+    certadobe.set("ofByteBooks", "false")
+    certadobe.text = certificate_adobe
 
 
     if authCert is None: 
@@ -194,9 +210,21 @@ def createUser(useVersionIndex = 0, authCert = None):
         response2 = sendHTTPRequest(authenticationURL)
 
         adobe_response_xml2 = etree.fromstring(response2)
-        authCert = adobe_response_xml2.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
+        authcertificate_bb = adobe_response_xml2.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
+        authcertificate_adobe = next(
+                c.text for c in adobe_response_xml2.findall(adNS("certificate"))
+                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+            )
 
 
+    authcertbb = etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authenticationCertificate"))
+    authcertbb.set("ofByteBooks", "true")
+    authcertbb.text = authcertificate_bb
+    
+    authcertadobe = etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authenticationCertificate"))
+    authcertadobe.set("ofByteBooks", "false")
+    authcertadobe.text = authcertificate_adobe
+    
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authenticationCertificate")).text = authCert
 
 
@@ -274,7 +302,7 @@ def buildSignInRequestForAnonAuthConvert(username, password, authenticationCerti
     # that matches the UUID in the <adept:user> tag.
 
     etree.SubElement(root, etree.QName(NSMAP["adept"], "user")).text = user_uuid
-    signature = sign_node(root)
+    signature = sign_node(root, True)
     etree.SubElement(root, etree.QName(NSMAP["adept"], "signature")).text = signature
 
     return "<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
@@ -400,6 +428,20 @@ def convertAnonAuthToAccount(username, passwd):
     return True, "Account linking successful"
 
 
+def is_bytebooks_account():
+    activationxml = etree.parse(get_activation_xml_path())
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    try: 
+        authcertificate_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
+    except: 
+        return False
+
+    if authcertificate_bb is not None:
+        return True
+
+    return False
+
 
 
 def signIn(account_type, username, passwd):
@@ -408,11 +450,16 @@ def signIn(account_type, username, passwd):
     # Get authenticationCertificate
     activationxml = etree.parse(get_activation_xml_path())
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-    authenticationCertificate = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
+
+    authcertificate_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
+    authcertificate_adobe = next(
+                c.text for c in activationxml.findall("./%s/%s" % (adNS("activationServiceInfo"), adNS("authenticationCertificate")))
+                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+            )
 
     
     # Type = "AdobeID" or "anonymous". For "anonymous", username and passwd need to be the empty string.
-    signInRequest = buildSignInRequest(account_type, username, passwd, authenticationCertificate)
+    signInRequest = buildSignInRequest(account_type, username, passwd, authcertificate_bb)
 
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/SignInDirect?ofByteBooks=1"
 
@@ -469,12 +516,35 @@ def signIn(account_type, username, passwd):
 
     f.write("<adept:credentials xmlns:adept=\"http://ns.adobe.com/adept\">\n")
     f.write("<adept:user>%s</adept:user>\n" % (credentialsXML.find("./%s" % (adNS("user"))).text))
+
+    username = ""
     if account_type != "anonymous": 
-        f.write("<adept:username method=\"%s\">%s</adept:username>\n" % (credentialsXML.find("./%s" % (adNS("username"))).get("method", account_type), credentialsXML.find("./%s" % (adNS("username"))).text))
-    f.write("<adept:pkcs12>%s</adept:pkcs12>\n" % (credentialsXML.find("./%s" % (adNS("pkcs12"))).text))
-    f.write("<adept:licenseCertificate>%s</adept:licenseCertificate>\n" % (credentialsXML.find("./%s" % (adNS("licenseCertificate"))).text))
+        username = credentialsXML.find("./%s" % (adNS("username"))).text
+        # TODO: Should we always write this? Windows does, MacOS doesn't.
+        f.write("<adept:username method=\"%s\">%s</adept:username>\n" % (credentialsXML.find("./%s" % (adNS("username"))).get("method", account_type), username))
+
+    pkcs12_bb = credentialsXML.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12"))).text
+    pkcs12_adobe = next(
+                c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
+                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+            )
+
+    f.write("<adept:pkcs12 ofByteBooks=\"true\">%s</adept:pkcs12>\n" % (pkcs12_bb))
+    f.write("<adept:pkcs12 ofByteBooks=\"false\">%s</adept:pkcs12>\n" % (pkcs12_adobe))
+
+    license_cert_bb = credentialsXML.find("./%s[@ofByteBooks='true']" % (adNS("licenseCertificate"))).text
+    license_cert_adobe = next(
+                c.text for c in credentialsXML.findall(adNS("licenseCertificate"))
+                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+            )
+
+    
+    f.write("<adept:licenseCertificate ofByteBooks=\"true\">%s</adept:licenseCertificate>\n" % (license_cert_bb))
+    f.write("<adept:licenseCertificate ofByteBooks=\"false\">%s</adept:licenseCertificate>\n" % (license_cert_adobe))
+
     f.write("<adept:privateLicenseKey>%s</adept:privateLicenseKey>\n" % (base64.b64encode(private_key_data).decode("latin-1")))
-    f.write("<adept:authenticationCertificate>%s</adept:authenticationCertificate>\n" % (authenticationCertificate))
+    f.write("<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>\n" % (authcertificate_bb))
+    f.write("<adept:authenticationCertificate ofByteBooks=\"false\">%s</adept:authenticationCertificate>\n" % (authcertificate_adobe))
     f.write("</adept:credentials>\n")
     f.write("</activationInfo>\n")
 
@@ -484,6 +554,7 @@ def signIn(account_type, username, passwd):
 
 def exportProxyAuth(act_xml_path, activationToken):
     # This authorizes a tethered device. 
+    # TODO: This is not yet properly adapted and tested for ByteBooks
     # ret, data = exportProxyAuth(act_xml_path, data)
 
     activationxml = etree.parse(get_activation_xml_path())
@@ -496,7 +567,11 @@ def exportProxyAuth(act_xml_path, activationToken):
     rt_si_userInfoURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("userInfoURL"))).text
     rt_si_activationURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("activationURL"))).text
     rt_si_certificate_bb = activationxml.find("./%s/%s[@ofByteBooks='1']" % (adNS("activationServiceInfo"), adNS("certificate"))).text
-    rt_si_certificate_ad = activationxml.find("./%s/%s[not(@ofByteBooks)]" % (adNS("activationServiceInfo"), adNS("certificate"))).text
+    rt_si_certificate_ad = next(
+                c.text for c in activationxml.findall(adNS("certificate"))
+                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+            )
+
 
     rt_c_user = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
     rt_c_licenseCertificate = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("licenseCertificate"))).text
@@ -553,11 +628,6 @@ def exportProxyAuth(act_xml_path, activationToken):
 
     return True, "Done"
     
-
-
-
-
-
 
 def buildActivateReqProxy(useVersionIndex = 0, proxyData = None):
 
@@ -729,7 +799,6 @@ def buildActivateReq(useVersionIndex = 0):
     return True, ret
 
 
-# Call this function to change from ADE2 to ADE3 and vice versa.
 def changeDeviceVersion(useVersionIndex = 0):
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
         return False, "Invalid Version index"
@@ -805,7 +874,7 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
 
     req_xml = etree.fromstring(activate_req)
 
-    signature = sign_node(req_xml)
+    signature = sign_node(req_xml, False)   # TODO update this to true when we have tested this with bytebooks.
 
     etree.SubElement(req_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
 
@@ -835,7 +904,7 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
         return False, "Error parsing Adobe /Activate response"
    
     if verbose_logging:
-        print("Response from server: ")
+        print("Response from server (for Activate): ")
         print(ret)
 
     if proxyData is not None: 

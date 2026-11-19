@@ -4,7 +4,7 @@
 # pyright: reportUndefinedVariable=false
 
 '''
-Copyright (c) 2021-2024 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -93,21 +93,23 @@ class ConfigWidget(QWidget):
             self.button_anon_auth.clicked.connect(self.create_anon_auth)
             ua_group_box_layout.addWidget(self.button_anon_auth)
 
+            # TODO add support for importing from BDE 5.0
+
             if isosx:
                 self.button_import_MacADE = QtGui.QPushButton(self)
-                self.button_import_MacADE.setText(_("Import activation from Digital Editions (MacOS)"))
+                self.button_import_MacADE.setText(_("Import activation from Digital Editions < 5.0 (MacOS)"))
                 self.button_import_MacADE.clicked.connect(self.import_activation_from_MAC)
                 ua_group_box_layout.addWidget(self.button_import_MacADE)
 
             if iswindows:
                 self.button_import_WinADE = QtGui.QPushButton(self)
-                self.button_import_WinADE.setText(_("Import activation from Digital Editions (Windows)"))
+                self.button_import_WinADE.setText(_("Import activation from Digital Editions < 5.0 (Windows)"))
                 self.button_import_WinADE.clicked.connect(self.import_activation_from_Win)
                 ua_group_box_layout.addWidget(self.button_import_WinADE)
 
             if islinux:
                 self.button_import_LinuxWineADE = QtGui.QPushButton(self)
-                self.button_import_LinuxWineADE.setText(_("Import activation from Digital Editions (Wine)"))
+                self.button_import_LinuxWineADE.setText(_("Import activation from Digital Editions < 5.0 (Wine)"))
                 self.button_import_LinuxWineADE.clicked.connect(self.import_activation_from_LinuxWine)
                 ua_group_box_layout.addWidget(self.button_import_LinuxWineADE)
 
@@ -516,6 +518,7 @@ class ConfigWidget(QWidget):
        
         try: 
             from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
+            from libadobeAccount import is_bytebooks_account
             from libadobeFulfill import getDecryptedCert
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -556,12 +559,9 @@ class ConfigWidget(QWidget):
             if hobbes_version is not None:
                 try: 
                     v_idx = VAR_VER_HOBBES_VERSIONS.index(hobbes_version)
-                    ADE_version = VAR_VER_SUPP_CONFIG_NAMES[v_idx] + " (" + hobbes_version + ")"
-
+                    ADE_version = VAR_VER_SUPP_CONFIG_NAMES[v_idx]
                 except:
-                    # Version not present, probably the "old" 10.0.4 entry. 
-                    # As 10.X is in the 3.0 range, assume we're on ADE 3.0
-                    ADE_version = "ADE 3.0.1 (" + hobbes_version + ")"
+                    ADE_version = "(unknown)"
           
 
             if container.find(adeptNS("activationToken")) == None:
@@ -573,10 +573,18 @@ class ConfigWidget(QWidget):
             if getDecryptedCert() is None: 
                 return "ADE authorization seems to be corrupted (failed to decrypt pkcs12)", False, None            
 
-            if not anon: 
-                return "Authorized with ADE ID ("+ade_type+") " + ade_mail + "\non device " + ade_device_name + ", emulating " + ADE_version + ".", True, ade_mail
+            if is_bytebooks_account():
+                acc_type = "ByteBooks"
             else: 
-                return "Authorized with an anonymous ADE ID\non device " + ade_device_name + ", emulating " + ADE_version + ".", True, None
+                acc_type = "Adobe"
+
+            if not anon: 
+                ade_type_str = " (" + ade_type + ")"
+                if ade_type == "AdobeID":
+                    ade_type_str = ""
+                return "Authorized with "+ acc_type +" ID"+ade_type_str + " " + ade_mail + "\non device " + ade_device_name + ", emulating " + ADE_version + ".", True, ade_mail
+            else: 
+                return "Authorized with an anonymous "+acc_type+" ID\non device " + ade_device_name + ", emulating " + ADE_version + ".", True, None
         except: 
             traceback.print_exc()
             return "ADE authorization seems to be corrupted", False, None
@@ -586,7 +594,7 @@ class ConfigWidget(QWidget):
 
         try: 
             from libadobe import update_account_path
-            from libadobeAccount import getAccountUUID
+            from libadobeAccount import getAccountUUID, is_bytebooks_account
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -595,16 +603,30 @@ class ConfigWidget(QWidget):
 
         update_account_path(self.deacsmprefs["path_to_account_data"])
 
+        use_bytebooks = True
+        if (is_bytebooks_account()):
+            msg = "Which format do you want to export your account data in?\n\n"
+            msg += "Click 'Yes' to use the new ByteBooks format which will work with all ACS servers but won't work with older versions of this plugin (recommended).\n\n"
+            msg += "Click 'No' to use the old Adobe format which may not work with all ACS servers but will work with older versions of the plugin (not recommended). The backup may stop working after December 2026."
+
+            use_bytebooks = question_dialog(None, "Choose backup format", msg)
+
+        if not use_bytebooks:
+            # TODO: Implement removing all Bytebooks-specific add-ons from the activation.xml here.
+            error_dialog(None, "Export failed", "Not implemented yet.", show=True, show_copy_button=False)
+            return False
+
+
         account_uuid = None
-        export_filename = "adobe_account_backup.zip"
+        export_filename = "bytebooks_account_backup.zip"
         try: 
             account_uuid = getAccountUUID()
-            export_filename = "adobe_account_backup_uuid_" + account_uuid + ".zip"
+            export_filename = "bytebooks_account_backup_uuid_" + account_uuid + ".zip"
         except:
             pass
 
         filters = [("ZIP", ["zip"])]
-        filename = choose_save_file(self, "Export ADE activation files", _("Export ADE activation files"), 
+        filename = choose_save_file(self, "Export activation files", _("Export activation files"), 
                 filters, all_files=False, initial_filename=export_filename)
 
         if (filename is None):
@@ -866,6 +888,7 @@ class ConfigWidget(QWidget):
     def create_anon_auth(self): 
     
         try: 
+            from libadobe import createDeviceKeyFile, update_account_path
             from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -998,7 +1021,7 @@ class ConfigWidget(QWidget):
 
 
         # Get account types
-        types, authCert = getAuthMethodsAndCert()
+        types, authCert_bb, _ = getAuthMethodsAndCert()
         
         msg = "Please select your AdobeID provider. Usually, \"Adobe ID\" is the correct choice, even for ByteBooks accounts."
 
@@ -1027,7 +1050,7 @@ class ConfigWidget(QWidget):
                 
         createDeviceKeyFile()
         createDeviceFile(False, vers_idx)
-        success, resp = createUser(vers_idx, authCert)
+        success, resp = createUser(vers_idx, authCert_bb)
         if (success is False):
             return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 

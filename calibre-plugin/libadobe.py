@@ -57,7 +57,7 @@ FILE_ACTIVATIONXML = "activation.xml"
 
 
 # Lists of different ADE "versions" we know about
-VAR_VER_SUPP_CONFIG_NAMES = [ "BDE 5.0.0" ]
+VAR_VER_SUPP_CONFIG_NAMES = [ "BDE 5.0.76" ]
 VAR_VER_SUPP_VERSIONS = [ "com.dtsbytebooks.digitaleditions.exe v5.0.76" ]
 VAR_VER_HOBBES_VERSIONS = [ "12.5.4.HOBBES_VERSION_BUILD_NUMBER_X" ] 
 # Yes, that last version is correct, looks like ByteBooks messed up their placeholder.
@@ -510,7 +510,7 @@ def get_cert_from_pkcs12(_pkcs12, _key):
 
 
 
-def sign_node(node):
+def sign_node(node, use_bytebooks):
 
     sha_hash = hash_node(node)
     sha_hash = sha_hash.digest()
@@ -527,12 +527,21 @@ def sign_node(node):
 
     # Get private key
 
-    try: 
-        activationxml = etree.parse(FILE_ACTIVATIONXML)
-        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-        pkcs12 = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("pkcs12"))).text
-    except: 
-        return None
+
+    activationxml = etree.parse(FILE_ACTIVATIONXML)
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    pkcs12_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12"))).text
+    pkcs12_adobe = next(
+                c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
+                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+            )
+
+    if use_bytebooks:
+        pkcs12 = pkcs12_bb
+    else: 
+        pkcs12 = pkcs12_adobe
+
 
     my_pkcs12 = base64.b64decode(pkcs12)
     my_priv_key, _, _ = keys.parse_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))
