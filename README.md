@@ -84,6 +84,14 @@ Right now, this process is fairly experimental, and I've only tested this with a
 
 Note that this process will use up one of your six mobile/tethered eReader authorizations on your AdobeID. While it is possible to clone a computer activation by exporting it on one computer and importing it on another, this is not possible with eReader authorizations. 
 
+### Library loans on authorized eReaders
+
+A loaned book only opens on an eReader that holds the library's current loan data, which the plugin writes to the eReader along with the authorization. To avoid having to authorize the eReader again after each new loan, the plugin remembers the eReaders it authorized and keeps their loan data up to date: when the eReader is connected to calibre, and when you import a new loan while it is connected. Borrowing a book is then just importing the ACSM file and sending the book to the eReader, in either order. 
+
+An eReader that is already authorized with your AdobeID (by ADE, or by an older version of the plugin) is asked about once, the first time it's connected. The settings let you forget an eReader or turn this off entirely. 
+
+This only works while calibre is running and sees the eReader. If you copy books to the eReader some other way, use "Refresh loans on eReader" from the plugin's menu before unplugging it. 
+
 ## Standalone version
 
 In the folder "calibre-plugin" in this repo (or inside the Calibre plugin ZIP file) there's some scripts that can also be used standalone without Calibre. If you want to use these, you need to extract the whole ZIP file. 

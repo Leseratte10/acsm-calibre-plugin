@@ -142,6 +142,59 @@ def update_account_path(folder_path):
     FILE_ACTIVATIONXML = os.path.join(folder_path, "activation.xml")
 
 
+# Loan tokens are stored in the account's activation.xml, next to the operatorURLList and the
+# licenseServices, because they are per-operator data just like those two. Each operator signs
+# its own loanToken and that token only covers the loans that operator issued, so one token is
+# kept per operator - keeping just the most recent one would silently break the loans of every
+# other operator the user has borrowed from.
+
+def get_loan_tokens():
+    # type: () -> list
+
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    try:
+        activationxml = etree.parse(get_activation_xml_path())
+    except:
+        return []
+
+    return activationxml.findall("./%s" % (adNS("loanToken")))
+
+
+def store_loan_token(loanToken):
+    # type: (etree._Element) -> None
+
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
+    etree.register_namespace("adept", NSMAP["adept"])
+
+    try:
+        operatorURL = loanToken.find("./%s" % (adNS("operatorURL"))).text.strip()
+    except:
+        # Without an operator there's no way to tell which token this one replaces.
+        return
+
+    activationxml = etree.parse(get_activation_xml_path())
+
+    # A loanToken covers all of that operator's currently-active loans, so a new one from the
+    # same operator supersedes the old one. Tokens are signed blobs: they are stored verbatim
+    # and never edited.
+    for oldToken in activationxml.findall("./%s" % (adNS("loanToken"))):
+        try:
+            if oldToken.find("./%s" % (adNS("operatorURL"))).text.strip() == operatorURL:
+                activationxml.getroot().remove(oldToken)
+        except:
+            pass
+
+    # Detach the node from the response document before adding it to the activation.
+    activationxml.getroot().append(etree.fromstring(etree.tostring(loanToken)))
+
+    f = open(get_activation_xml_path(), "w")
+    f.write("<?xml version=\"1.0\"?>\n")
+    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8"))
+    f.close()
+
+
 def createDeviceKeyFile():
     # Original implementation: Device::createDeviceKeyFile()
 
