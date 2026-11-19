@@ -63,13 +63,13 @@ def main():
         print ("Preparing keys ...")
 
         createDeviceKeyFile()
-        success = createDeviceFile(True, VAR_VER)
+        success = createDeviceFile(True, 0)
         if (success is False):
             print("Error, couldn't create device file.")
             exit(1)
 
 
-        success, resp = createUser(VAR_VER, None)
+        success, resp = createUser(0, None)
         if (success is False):
             print("Error, couldn't create user: %s" % resp)
             exit(1)

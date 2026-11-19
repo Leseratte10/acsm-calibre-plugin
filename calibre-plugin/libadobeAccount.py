@@ -523,9 +523,12 @@ def signIn(account_type, username, passwd):
         # TODO: Should we always write this? Windows does, MacOS doesn't.
         f.write("<adept:username method=\"%s\">%s</adept:username>\n" % (credentialsXML.find("./%s" % (adNS("username"))).get("method", account_type), username))
 
-    pkcs12_bb = credentialsXML.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12"))).text
+    print(credentialsXML)
+    print("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12")))
+
+    pkcs12_bb = credentialsXML.find("./%s[@ofByteBooks='true']" % (adNS("pkcs12"))).text
     pkcs12_adobe = next(
-                c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
+                c.text for c in credentialsXML.findall("./%s" % (adNS("pkcs12")))
                 if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
             )
 
