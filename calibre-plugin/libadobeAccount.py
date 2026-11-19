@@ -121,7 +121,8 @@ def getAuthMethodsAndCert():
 
     try: 
         authCert = None
-        authCert = adobe_response_xml2.find("./%s" % (adNS("certificate"))).text
+        authCert_bb = adobe_response_xml2.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
+        authCert_adobe = adobe_response_xml2.find("./%s[not(@ofByteBooks)]" % (adNS("certificate"))).text
     except:
         pass
 
@@ -139,7 +140,7 @@ def getAuthMethodsAndCert():
             aid_ids.append(mid)
             aid_names.append(txt)
 
-    return [aid_ids, aid_names], authCert
+    return [aid_ids, aid_names], authCert_bb
 
 
 
@@ -174,15 +175,17 @@ def createUser(useVersionIndex = 0, authCert = None):
 
     authURL = adobe_response_xml.find("./%s" % (adNS("authURL"))).text
     userInfoURL = adobe_response_xml.find("./%s" % (adNS("userInfoURL"))).text
-    certificate = adobe_response_xml.find("./%s" % (adNS("certificate"))).text
+    certificate_bb = adobe_response_xml.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
+    certificate_adobe = adobe_response_xml.find("./%s[not(@ofByteBooks)]" % (adNS("certificate"))).text
 
-    if (authURL is None or userInfoURL is None or certificate is None):
+    if (authURL is None or userInfoURL is None or certificate_bb is None):
         return False, "Error: Unexpected reply from Adobe.", [[], []]
 
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authURL")).text = authURL
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "userInfoURL")).text = userInfoURL
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "activationURL")).text = VAR_ACS_SERVER_HTTPS
-    etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "certificate")).text = certificate
+    etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "certificate"), "ofByteBooks", "true").text = certificate_bb
+    etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "certificate")).text = certificate_adobe
 
 
     if authCert is None: 
@@ -191,7 +194,7 @@ def createUser(useVersionIndex = 0, authCert = None):
         response2 = sendHTTPRequest(authenticationURL)
 
         adobe_response_xml2 = etree.fromstring(response2)
-        authCert = adobe_response_xml2.find("./%s" % (adNS("certificate"))).text
+        authCert = adobe_response_xml2.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
 
 
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authenticationCertificate")).text = authCert
@@ -492,7 +495,8 @@ def exportProxyAuth(act_xml_path, activationToken):
     rt_si_authURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text
     rt_si_userInfoURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("userInfoURL"))).text
     rt_si_activationURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("activationURL"))).text
-    rt_si_certificate = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("certificate"))).text
+    rt_si_certificate_bb = activationxml.find("./%s/%s[@ofByteBooks='1']" % (adNS("activationServiceInfo"), adNS("certificate"))).text
+    rt_si_certificate_ad = activationxml.find("./%s/%s[not(@ofByteBooks)]" % (adNS("activationServiceInfo"), adNS("certificate"))).text
 
     rt_c_user = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
     rt_c_licenseCertificate = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("licenseCertificate"))).text
@@ -515,7 +519,8 @@ def exportProxyAuth(act_xml_path, activationToken):
     ret += "<adept:authURL>%s</adept:authURL>" % (rt_si_authURL)
     ret += "<adept:userInfoURL>%s</adept:userInfoURL>" % (rt_si_userInfoURL)
     ret += "<adept:activationURL>%s</adept:activationURL>" % (rt_si_activationURL)
-    ret += "<adept:certificate>%s</adept:certificate>" % (rt_si_certificate)
+    ret += "<adept:certificate>%s</adept:certificate>" % (rt_si_certificate_ad)
+    ret += "<adept:certificate ofByteBooks='true'>%s</adept:certificate>" % (rt_si_certificate_bb)
     ret += "</adept:activationServiceInfo>"
 
     ret += "<adept:credentials xmlns:adept=\"http://ns.adobe.com/adept\">"
