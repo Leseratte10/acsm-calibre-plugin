@@ -95,19 +95,19 @@ class ConfigWidget(QWidget):
 
             if isosx:
                 self.button_import_MacADE = QtGui.QPushButton(self)
-                self.button_import_MacADE.setText(_("Import activation from ADE (MacOS)"))
+                self.button_import_MacADE.setText(_("Import activation from Digital Editions (MacOS)"))
                 self.button_import_MacADE.clicked.connect(self.import_activation_from_MAC)
                 ua_group_box_layout.addWidget(self.button_import_MacADE)
 
             if iswindows:
                 self.button_import_WinADE = QtGui.QPushButton(self)
-                self.button_import_WinADE.setText(_("Import activation from ADE (Windows)"))
+                self.button_import_WinADE.setText(_("Import activation from Digital Editions (Windows)"))
                 self.button_import_WinADE.clicked.connect(self.import_activation_from_Win)
                 ua_group_box_layout.addWidget(self.button_import_WinADE)
 
             if islinux:
                 self.button_import_LinuxWineADE = QtGui.QPushButton(self)
-                self.button_import_LinuxWineADE.setText(_("Import activation from ADE (Wine)"))
+                self.button_import_LinuxWineADE.setText(_("Import activation from Digital Editions (Wine)"))
                 self.button_import_LinuxWineADE.clicked.connect(self.import_activation_from_LinuxWine)
                 ua_group_box_layout.addWidget(self.button_import_LinuxWineADE)
 
@@ -121,7 +121,7 @@ class ConfigWidget(QWidget):
             if mail is None: 
                 # Current auth is anon auth. Offer to link to account.
                 self.button_convert_anon_to_account = QtGui.QPushButton(self)
-                self.button_convert_anon_to_account.setText(_("Connect anonymous auth to ADE account"))
+                self.button_convert_anon_to_account.setText(_("Connect anonymous auth to ByteBooks account"))
                 self.button_convert_anon_to_account.clicked.connect(self.convert_anon_to_account)
                 ua_group_box_layout.addWidget(self.button_convert_anon_to_account)  
 
@@ -133,10 +133,7 @@ class ConfigWidget(QWidget):
                 self.button_manage_ext_device.clicked.connect(self.manage_ext_device)
                 ua_group_box_layout.addWidget(self.button_manage_ext_device)
 
-            self.button_switch_ade_version = QtGui.QPushButton(self)
-            self.button_switch_ade_version.setText(_("Change ADE version"))
-            self.button_switch_ade_version.clicked.connect(self.switch_ade_version)
-            ua_group_box_layout.addWidget(self.button_switch_ade_version)
+
 
 
         self.button_export_key = QtGui.QPushButton(self)
@@ -218,7 +215,6 @@ class ConfigWidget(QWidget):
                     if islinux:
                         self.button_import_LinuxWineADE.setEnabled(activated)
                 else:
-                    self.button_switch_ade_version.setEnabled(False)
                     try: 
                         self.button_convert_anon_to_account.setEnabled(False)
                     except: 
@@ -505,11 +501,6 @@ class ConfigWidget(QWidget):
         # Show success, then close:
         info_dialog(None, "Remove ADE account", "ADE authorization successfully removed.", show=True, show_copy_button=False)
             
-
-        try: 
-            self.button_switch_ade_version.setEnabled(False)
-        except:
-            pass
         if ade_mail is None: 
             try: 
                 self.button_convert_anon_to_account.setEnabled(False)
@@ -870,107 +861,11 @@ class ConfigWidget(QWidget):
         else: 
             info_dialog(None, "Done", "Successfully imported authorization for " + ade_mail, show=True, show_copy_button=False)
 
-
-    def switch_ade_version(self): 
-        try: 
-            from libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES
-            from libadobe import VAR_VER_BUILD_IDS, VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO
-            from libadobeAccount import changeDeviceVersion
-        except: 
-            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-            traceback.print_exc()
-
-
-        device_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml")
-
-        try: 
-            containerdev = etree.parse(device_xml_path)
-        except (IOError, FileNotFoundError, OSError) as e:
-            return error_dialog(None, "Failed", "Error while reading file", show=True, show_copy_button=False)
-
-        try: 
-            adeptNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)        
-
-            # Determine the ADE version we're emulating:
-            ver = containerdev.findall("./%s" % (adeptNS("version")))
-
-            # "Default" entry would be for the old 10.0.4 entry. 
-            # As 10.X is in the 3.0 range, assume we're on ADE 3.0.1 with hobbes version 10.0.85385
-            v_idx = VAR_VER_HOBBES_VERSIONS.index("10.0.85385")
-
-            for f in ver:
-                if f.get("name") == "hobbes":
-                    hobbes_version = f.get("value")
-
-            
-            if hobbes_version is not None:
-                ADE_version = "ADE 3.0.X (RMSDK " + hobbes_version + ")"
-                try: 
-                    v_idx = VAR_VER_HOBBES_VERSIONS.index(hobbes_version)
-                    ADE_version = VAR_VER_SUPP_CONFIG_NAMES[v_idx] + " (RMSDK " + hobbes_version + ")"
-                except:
-                    pass
-            else: 
-                ADE_version = "ADE 3.0.X"
-
-
-        except: 
-            err = traceback.format_exc()
-            return error_dialog(None, "Failed", "Error while determining current ADE version.", show=True, det_msg=err, show_copy_button=False)
-
-
-        # Build a list of allowed strings:
-        allowed_strings = []
-        for allowed_id in VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO:
-            try: 
-                idx = VAR_VER_BUILD_IDS.index(allowed_id)
-            except:
-                pass
-        
-            try: 
-                allowed_strings.append(VAR_VER_SUPP_CONFIG_NAMES[idx])
-            except:
-                pass
-        
-        if len(allowed_strings) == 0:
-            return error_dialog(None, "Failed", "Error determining available versions", show=True, show_copy_button=True)
-
-
-        msg = "You are currently using " + ADE_version + "\n"
-        msg += "You can switch to a different ADE version by using the selection box below.\n"
-        msg += "- ADE 1.7.2 is for debugging only. Do not use this setting, it might get your account banned\n"
-        msg += "- ADE 2.0.1 works with most books, and will always get you the old DRM. Select this if you're unsure\n"
-        msg += "- ADE 3.0.1 works with all books, but may give you newer DRM that requires newer tools to remove\n"
-        msg += "- ADE 4.0.3 and ADE 4.5.11 are available, but aren't really needed for anything\n"
-        msg += "Select ADE 2.0.1 if you are unsure\n\n"
-        msg += "Which ADE version do you want to emulate?"
-
-        item, ok = QInputDialog.getItem(self, "Change ADE version", msg, allowed_strings, 1, False)
-
-        if (not ok):
-            return
-
-        idx = -1
-        try: 
-            idx = VAR_VER_SUPP_CONFIG_NAMES.index(item)
-            ret, msg = changeDeviceVersion(idx)
-            if (ret):
-                # Update info display:
-                info_string, activated, mail = self.get_account_info()
-                self.lblAccInfo.setText(info_string)
-                return info_dialog(None, "Done", "Successfully switched to " + item, show=True, show_copy_button=False)
-            else: 
-                return error_dialog(None, "Failed", "Error while changing ADE version: " + msg, show=True, show_copy_button=False)    
-
-        except: 
-            return error_dialog(None, "Failed", "Error while changing ADE version.", show=True, det_msg=traceback.format_exc(), show_copy_button=False)
-            
+           
 
     def create_anon_auth(self): 
     
         try: 
-            from libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
-            from libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
             from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -983,51 +878,20 @@ class ConfigWidget(QWidget):
         msg += "Make sure to create backups of the authorization data!"
         
         warning_dialog(None, "Warning", msg, show=True, show_copy_button=False)
-        
-        # Build a list of allowed strings:
-        allowed_strings = []
-
-        for allowed_id in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
-            idx = VAR_VER_BUILD_IDS.index(allowed_id)
-            allowed_strings.append(VAR_VER_SUPP_CONFIG_NAMES[idx])
-
-        
-        if len(allowed_strings) == 0:
-            return error_dialog(None, "ADE activation failed", "Error determining available versions", show=True, show_copy_button=True)
-
-
-        msg = "Which ADE version do you want to emulate?\n"
-        msg += "- ADE 2.0.1 works with most but not all books, but will always give you the old DRM.\n"
-        msg += "- ADE 3.0.1 works with all books, but may give you newer DRM for some retailers.\n"
-        msg += "- ADE 4.0.3 and 4.5.11 are only provided for completeness sake, but aren't usually needed.\n"
-        msg += "Select ADE 2.0 if you are unsure."
-        item, ok = QInputDialog.getItem(self, "Authorizing ADE account", msg, allowed_strings, 
-            VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE.index(VAR_VER_DEFAULT_BUILD_ID), False)
-
-        if (not ok):
-            return
-
-        idx = 0
-        try: 
-            idx = VAR_VER_SUPP_CONFIG_NAMES.index(item)
-            print("User selected ({0}) -> {1}".format(idx, VAR_VER_SUPP_CONFIG_NAMES[idx]))
-        except: 
-            resp = traceback.format_exc()
-            return error_dialog(None, "ADE activation failed", "Error determining version", det_msg=str(resp), show=True, show_copy_button=True)
-                
+                        
         createDeviceKeyFile()
-        createDeviceFile(False, idx)
-        success, resp = createUser(idx, None)
+        createDeviceFile(False, 0)
+        success, resp = createUser(0, None)
         if (success is False):
-            return error_dialog(None, "ADE activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
+            return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 
         success, resp = signIn("anonymous", "", "")
         if (success is False):
-            return error_dialog(None, "ADE activation failed", "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
+            return error_dialog(None, "Digital Editions activation failed", "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
 
-        success, resp = activateDevice(idx, None)
+        success, resp = activateDevice(0, None)
         if (success is False):
-            return error_dialog(None, "ADE activation failed", "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
+            return error_dialog(None, "Digital Editions activation failed", "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
 
         print("Authorized to anonymous account")
 
@@ -1124,8 +988,7 @@ class ConfigWidget(QWidget):
     def link_account(self):
 
         try: 
-            from libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
-            from libadobe import VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE, VAR_VER_BUILD_IDS, VAR_VER_DEFAULT_BUILD_ID
+            from libadobe import createDeviceKeyFile, update_account_path
             from libadobeAccount import createDeviceFile, getAuthMethodsAndCert, createUser, signIn, activateDevice
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -1137,73 +1000,44 @@ class ConfigWidget(QWidget):
         # Get account types
         types, authCert = getAuthMethodsAndCert()
         
-        msg = "Please select your AdobeID provider. Usually, \"Adobe ID\" is the correct choice."
+        msg = "Please select your AdobeID provider. Usually, \"Adobe ID\" is the correct choice, even for ByteBooks accounts."
 
-        acc_item, ok = QInputDialog.getItem(self, "Authorizing ADE account", msg, types[1], 0, False)
+        acc_item, ok = QInputDialog.getItem(self, "Authorizing Digital Editions account", msg, types[1], 0, False)
         acc_type = "AdobeID"
         try: 
             acc_idx = types[1].index(acc_item)
             acc_type = types[0][acc_idx]
             print("User has selected account type " + acc_type)
         except ValueError:
-            return error_dialog(None, "ADE activation failed", "Invalid provider", show=True, show_copy_button=True)
+            return error_dialog(None, "Digital Editions activation failed", "Invalid provider", show=True, show_copy_button=True)
 
 
         
-        mail, ok = QInputDialog.getText(self, "Authorizing ADE account", "Please enter mail address")
+        mail, ok = QInputDialog.getText(self, "Authorizing Digital Editions account", "Please enter mail address")
 
         if (not ok or mail is None or len(mail) == 0):
             return
 
-        passwd, ok = QInputDialog.getText(self, "Authorizing ADE account", "Please enter password", QLineEdit.Password)
+        passwd, ok = QInputDialog.getText(self, "Authorizing Digital Editions account", "Please enter password", QLineEdit.Password)
 
         if (not ok or passwd is None or len(passwd) == 0):
             return
 
-        # Build a list of allowed strings:
-        allowed_strings = []
-
-        for allowed_id in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
-            idx = VAR_VER_BUILD_IDS.index(allowed_id)
-            allowed_strings.append(VAR_VER_SUPP_CONFIG_NAMES[idx])
-
-        
-        if len(allowed_strings) == 0:
-            return error_dialog(None, "ADE activation failed", "Error determining available versions", show=True, show_copy_button=True)
-
-
-        msg = "Which ADE version do you want to emulate?\n"
-        msg += "- ADE 2.0.1 works with most but not all books, but will always give you the old DRM.\n"
-        msg += "- ADE 3.0.1 works with all books, but may give you newer DRM for some retailers.\n"
-        msg += "- ADE 4.0.3 and 4.5.11 are only provided for completeness sake, but aren't usually needed.\n"
-        msg += "Select ADE 2.0 if you are unsure."
-        item, ok = QInputDialog.getItem(self, "Authorizing ADE account", msg, allowed_strings, 
-            VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE.index(VAR_VER_DEFAULT_BUILD_ID), False)
-
-        if (not ok):
-            return
-
         vers_idx = 0
-        try: 
-            vers_idx = VAR_VER_SUPP_CONFIG_NAMES.index(item)
-            print("User selected ({0}) -> {1}".format(vers_idx, VAR_VER_SUPP_CONFIG_NAMES[vers_idx]))
-        except: 
-            resp = traceback.format_exc()
-            return error_dialog(None, "ADE activation failed", "Error determining version", det_msg=str(resp), show=True, show_copy_button=True)
                 
         createDeviceKeyFile()
         createDeviceFile(False, vers_idx)
         success, resp = createUser(vers_idx, authCert)
         if (success is False):
-            return error_dialog(None, "ADE activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
+            return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 
         success, resp = signIn(acc_type, mail, passwd)
         if (success is False):
-            return error_dialog(None, "ADE activation failed", "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
+            return error_dialog(None, "Digital Editions activation failed", "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
 
         success, resp = activateDevice(vers_idx, None)
         if (success is False):
-            return error_dialog(None, "ADE activation failed", "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
+            return error_dialog(None, "Digital Editions activation failed", "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
 
         print("Authorized to '" + acc_type + "' account " + mail)
 
@@ -1257,7 +1091,7 @@ class ConfigWidget(QWidget):
         except:
             pass
 
-        filename = choose_save_file(self, "Export ADE keys", _("Export ADE keys"), filters, 
+        filename = choose_save_file(self, "Export Digital Editions keys", _("Export Digital Editions keys"), filters, 
                     all_files=False, initial_filename=export_filename)
 
         if (filename is None):

@@ -1,6 +1,6 @@
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -29,8 +29,8 @@ from libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
 from libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key
 from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
 from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
-from libadobe import VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO, VAR_VER_SUPP_VERSIONS, VAR_ACS_SERVER_HTTP
-from libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
+from libadobe import VAR_VER_SUPP_VERSIONS
+from libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
 
 
 def createDeviceFile(randomSerial, useVersionIndex = 0): 
@@ -38,13 +38,10 @@ def createDeviceFile(randomSerial, useVersionIndex = 0):
 
     # Original implementation: Device::createDeviceFile(const std::string& hobbes, bool randomSerial)
 
-    if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
+    if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES) and useVersionIndex is not None:
         return False
 
-    try: 
-        build_id = VAR_VER_BUILD_IDS[useVersionIndex]
-    except:
-        return False
+    build_id = VAR_VER_BUILD_IDS[useVersionIndex]
 
     if build_id not in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
         # ADE 1.7.2 or another version that authorization is disabled for
@@ -115,7 +112,7 @@ def getAuthMethodsAndCert():
     # to the createUser function call. 
     # Otherwise the plugin will not look 100% like ADE to Adobe.
 
-    authenticationURL = VAR_ACS_SERVER_HTTP + "/AuthenticationServiceInfo"
+    authenticationURL = VAR_ACS_SERVER_HTTPS + "/AuthenticationServiceInfo?ofByteBooks=1"
     response2 = sendHTTPRequest(authenticationURL)
 
     adobe_response_xml2 = etree.fromstring(response2)
@@ -161,16 +158,7 @@ def createUser(useVersionIndex = 0, authCert = None):
 
     activationServiceInfo = etree.SubElement(root, etree.QName(NSMAP["adept"], "activationServiceInfo"))
 
-    useHTTPS = False
-    if VAR_VER_BUILD_IDS[useVersionIndex] >= VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT:
-        useHTTPS = True
-
-
-    if useHTTPS:
-        # ADE 4.X uses HTTPS
-        activationURL = VAR_ACS_SERVER_HTTPS + "/ActivationServiceInfo"
-    else:
-        activationURL = VAR_ACS_SERVER_HTTP + "/ActivationServiceInfo"
+    activationURL = VAR_ACS_SERVER_HTTPS + "/ActivationServiceInfo?ofByteBooks=1"
 
     response = sendHTTPRequest(activationURL)
 
@@ -193,17 +181,13 @@ def createUser(useVersionIndex = 0, authCert = None):
 
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authURL")).text = authURL
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "userInfoURL")).text = userInfoURL
-    if useHTTPS:
-        # ADE 4.X uses HTTPS
-        etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "activationURL")).text = VAR_ACS_SERVER_HTTPS
-    else: 
-        etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "activationURL")).text = VAR_ACS_SERVER_HTTP
+    etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "activationURL")).text = VAR_ACS_SERVER_HTTPS
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "certificate")).text = certificate
 
 
     if authCert is None: 
         # This is not supposed to happen, but if it does, then just query it again from Adobe.
-        authenticationURL = authURL + "/AuthenticationServiceInfo"
+        authenticationURL = authURL + "/AuthenticationServiceInfo?ofByteBooks=1"
         response2 = sendHTTPRequest(authenticationURL)
 
         adobe_response_xml2 = etree.fromstring(response2)
@@ -349,7 +333,7 @@ def convertAnonAuthToAccount(username, passwd):
         return False, "Empty authenticationCertificate"
 
     linkRequest = buildSignInRequestForAnonAuthConvert(username, passwd, authenticationCertificate)
-    signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/AddSignInDirect"
+    signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/AddSignInDirect?ofByteBooks=1"
     linkResponse = sendRequestDocu(linkRequest, signInURL)
 
     try: 
@@ -427,7 +411,7 @@ def signIn(account_type, username, passwd):
     # Type = "AdobeID" or "anonymous". For "anonymous", username and passwd need to be the empty string.
     signInRequest = buildSignInRequest(account_type, username, passwd, authenticationCertificate)
 
-    signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/SignInDirect"
+    signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/SignInDirect?ofByteBooks=1"
 
     credentials = sendRequestDocu(signInRequest, signInURL)
     
@@ -750,10 +734,6 @@ def changeDeviceVersion(useVersionIndex = 0):
     except:
         return False, "Unknown build ID"
 
-    if build_id not in VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO:
-        # A version that we no longer want to allow switching to
-        return False, "BuildID not supported"
-
     try: 
         devicexml = etree.parse(get_device_path())
         new_hobbes = VAR_VER_HOBBES_VERSIONS[useVersionIndex]
@@ -830,15 +810,7 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
 
     data = "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
 
-    useHTTPS = False
-    if VAR_VER_BUILD_IDS[useVersionIndex] >= VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT:
-        useHTTPS = True
-
-    if useHTTPS:
-        # ADE 4.X uses HTTPS
-        ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTPS + "/Activate")
-    else:
-        ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTP + "/Activate")
+    ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTPS + "/Activate?ofByteBooks=1")
 
     try: 
         credentialsXML = etree.fromstring(ret)

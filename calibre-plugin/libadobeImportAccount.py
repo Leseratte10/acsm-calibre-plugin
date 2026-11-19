@@ -7,6 +7,9 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
+
+# TODO: This still needs to be adapted for ByteBooks
+
 from lxml import etree
 import base64
 import os, locale, platform

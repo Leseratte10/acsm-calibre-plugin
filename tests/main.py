@@ -68,8 +68,7 @@ class TestAdobe(unittest.TestCase):
 
         for version in libadobe.VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
             self.assertIn(version, libadobe.VAR_VER_BUILD_IDS, "Invalid buildID for authorization")
-        for version in libadobe.VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO:
-            self.assertIn(version, libadobe.VAR_VER_BUILD_IDS, "Invalid buildID for switching")
+
 
     def test_serialGeneration(self):
         '''Check if serial generation works'''

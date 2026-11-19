@@ -37,14 +37,12 @@ from libadobeAccount import createDeviceFile, createUser, signIn, exportAccountE
 
 VAR_MAIL = ""
 VAR_PASS = ""
-VAR_VER = None # 1 for ADE2.0.1, 2 for ADE3.0.1
 
 #################################################################
 
 def main():
     global VAR_MAIL
     global VAR_PASS
-    global VAR_VER
 
     if (VAR_MAIL == ""):
         VAR_MAIL = input("Please enter your AdobeID: ")
@@ -52,12 +50,6 @@ def main():
     if (VAR_PASS == ""):
         VAR_PASS = getpass.getpass("Please enter the password for your AdobeID: ")
 
-    if (VAR_VER is None):
-        VAR_VER = int(input("Please enter '1' for ADE 2.0 or '2' for ADE 3.0: "))
-
-    if VAR_VER >= len(VAR_VER_SUPP_CONFIG_NAMES):
-        print("Invalid version")
-        exit(1)
 
     if (VAR_MAIL == "" or VAR_PASS == ""):
         print("Empty credential, aborting")
