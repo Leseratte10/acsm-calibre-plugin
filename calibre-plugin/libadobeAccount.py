@@ -442,7 +442,18 @@ def is_bytebooks_account():
 
     return False
 
+def html_to_str(string):
+    try: 
+        from urllib.parse import unquote_plus
+    except: 
+        from urllib import unquote_plus
 
+    data = unquote_plus(string)
+    if isinstance(data, bytes):
+        data = data.decode('utf-8')
+
+    return data
+    
 
 def signIn(account_type, username, passwd):
 
@@ -480,14 +491,20 @@ def signIn(account_type, username, passwd):
         
         if (credentialsXML.tag == adNS("error")): 
             err = credentialsXML.get("data")
-            if ("E_AUTH_FAILED" in err and "CUS05051" in err): 
+
+            error_data = err.split(' ')
+
+            if (error_data[0] == "E_AUTH_FAILED" and "CUS05051" in err): 
+                # This only seems to occur on the old Adobe servers?
                 return False, "Invalid username or password!"
-            elif ("E_AUTH_FAILED" in err and "LOGIN_FAILED" in err): 
-                return False, "E_AUTH_FAILED/LOGIN_FAILED. If you have 2FA enabled, please disable that and try again."
-            elif ("E_ADEPT_RESET_PW_REQUIRED" in err):
-                return False, "Server requires a password reset due to ByteBooks migration. See https://dtsbytebooks.com/transition-help"
+            elif (error_data[0] == "E_AUTH_FAILED" and len(error_data) == 4 and error_data[3] != ""):
+                return False, "The server refused our login: \n" + html_to_str(error_data[3])
+            elif (error_data[0] == "E_AUTH_FAILED"):
+                return False, "The server refused our login: \n" + err
+            elif (error_data[0] == "E_ADEPT_RESET_PW_REQUIRED"):
+                return False, "Server requires a password reset due to ByteBooks migration. \nSee https://dtsbytebooks.com/transition-help"
             else: 
-                return False, "Unknown Adobe error:" + str(credentials)
+                return False, "Unknown Adobe error:" + str(err)
             
         elif (credentialsXML.tag == adNS("credentials")):
             pass
