@@ -66,6 +66,7 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
         current_parent = None
         current_name = None
         current_value = None
+        current_ofbytebooks = None
         current_method = None
         while True: 
             line = registry_file.readline()
@@ -81,6 +82,17 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
                 if (line.lower().startswith('"value"=')): 
                     current_value = line.split('=', 1)[1].strip()[1:-1]
                     continue
+
+                if (line.lower().startswith('"ofByteBooks"=')): 
+                    val = line.split('=', 1)[1].strip()[1:-1]
+                    if val == "1" or val.lower() == "true" or val == True:
+                        current_ofbytebooks = True
+                    elif val == "0" or val.lower() == "false" or val == False:
+                        current_ofbytebooks = False
+                    else:
+                        print("Warning: Invalid ofByteBooks value while importing.")
+                        current_ofbytebooks = False
+                    continue
             
                 if (line.lower().startswith('"method"=')): 
                     current_method = line.split('=', 1)[1].strip()[1:-1]
@@ -92,10 +104,11 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
                         current_parent = current_name
                         current_name = None
                         current_method = None
+                        current_ofbytebooks = None
                         current_value = None
                         waiting_for_element = False
                         continue
-                    handle_subkey(current_parent, current_name, current_value, master_key, current_method, None)
+                    handle_subkey(current_parent, current_name, current_value, master_key, current_method, current_ofbytebooks, None)
                     current_name = None
                     current_value = None
                     current_method = None
@@ -104,10 +117,12 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
             else: 
                 if (line.startswith("[Software\\\\Adobe\\\\Adept\\\\Activation\\\\")):
                     waiting_for_element = True
+                if (line.startswith("[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\")):
+                    waiting_for_element = True
 
                                 
         registry_file.close()
-        return handle_subkey(None, None, None, master_key, None, buildIDtoEmulate)
+        return handle_subkey(None, None, None, master_key, None, None, buildIDtoEmulate)
 
     except: 
         # There was an error hunting through the registry. 
@@ -136,8 +151,6 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
     if master_key is None: 
         return False, "Could not access ADE encryption key"
 
-    PRIVATE_LICENCE_KEY_PATH = r'Software\Adobe\Adept\Activation'
-
     # Dump data from registry:
     try:
         import winreg
@@ -145,9 +158,12 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
         import _winreg as winreg
 
     try: 
-        activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, PRIVATE_LICENCE_KEY_PATH)
+        activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\ByteBooks\Adept\Activation')
     except: 
-        return False, "Could not locate ADE activation"
+        try: 
+            activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Adobe\Adept\Activation')
+        except: 
+            return False, "Could not locate ADE activation"
 
     i = 0
     while True:
@@ -171,8 +187,19 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
                     method = winreg.QueryValueEx(activation_child, 'method')[0]
                 except:
                     method = None
+                try: 
+                    val = winreg.QueryValueEx(activation_child, 'ofByteBooks')[0]
+                    if val == "1" or val.lower() == "true" or val == True:
+                        ofbytebooks = True
+                    elif val == "0" or val.lower() == "false" or val == False:
+                        ofbytebooks = False
+                    else:
+                        print("Warning: Invalid ofByteBooks value while importing: " + str(val))
+                        ofbytebooks = False
+                except:
+                    ofbytebooks = None
 
-                handle_subkey(ParentKeyType, SubKeyType, value, master_key, method, None)
+                handle_subkey(ParentKeyType, SubKeyType, value, master_key, method, ofbytebooks, None)
             except:
                 pass
 
@@ -203,8 +230,25 @@ def finalize_write_config_Windows(data, key, buildID):
     content += "<adept:authURL>%s</adept:authURL>" % (data["activationServiceInfo"]["authURL"])
     content += "<adept:userInfoURL>%s</adept:userInfoURL>" % (data["activationServiceInfo"]["userInfoURL"])
     content += "<adept:activationURL>%s</adept:activationURL>" % (data["activationServiceInfo"]["activationURL"])
-    content += "<adept:certificate>%s</adept:certificate>" % (data["activationServiceInfo"]["certificate"])
-    content += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (data["activationServiceInfo"]["authenticationCertificate"])
+    
+    cert_key = data["activationServiceInfo"]["certificate"]
+    if isinstance(cert_key, dict):
+        if True in cert_key:
+            content += "<adept:certificate ofByteBooks=\"true\">%s</adept:certificate>" % (cert_key[True])
+        if False in cert_key:
+            content += "<adept:certificate ofByteBooks=\"false\">%s</adept:certificate>" % (cert_key[False])
+    else: 
+        content += "<adept:certificate>%s</adept:certificate>" % (cert_key)
+
+    authcert_key = data["activationServiceInfo"]["authenticationCertificate"]
+    if isinstance(authcert_key, dict):
+        if True in authcert_key:
+            content += "<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>" % (authcert_key[True])
+        if False in authcert_key:
+            content += "<adept:authenticationCertificate ofByteBooks=\"false\">%s</adept:authenticationCertificate>" % (authcert_key[False])
+    else: 
+        content += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (authcert_key)
+
     content += '</adept:activationServiceInfo>\n'
 
     content += '<adept:credentials xmlns:adept="http://ns.adobe.com/adept">'
@@ -215,11 +259,37 @@ def finalize_write_config_Windows(data, key, buildID):
             account_method = "AdobeID"
     
         content += "<adept:username method=\"%s\">%s</adept:username>" % (account_method, data["credentials"]["username"])
+
+
+    pkcs12_key = data["credentials"]["pkcs12"]
+    if isinstance(pkcs12_key, dict):
+        if True in pkcs12_key:
+            content += "<adept:pkcs12 ofByteBooks=\"true\">%s</adept:pkcs12>" % (pkcs12_key[True])
+        if False in pkcs12_key:
+            content += "<adept:pkcs12 ofByteBooks=\"false\">%s</adept:pkcs12>" % (pkcs12_key[False])
+    else: 
+        content += "<adept:pkcs12>%s</adept:pkcs12>" % (pkcs12_key)
+
+    licenseCertificate_key = data["credentials"]["licenseCertificate"]
+    if isinstance(licenseCertificate_key, dict):
+        if True in licenseCertificate_key:
+            content += "<adept:licenseCertificate ofByteBooks=\"true\">%s</adept:licenseCertificate>" % (licenseCertificate_key[True])
+        if False in licenseCertificate_key:
+            content += "<adept:licenseCertificate ofByteBooks=\"false\">%s</adept:licenseCertificate>" % (licenseCertificate_key[False])
+    else: 
+        content += "<adept:licenseCertificate>%s</adept:licenseCertificate>" % (licenseCertificate_key)
     
-    content += "<adept:pkcs12>%s</adept:pkcs12>" % (data["credentials"]["pkcs12"])
-    content += "<adept:licenseCertificate>%s</adept:licenseCertificate>" % (data["credentials"]["licenseCertificate"])
     content += "<adept:privateLicenseKey>%s</adept:privateLicenseKey>" % (data["credentials"]["privateLicenseKey"])
-    content += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (data["credentials"]["authenticationCertificate"])
+
+    authCertificate_key = data["credentials"]["authenticationCertificate"]
+    if isinstance(authCertificate_key, dict):
+        if True in authCertificate_key:
+            content += "<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>" % (authCertificate_key[True])
+        if False in authCertificate_key:
+            content += "<adept:authenticationCertificate ofByteBooks=\"false\">%s</adept:authenticationCertificate>" % (authCertificate_key[False])
+    else: 
+        content += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (authCertificate_key)
+
     content += '</adept:credentials>\n'
 
     content += '<activationToken xmlns="http://ns.adobe.com/adept">'
@@ -270,7 +340,7 @@ def finalize_write_config_Windows(data, key, buildID):
 
     return True, "Done"
 
-def handle_subkey(parent, subkey, value, encryption_key, method, buildID):
+def handle_subkey(parent, subkey, value, encryption_key, method, ofByteBooks, buildID):
 
     if parent is None: 
         # We're done collecting sub keys - decrypt the private key, then finalize config.
@@ -296,11 +366,15 @@ def handle_subkey(parent, subkey, value, encryption_key, method, buildID):
             account_method = method
 
         # Not encrypted
-        try: 
-            persistent_data[parent][subkey] = value
-        except KeyError:
+        if not parent in persistent_data:
             persistent_data[parent] = dict()
+
+        if ofByteBooks is None:
             persistent_data[parent][subkey] = value
+        else:
+            persistent_data[parent][subkey] = dict()
+            persistent_data[parent][subkey][ofByteBooks] = value
+    
 
     return None
 
