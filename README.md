@@ -79,7 +79,7 @@ Note: You can only return books that you downloaded with this plugin. You cannot
 
 ## Authorizing eReaders
 
-The plugin can also authorize an eReader connected to the Computer through USB. For now, this only works with devices that export their `.adobe-digital-editions` folder through USB. In order to authorize such an eReader, just open the plugin settings and click "Authorize eReader over USB" (only available if the plugin is authorized with an AdobeID). Then select the eReader in the folder selection dialog. This process does not work with eReaders relying on a specific USB driver for the  connection such as the Sony PRS-T2 (and probably some other older Sony devices). 
+The plugin can also authorize an eReader connected to the Computer through USB. For now, this only works with devices that export their `.adobe-digital-editions` folder through USB. In order to authorize such an eReader, just open the plugin settings and click "Authorize eReader over USB" (only available if the plugin is authorized with a ByteBooks ID). Then select the eReader in the folder selection dialog. This process does not work with eReaders relying on a specific USB driver for the connection such as the Sony PRS-T2 (and probably some other older Sony devices). 
 
 Right now, this process is fairly experimental, and I've only tested this with a Pocketbook reader so far.
 

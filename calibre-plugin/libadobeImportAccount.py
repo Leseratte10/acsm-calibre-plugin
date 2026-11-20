@@ -435,6 +435,7 @@ def importADEactivationMac(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
     import warnings
     warnings.filterwarnings('ignore', category=FutureWarning)
 
+    # TODO: Add support for the ByteBooks path
     home = os.getenv('HOME')
     cmdline = 'find "' + home + '/Library/Application Support/Adobe/Digital Editions" -name "activation.dat"'
     cmdline = cmdline.encode(sys.getfilesystemencoding())

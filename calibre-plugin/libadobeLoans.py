@@ -18,9 +18,9 @@ def remove_overdue_books_from_list(loan_list):
 		except: 
 			# Invalid book timestamp
 			timestamp = 0
-			continue
 
-		if (currenttime < timestamp or timestamp == 0):
+
+		if (timestamp == 0 or currenttime < timestamp):
 			# Book still valid, keep it on the list.
 			templist.append(book)
 		

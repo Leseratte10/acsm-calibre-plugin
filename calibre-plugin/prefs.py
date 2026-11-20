@@ -40,7 +40,7 @@ class ACSMInput_Prefs():
         self.__pluginsdir = os.path.join(config_dir,"plugins")
 
         success = False
-        # Try to find an existing account folder; first in DeACSM, then in ACSMInput
+        # Try to find an existing account folder in ACSMInput
         self.__maindir = os.path.join(self.__pluginsdir, "ACSMInput")
         self.__accountdir = os.path.join(self.__maindir,"account")
 

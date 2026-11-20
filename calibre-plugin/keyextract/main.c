@@ -55,6 +55,7 @@ int main() {
 	DWORD wideuser_size = BUFSIZE;
 	LSTATUS user_retval = RegGetValueW(HKEY_CURRENT_USER, L"Software\\ByteBooks\\Adept\\Device", L"username", RRF_RT_REG_SZ, NULL, &wideuser, &wideuser_size);
 	if (user_retval != ERROR_SUCCESS) {
+		wideuser_size = BUFSIZE;
 		user_retval = RegGetValueW(HKEY_CURRENT_USER, L"Software\\Adobe\\Adept\\Device", L"username", RRF_RT_REG_SZ, NULL, &wideuser, &wideuser_size);
 	}
 	if (user_retval != ERROR_SUCCESS) {
@@ -83,6 +84,7 @@ int main() {
 	DWORD key_size = BUFSIZE;
 	LSTATUS key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\ByteBooks\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
 	if (key_retval != ERROR_SUCCESS) {
+		key_size = BUFSIZE;
 		key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\Adobe\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
 	}
 	if (key_retval != ERROR_SUCCESS) {

@@ -225,6 +225,40 @@ def makeFingerprint(serial):
 
 ############################################## HTTP stuff:
 
+def create_ssl_context(validate_tls):
+    # type: (bool) -> ssl.SSLContext
+
+    # Works on Python 2.7.9+ and all Python 3 versions the plugin supports.
+
+    try: 
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+        # This is needed due to an Adobe change. 
+        # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
+        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
+        # just enforce TLSv1.2 here.
+        # Note that a context created like this does NOT verify anything by default
+        # (CERT_NONE, no hostname check, no CA certificates loaded).
+    except Exception:
+        ctx = ssl.create_default_context()
+
+    if validate_tls:
+        # Order matters: Python 2 and Python < 3.7 raise ValueError if
+        # check_hostname is enabled while verify_mode is still CERT_NONE.
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        ctx.check_hostname = True
+        # Windows: system certificate store. Linux / MacOS: OpenSSL default paths,
+        # which Calibre points at the system / bundled CA certificates (SSL_CERT_FILE / SSL_CERT_DIR).
+        ctx.load_default_certs()
+    else:
+        # It appears as if lots of book distributors have either invalid or expired certs ...
+        # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
+        # Order matters here, too: check_hostname must be disabled before CERT_NONE.
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+    return ctx
+
+
 def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
     # type: (str, str, bool) -> int
 
@@ -234,22 +268,7 @@ def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
         # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
     }
 
-    # Ignore SSL:
-    # It appears as if lots of book distributors have either invalid or expired certs ...
-    # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
-    # Not the best solution, but it works.
-    try: 
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-        # This is needed due to an Adobe change. 
-        # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
-        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
-        # just enforce TLSv1.2 here.
-    except:
-        ctx = ssl.create_default_context()
-
-    if not validate_tls:
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
+    ctx = create_ssl_context(validate_tls)
 
 
     req = ulib.Request(url=URL, headers=headers)
@@ -280,22 +299,7 @@ def sendHTTPRequest_getSimple(URL, validate_tls = True):
         # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
     }
 
-    # Ignore SSL:
-    # It appears as if lots of book distributors have either invalid or expired certs ...
-    # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
-    # Not the best solution, but it works.
-    try: 
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-        # This is needed due to an Adobe change. 
-        # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
-        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
-        # just enforce TLSv1.2 here.
-    except:
-        ctx = ssl.create_default_context()
-    
-    if not validate_tls:
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
+    ctx = create_ssl_context(validate_tls)
 
     req = ulib.Request(url=URL, headers=headers)
     handler = ulib.urlopen(req, context=ctx)
@@ -314,22 +318,7 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False, validate_tls = Tr
         "Content-Type": type
     }
 
-    # Ignore SSL:
-    # It appears as if lots of book distributors have either invalid or expired certs ...
-    # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
-    # Not the best solution, but it works.
-    try: 
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-        # This is needed due to an Adobe change. 
-        # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
-        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
-        # just enforce TLSv1.2 here.
-    except:
-        ctx = ssl.create_default_context()
-
-    if not validate_tls:
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
+    ctx = create_ssl_context(validate_tls)
 
     # Make sure URL has a protocol
     # Some vendors (see issue #22) apparently don't include "http://" in some of their URLs.
@@ -351,11 +340,21 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False, validate_tls = Tr
             return None
 
     except uliberror.URLError as err: 
-        # This happens if the hostname cannot be resolved.
-        print("Post request failed with URLError")
+        # This happens if the hostname cannot be resolved, or (with validate_tls)
+        # if the server's certificate chain can't be verified.
+        print("Post request failed with URLError: %s" % (err.reason))
         if returnRC:
             return 900, "Post request failed with URLError"
         else: 
+            return None
+
+    except ssl.CertificateError as err:
+        # Hostname mismatch with validate_tls. Python 2 and Python < 3.7 raise this
+        # directly instead of wrapping it in a URLError like Python 3.7+ does.
+        print("Post request failed, certificate does not match host: %s" % (err))
+        if returnRC:
+            return 900, "Post request failed with CertificateError"
+        else:
             return None
 
     ret_code = handler.getcode()
@@ -485,7 +484,7 @@ def get_cert_from_pkcs12(_pkcs12, _key):
 
 
 
-def sign_node(node, use_bytebooks):
+def sign_node(node, prefer_bytebooks):
 
     sha_hash = hash_node(node)
     sha_hash = sha_hash.digest()
@@ -506,14 +505,42 @@ def sign_node(node, use_bytebooks):
     activationxml = etree.parse(FILE_ACTIVATIONXML)
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-    if use_bytebooks:
-        pkcs12 = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12"))).text
-    else: 
-        pkcs12 = next(
-                c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
+    pkcs12 = None
 
+    # If prefer_bytebooks is set, this function will first try to use the ByteBooks cert. 
+    # If it isn't, it tries the Adobe cert. 
+    # If the requested one isn't found, it uses the other one.
+
+    try: 
+        pkcs12bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12"))).text
+    except: 
+        pkcs12bb = None
+
+    try: 
+        pkcs12adobe = pkcs12 = next(
+                        c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
+                        if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+                        )
+    except: 
+        pkcs12adobe = None
+
+
+    if pkcs12adobe is None and pkcs12bb is None: 
+        return None
+
+    if prefer_bytebooks:
+        if pkcs12bb is not None: 
+            pkcs12 = pkcs12bb
+        else: 
+            pkcs12 = pkcs12adobe
+    else: 
+        if pkcs12adobe is not None: 
+            pkcs12 = pkcs12adobe
+        else: 
+            pkcs12 = pkcs12bb
+
+    if pkcs12 is None: 
+        return None
 
     my_pkcs12 = base64.b64decode(pkcs12)
     my_priv_key, _, _ = keys.parse_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))

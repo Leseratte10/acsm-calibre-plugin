@@ -71,6 +71,20 @@ class TestAdobe(unittest.TestCase):
             self.assertIn(version, libadobe.VAR_VER_BUILD_IDS, "Invalid buildID for authorization")
 
 
+    def test_sslContextValidation(self):
+        '''Check if validate_tls actually turns certificate validation on and off'''
+
+        import ssl
+
+        ctx = libadobe.create_ssl_context(True)
+        self.assertEqual(ctx.verify_mode, ssl.CERT_REQUIRED, "validate_tls=True doesn't require a certificate")
+        self.assertTrue(ctx.check_hostname, "validate_tls=True doesn't check the hostname")
+
+        ctx = libadobe.create_ssl_context(False)
+        self.assertEqual(ctx.verify_mode, ssl.CERT_NONE, "validate_tls=False still requires a certificate")
+        self.assertFalse(ctx.check_hostname, "validate_tls=False still checks the hostname")
+
+
     def test_serialGeneration(self):
         '''Check if serial generation works'''
         self.assertEqual((len(libadobe.get_mac_address())), 6,  "MAC address invalid")

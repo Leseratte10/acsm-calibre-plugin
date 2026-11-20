@@ -70,9 +70,7 @@ def buildFulfillRequest(acsm):
         clientVersion = VAR_VER_SUPP_VERSIONS[v_idx]
 
     except:
-        # Version not present, probably the "old" 10.0.4 entry. 
-        # As 10.X is in the 3.0 range, assume we're on ADE 3.0
-        clientVersion = "3.0.1.91394"
+        clientVersion = VAR_VER_SUPP_VERSIONS[0]
 
 
 
@@ -106,8 +104,8 @@ def buildFulfillRequest(acsm):
 
 
 
-def buildInitLicenseServiceRequest(authURL):
-    # type: (str) -> str
+def buildInitLicenseServiceRequest(authURL, force_adobe):
+    # type: (str, bool) -> str
 
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
@@ -130,7 +128,7 @@ def buildInitLicenseServiceRequest(authURL):
 
     req_xml = etree.fromstring(ret)
 
-    signature = sign_node(req_xml, True)
+    signature = sign_node(req_xml, not force_adobe)
     if (signature is None):
         return None
 
@@ -151,12 +149,21 @@ def getDecryptedCert(pkcs12_b64_string = None, force_bytebooks = False):
             # When old activation.xmls are loaded in the new plugin.
             certificate_bb = None
 
-        certificate_adobe = next(
+        try: 
+            certificate_adobe = next(
                 c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
                 if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
             )
+        except:
+            certificate_adobe = None
 
-        if force_bytebooks and certificate_bb is not None:
+        if certificate_bb is None and certificate_adobe is None: 
+            return None
+        elif certificate_adobe is None: 
+            pkcs12_b64_string = certificate_bb
+        elif certificate_bb is None:
+            pkcs12_b64_string = certificate_adobe
+        elif force_bytebooks and certificate_bb is not None:
             pkcs12_b64_string = certificate_bb
         else: 
             pkcs12_b64_string = certificate_adobe
@@ -205,15 +212,19 @@ def buildAuthRequest(use_bytebooks = False):
         auth_cert_bb = None
 
 
-    license_cert_adobe = next(
+    try: 
+        license_cert_adobe = next(
                 c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("licenseCertificate")))
                 if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
             )
 
-    auth_cert_adobe = next(
+        auth_cert_adobe = next(
                 c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("authenticationCertificate")))
                 if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
             )
+    except: 
+        license_cert_adobe = None
+        auth_cert_adobe = None
 
 
 
@@ -221,6 +232,8 @@ def buildAuthRequest(use_bytebooks = False):
         ret += "<adept:licenseCertificate>%s</adept:licenseCertificate>\n" % (license_cert_bb)
         ret += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>\n" % (auth_cert_bb)
 
+    elif auth_cert_adobe is None or license_cert_adobe is None: 
+        return None
     else: 
         ret += "<adept:licenseCertificate>%s</adept:licenseCertificate>\n" % (license_cert_adobe)
         ret += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>\n" % (auth_cert_adobe)
@@ -246,10 +259,12 @@ def doOperatorAuth(operatorURL, force_adobe = False):
         authURL = authURL[:-8]
     
     
+    # The operator is the distributor's own ACS server, not ByteBooks. Don't validate TLS here,
+    # same as for /Fulfill: lots of distributors have invalid or expired certs.
     if not force_adobe:
-        replyData = sendRequestDocu(auth_req, authURL + "/Auth?ofByteBooks=1", True).decode("utf-8")
+        replyData = sendRequestDocu(auth_req, authURL + "/Auth?ofByteBooks=1", False).decode("utf-8")
     else:
-        replyData = sendRequestDocu(auth_req, authURL + "/Auth", True).decode("utf-8")
+        replyData = sendRequestDocu(auth_req, authURL + "/Auth", False).decode("utf-8")
 
     if not "<success" in replyData:
         if "<error" in replyData and 'E_ADEPT_INVALID_CERTIFICATE' in replyData and not force_adobe:
@@ -265,13 +280,17 @@ def doOperatorAuth(operatorURL, force_adobe = False):
 
     activationURL = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("activationURL"))).text
 
-    init_license_service_request = buildInitLicenseServiceRequest(authURL)
+    init_license_service_request = buildInitLicenseServiceRequest(authURL, force_adobe)
 
     if (init_license_service_request is None):
         return "Creating license request failed!", None
 
 
-    resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService?ofByteBooks=1", True).decode("utf-8")
+    if force_adobe:
+        resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService", True).decode("utf-8")
+    else: 
+        resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService?ofByteBooks=1", True).decode("utf-8")
+
     if "<error" in resp: 
         return "Looks like that failed: %s" % resp, None
     elif "<success" in resp: 
@@ -709,7 +728,7 @@ def tryReturnBook(bookData):
         print(doc_send)
 
 
-    retval = sendRequestDocu(doc_send, return_server, True).decode("utf-8")
+    retval = sendRequestDocu(doc_send, return_server, False).decode("utf-8")
 
     if "<error" in retval: 
         print("Loan return failed: %s" % (retval))

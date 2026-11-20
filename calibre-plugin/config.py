@@ -892,6 +892,14 @@ class ConfigWidget(QWidget):
 
            
 
+    def show_activation_server_error(self, step):
+        # Call this from inside an except block so the traceback ends up in the details.
+        msg = "Couldn't connect to the ByteBooks activation server (" + step + ").\n\n"
+        msg += "Please check your internet connection. If the details below mention a certificate error, "
+        msg += "your system's CA certificates might be missing or outdated."
+        return error_dialog(None, "Digital Editions activation failed", msg, det_msg=traceback.format_exc(), show=True, show_copy_button=True)
+
+
     def create_anon_auth(self): 
     
         try: 
@@ -911,7 +919,10 @@ class ConfigWidget(QWidget):
                         
         createDeviceKeyFile()
         createDeviceFile(False, 0)
-        success, resp = createUser(0, None, None)
+        try:
+            success, resp = createUser(0, None, None)
+        except Exception:
+            return self.show_activation_server_error("while creating the user")
         if (success is False):
             return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 
@@ -1028,7 +1039,10 @@ class ConfigWidget(QWidget):
 
 
         # Get account types
-        types, authCert_bb, authCert_adobe = getAuthMethodsAndCert()
+        try:
+            types, authCert_bb, authCert_adobe = getAuthMethodsAndCert()
+        except Exception:
+            return self.show_activation_server_error("while loading the list of ID providers")
                 
         msg = "Please select your ID provider (usually ByteBooks ID)"
 
@@ -1057,7 +1071,10 @@ class ConfigWidget(QWidget):
                 
         createDeviceKeyFile()
         createDeviceFile(False, vers_idx)
-        success, resp = createUser(vers_idx, authCert_bb, authCert_adobe)
+        try:
+            success, resp = createUser(vers_idx, authCert_bb, authCert_adobe)
+        except Exception:
+            return self.show_activation_server_error("while creating the user")
         if (success is False):
             return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 
