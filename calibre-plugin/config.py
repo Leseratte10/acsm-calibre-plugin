@@ -1021,8 +1021,8 @@ class ConfigWidget(QWidget):
 
         # Get account types
         types, authCert_bb, authCert_adobe = getAuthMethodsAndCert()
-        
-        msg = "Please select your ID provider. In most cases, \"Adobe ID\" is the correct choice, even for ByteBooks accounts."
+                
+        msg = "Please select your ID provider (usually ByteBooks ID)"
 
         acc_item, ok = QInputDialog.getItem(self, "Authorizing Digital Editions account", msg, types[1], 0, False)
         acc_type = "AdobeID"

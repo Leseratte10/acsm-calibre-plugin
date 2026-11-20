@@ -144,7 +144,12 @@ def getAuthMethodsAndCert():
         mid = method.get("method", None)
         txt = method.text
 
-        if mid != "anonymous":
+        if mid == "anonymous":
+            continue
+        elif mid == "AdobeID":
+            aid_ids.append(mid)
+            aid_names.append("ByteBooks ID (Adobe ID)")
+        else:
             aid_ids.append(mid)
             aid_names.append(txt)
 
