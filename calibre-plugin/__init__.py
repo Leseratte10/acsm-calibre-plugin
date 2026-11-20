@@ -108,7 +108,7 @@ try:
 except:
     from calibre_plugins.deacsm.singleinstance_helper import SingleInstance
 
-import os, shutil, traceback, sys, time, io, random
+import os, shutil, traceback, sys, time, io
 import zipfile
 from lxml import etree
 
@@ -370,6 +370,8 @@ class ACSMInput(FileTypePlugin):
         try: 
             download_url = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("src"))).text
         except: 
+            # If src is present, it is used. If it isn't, ADE uses /Download instead.
+            # If downloadType is "simple", it does a GET. If it's anything else, it does a POST including a bunch of data.
             print("{0} v{1}: FulfillmentResult does not contain the <src> tag. This may be an ACSM with download type 'auth'?".format(PLUGIN_NAME, PLUGIN_VERSION))
             print("{0} v{1}: Please download the book through ADE (so the ACSM file is 'used').".format(PLUGIN_NAME, PLUGIN_VERSION))
             print("{0} v{1}: After that, please open a bug report and attach the ACSM file.".format(PLUGIN_NAME, PLUGIN_VERSION))

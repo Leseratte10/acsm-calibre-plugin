@@ -299,11 +299,11 @@ def operatorAuth(operatorURL):
         pass
 
     
-    ret = doOperatorAuth(operatorURL)
+    ret, reqtype = doOperatorAuth(operatorURL)
     if (ret is not None):
-        return "doOperatorAuth error: %s" % ret, None
+        return ("doOperatorAuth error: %s" % ret), None
 
-    #ret is now a boolean. If true, Adobe, if false, Bytebooks.
+    #reqtype is now a boolean. If true, Adobe, if false, Bytebooks.
 
     # Check if list exists:
     list = activationxml.find("./%s" % (adNS("operatorURLList")))
@@ -323,7 +323,7 @@ def operatorAuth(operatorURL):
     f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8"))
     f.close()
 
-    return None, ret
+    return None, reqtype
 
 
 
@@ -460,7 +460,7 @@ def fulfill(acsm_file, do_notify = False):
     if "<error" in replyData: 
         if "E_ADEPT_DISTRIBUTOR_AUTH" in replyData:
             # This distributor *always* wants authentication, so force that again
-            ret = doOperatorAuth(fulfillURL)
+            ret, use_adobe = doOperatorAuth(fulfillURL)
 
             if (ret is not None):
                 return False, "doOperatorAuth error: %s" % ret

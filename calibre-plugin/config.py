@@ -12,18 +12,17 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-import os, base64, traceback
+import os, traceback
 from PyQt5.QtGui import QKeySequence
 
 from lxml import etree
 
-import sys, time, datetime
+import sys, datetime
 
 
-from PyQt5.Qt import (Qt, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit,
-                      QGroupBox, QPushButton, QListWidget, QListWidgetItem, QInputDialog, 
-                      QFileDialog, 
-                      QLineEdit, QAbstractItemView, QIcon, QDialog, QDialogButtonBox, QUrl)
+from PyQt5.Qt import (QWidget, QHBoxLayout, QVBoxLayout, QLineEdit, QGroupBox, 
+                      QListWidget, QListWidgetItem, QInputDialog, QFileDialog, 
+                      QLineEdit, QAbstractItemView, QIcon, QDialog, QDialogButtonBox)
 from PyQt5.QtWidgets import QShortcut
 
 from PyQt5 import QtCore
@@ -158,9 +157,14 @@ class ConfigWidget(QWidget):
 
         # First remove all overdue books from the loan list, 
         # to determine if we should enable the button.
-        RentedBooksDialog.remove_overdue_books_from_list()
 
-        if (len(self.tempacsmprefs["list_of_rented_books"]) == 0):
+        from libadobeLoans import remove_overdue_books_from_list
+        new_booklist = remove_overdue_books_from_list(self.acsmprefs["list_of_rented_books"])
+        self.acsmprefs.set("list_of_rented_books", new_booklist)
+        self.acsmprefs.writeprefs()
+
+
+        if (len(self.acsmprefs["list_of_rented_books"]) == 0):
             self.button_rented_books.setText(_("No loaned books available"))
             self.button_rented_books.setEnabled(False)
 
@@ -1151,49 +1155,17 @@ class ConfigWidget(QWidget):
 
 class RentedBooksDialog(QDialog):
 
-    @staticmethod
-    def remove_overdue_books_from_list():
-        # Delete rented books that are overdue: 
-        overdue_books = []
-
-        acsmprefs = prefs.ACSMInput_Prefs()
-
-        for book in acsmprefs["list_of_rented_books"]:
-            try: 
-                book_time_stamp = book["validUntil"]
-                timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%SZ")
-                currenttime = datetime.datetime.utcnow()
-            except: 
-                # Invalid book timestano
-                continue
-
-            if (timestamp <= currenttime):
-                # Book is overdue, no need to return. Delete from list.
-                overdue_books.append(book)
-                continue
-
-        templist = acsmprefs["list_of_rented_books"]
-
-        for book in overdue_books:
-            templist.remove(book)
-
-        acsmprefs.set("list_of_rented_books", templist)
-        acsmprefs.writeprefs()
-
-
-
-
     def __init__(self, parent):
         QDialog.__init__(self,parent)
         self.parent = parent
 
-        
-
         self.setWindowTitle("ACSM Input: Manage loaned Books")
         self.acsmprefs = prefs.ACSMInput_Prefs()
 
-        # Delete rented books that are overdue: 
-        RentedBooksDialog.remove_overdue_books_from_list()
+        from libadobeLoans import remove_overdue_books_from_list
+        new_booklist = remove_overdue_books_from_list(self.acsmprefs["list_of_rented_books"])
+        self.acsmprefs.set("list_of_rented_books", new_booklist)
+        self.acsmprefs.writeprefs()
 
         # Start Qt Gui dialog layout
         layout = QVBoxLayout(self)
@@ -1266,13 +1238,20 @@ class RentedBooksDialog(QDialog):
 
             try: 
                 book_time_stamp = book["validUntil"]
-                timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%SZ")
-                currenttime = datetime.datetime.utcnow()
+                if sys.version_info < (3, 7, 0):
+                    # https://blog.miguelgrinberg.com/post/it-s-time-for-a-change-datetime-utcnow-is-now-deprecated 
+                    timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%SZ")
+                    currenttime = datetime.datetime.utcnow()
+                else: 
+                    timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%S%z")
+                    currenttime = datetime.datetime.now(datetime.timezone.utc)
+
+                info = "(" + self.td_format(timestamp - currenttime) + " remaining)"
             except: 
                 # Invalid book timestamp
+                info = "(unknown time remaining)"
                 continue
 
-            info = "(" + self.td_format(timestamp - currenttime) + " remaining)"
 
             book_name = book["book_name"]
             if book_name is None: 
@@ -1297,16 +1276,16 @@ class RentedBooksDialog(QDialog):
             print("{0} v{1}: Error while importing book return stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
 
-        Ret_book = None
+        ret_book = None
         for book in self.acsmprefs["list_of_rented_books"]:
             if book["loanID"] == userdata:
-                Ret_book = book
+                ret_book = book
                 break
 
-        if Ret_book is None: 
+        if ret_book is None: 
             return
 
-        ret, msg = tryReturnBook(Ret_book)
+        ret, msg = tryReturnBook(ret_book)
 
         if (ret):
             print("Book successfully returned.")
