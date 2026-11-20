@@ -113,7 +113,7 @@ def getAuthMethodsAndCert():
     # Otherwise the plugin will not look 100% like ADE to Adobe.
 
     authenticationURL = VAR_ACS_SERVER_HTTPS + "/AuthenticationServiceInfo?ofByteBooks=1"
-    response2 = sendHTTPRequest(authenticationURL)
+    response2 = sendHTTPRequest(authenticationURL, True)
 
     adobe_response_xml2 = etree.fromstring(response2)
 
@@ -161,7 +161,7 @@ def getAuthMethodsAndCert():
 def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None): 
 
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
-        return False, "Invalid Version index", [[], []]
+        return False, "Invalid Version index"
 
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
 
@@ -174,7 +174,7 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
 
     activationURL = VAR_ACS_SERVER_HTTPS + "/ActivationServiceInfo?ofByteBooks=1"
 
-    response = sendHTTPRequest(activationURL)
+    response = sendHTTPRequest(activationURL, True)
 
     #print("======================================================")
     #print("Sending request to " + activationURL)
@@ -195,7 +195,7 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
             )
 
     if (authURL is None or userInfoURL is None or certificate_bb is None):
-        return False, "Error: Unexpected reply from activation service.", [[], []]
+        return False, "Error: Unexpected reply from activation service."
 
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authURL")).text = authURL
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "userInfoURL")).text = userInfoURL
@@ -212,7 +212,7 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
     if authCertBB is None or authCertAdobe is None: 
         # This is not supposed to happen, but if it does, then just query it again from Adobe.
         authenticationURL = authURL + "/AuthenticationServiceInfo?ofByteBooks=1"
-        response2 = sendHTTPRequest(authenticationURL)
+        response2 = sendHTTPRequest(authenticationURL, True)
 
         adobe_response_xml2 = etree.fromstring(response2)
         authCertBB = adobe_response_xml2.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
@@ -370,7 +370,7 @@ def convertAnonAuthToAccount(username, passwd):
 
     linkRequest = buildSignInRequestForAnonAuthConvert(username, passwd, authenticationCertificate)
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/AddSignInDirect?ofByteBooks=1"
-    linkResponse = sendRequestDocu(linkRequest, signInURL)
+    linkResponse = sendRequestDocu(linkRequest, signInURL, True)
 
     try: 
         credentialsXML = etree.fromstring(linkResponse)
@@ -479,7 +479,7 @@ def signIn(account_type, username, passwd):
 
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/SignInDirect?ofByteBooks=1"
 
-    credentials = sendRequestDocu(signInRequest, signInURL)
+    credentials = sendRequestDocu(signInRequest, signInURL, True)
     
     
     #print("======================================================")
@@ -591,7 +591,7 @@ def exportProxyAuth(act_xml_path, activationToken):
     rt_si_authURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text
     rt_si_userInfoURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("userInfoURL"))).text
     rt_si_activationURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("activationURL"))).text
-    rt_si_certificate_bb = activationxml.find("./%s/%s[@ofByteBooks='1']" % (adNS("activationServiceInfo"), adNS("certificate"))).text
+    rt_si_certificate_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("activationServiceInfo"), adNS("certificate"))).text
     rt_si_certificate_ad = next(
                 c.text for c in activationxml.findall(adNS("certificate"))
                 if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
@@ -909,7 +909,7 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
 
     data = "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
 
-    ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTPS + "/Activate?ofByteBooks=1")
+    ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTPS + "/Activate?ofByteBooks=1", True)
 
     try: 
         credentialsXML = etree.fromstring(ret)

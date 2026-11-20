@@ -391,7 +391,7 @@ class ACSMInput(FileTypePlugin):
         filename_tmp = self.temporary_file(".blob").name
 
         dl_start_time = int(time.time() * 1000)
-        ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp)
+        ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp, False)
         dl_end_time = int(time.time() * 1000)
 
         print("Download took %d ms (HTTP %d)" % (dl_end_time - dl_start_time, ret))

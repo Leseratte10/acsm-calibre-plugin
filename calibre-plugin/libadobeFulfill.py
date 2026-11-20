@@ -242,14 +242,14 @@ def doOperatorAuth(operatorURL, force_adobe = False):
 
     authURL = operatorURL
     authURL = authURL.replace('?ofByteBooks=1', '')
-    if authURL.endswith("Fulfill"):
-        authURL = authURL.replace("/Fulfill", "")
+    if authURL.endswith("/Fulfill"):
+        authURL = authURL[:-8]
     
     
     if not force_adobe:
-        replyData = sendRequestDocu(auth_req, authURL + "/Auth?ofByteBooks=1").decode("utf-8")
+        replyData = sendRequestDocu(auth_req, authURL + "/Auth?ofByteBooks=1", True).decode("utf-8")
     else:
-        replyData = sendRequestDocu(auth_req, authURL + "/Auth").decode("utf-8")
+        replyData = sendRequestDocu(auth_req, authURL + "/Auth", True).decode("utf-8")
 
     if not "<success" in replyData:
         if "<error" in replyData and 'E_ADEPT_INVALID_CERTIFICATE' in replyData and not force_adobe:
@@ -271,7 +271,7 @@ def doOperatorAuth(operatorURL, force_adobe = False):
         return "Creating license request failed!", None
 
 
-    resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService?ofByteBooks=1").decode("utf-8")
+    resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService?ofByteBooks=1", True).decode("utf-8")
     if "<error" in resp: 
         return "Looks like that failed: %s" % resp, None
     elif "<success" in resp: 
@@ -681,7 +681,7 @@ def tryReturnBook(bookData):
         print(doc_send)
 
 
-    retval = sendRequestDocu(doc_send, return_server).decode("utf-8")
+    retval = sendRequestDocu(doc_send, return_server, True).decode("utf-8")
 
     if "<error" in retval: 
         print("Loan return failed: %s" % (retval))
@@ -858,7 +858,17 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, forceO
     return False, errmsg
 
 
+def quote_query_value(value):
+    try: 
+        from urllib.parse import quote
+    except ImportError:
+        from urllib import quote
 
+    # Python 2's quote() raises KeyError on unicode with non-ASCII characters,
+    # so always hand it UTF-8 bytes. Python 3's quote() accepts bytes as well.
+    if not isinstance(value, bytes):
+        value = value.encode("utf-8")
+    return quote(value)
 
 def fetchLicenseServiceCertificate(licenseURL, operatorURL):
 
@@ -889,7 +899,7 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL):
     
     info_entry = etree.SubElement(list, etree.QName(NSMAP["adept"], "licenseServiceInfo"))
 
-    licenseServiceInfoReq = operatorURL + "/LicenseServiceInfo?licenseURL=" + licenseURL + "&ofByteBooks=1"
+    licenseServiceInfoReq = operatorURL + "/LicenseServiceInfo?licenseURL=" + quote_query_value(licenseURL) + "&ofByteBooks=1"
 
     try: 
         response = sendHTTPRequest(licenseServiceInfoReq).decode("utf-8")

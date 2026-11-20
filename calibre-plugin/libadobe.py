@@ -225,8 +225,8 @@ def makeFingerprint(serial):
 
 ############################################## HTTP stuff:
 
-def sendHTTPRequest_DL2FILE(URL, outputfile):
-    # type: (str, str) -> int
+def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
+    # type: (str, str, bool) -> int
 
     headers = {
         "Accept": "*/*",
@@ -247,8 +247,9 @@ def sendHTTPRequest_DL2FILE(URL, outputfile):
     except:
         ctx = ssl.create_default_context()
 
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    if not validate_tls:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
 
 
     req = ulib.Request(url=URL, headers=headers)
@@ -257,16 +258,6 @@ def sendHTTPRequest_DL2FILE(URL, outputfile):
     chunksize = 16 * 1024
 
     ret_code = handler.getcode()
-
-
-    loc = None
-    try: 
-        loc = req.headers.get("Location")
-    except:
-        pass
-
-    if loc is not None: 
-        return sendHTTPRequest_DL2FILE(loc)
 
     if ret_code != 200:
         return ret_code
@@ -280,8 +271,8 @@ def sendHTTPRequest_DL2FILE(URL, outputfile):
 
     return 200
 
-def sendHTTPRequest_getSimple(URL):
-    # type: (str) -> str
+def sendHTTPRequest_getSimple(URL, validate_tls = True):
+    # type: (str, bool) -> str
 
     headers = {
         "Accept": "*/*",
@@ -301,28 +292,20 @@ def sendHTTPRequest_getSimple(URL):
         # just enforce TLSv1.2 here.
     except:
         ctx = ssl.create_default_context()
-
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    
+    if not validate_tls:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
 
     req = ulib.Request(url=URL, headers=headers)
     handler = ulib.urlopen(req, context=ctx)
 
     content = handler.read()
 
-    loc = None
-    try: 
-        loc = req.headers.get("Location")
-    except:
-        pass
-
-    if loc is not None: 
-        return sendHTTPRequest_getSimple(loc)
-
     return content
 
-def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
-    # type: (str, bytes, str, bool) -> str
+def sendPOSTHTTPRequest(URL, document, type, returnRC = False, validate_tls = True):
+    # type: (str, bytes, str, bool, bool) -> str
 
     headers = {
         "Accept": "*/*",
@@ -344,8 +327,9 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
     except:
         ctx = ssl.create_default_context()
 
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    if not validate_tls:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
 
     # Make sure URL has a protocol
     # Some vendors (see issue #22) apparently don't include "http://" in some of their URLs.
@@ -382,33 +366,24 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
 
     content = handler.read()
 
-    loc = None
-    try: 
-        loc = req.headers.get("Location")
-    except:
-        pass
-
-    if loc is not None: 
-        return sendPOSTHTTPRequest(loc, document, type, returnRC)
-
     if returnRC:
         return ret_code, content
 
     return content
 
 
-def sendHTTPRequest(URL):
-    # type: (str) -> str
-    return sendHTTPRequest_getSimple(URL)
+def sendHTTPRequest(URL, validate_tls = False):
+    # type: (str, bool) -> str
+    return sendHTTPRequest_getSimple(URL, validate_tls)
 
 
-def sendRequestDocu(document, URL):
-    # type: (str, str) -> str
-    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", False)
+def sendRequestDocu(document, URL, validate_tls = False):
+    # type: (str, str, bool) -> str
+    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", False, validate_tls)
 
-def sendRequestDocuRC(document, URL):
-    # type: (str, str) -> str
-    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", True)
+def sendRequestDocuRC(document, URL, validate_tls = False):
+    # type: (str, str, bool) -> str
+    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", True, validate_tls)
 
 
 
@@ -531,16 +506,13 @@ def sign_node(node, use_bytebooks):
     activationxml = etree.parse(FILE_ACTIVATIONXML)
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-    pkcs12_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12"))).text
-    pkcs12_adobe = next(
+    if use_bytebooks:
+        pkcs12 = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12"))).text
+    else: 
+        pkcs12 = next(
                 c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
                 if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
             )
-
-    if use_bytebooks:
-        pkcs12 = pkcs12_bb
-    else: 
-        pkcs12 = pkcs12_adobe
 
 
     my_pkcs12 = base64.b64decode(pkcs12)

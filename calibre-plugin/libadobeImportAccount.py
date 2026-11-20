@@ -83,7 +83,7 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
                     current_value = line.split('=', 1)[1].strip()[1:-1]
                     continue
 
-                if (line.lower().startswith('"ofByteBooks"=')): 
+                if (line.lower().startswith('"ofbytebooks"=')): 
                     val = line.split('=', 1)[1].strip()[1:-1]
                     if val == "1" or val.lower() == "true" or val == True:
                         current_ofbytebooks = True
@@ -111,6 +111,7 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
                     handle_subkey(current_parent, current_name, current_value, master_key, current_method, current_ofbytebooks, None)
                     current_name = None
                     current_value = None
+                    current_ofbytebooks = None
                     current_method = None
 
 
@@ -207,7 +208,7 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
         
         i = i + 1
 
-    return handle_subkey(None, None, None, master_key, None, buildIDtoEmulate)
+    return handle_subkey(None, None, None, master_key, None, None, buildIDtoEmulate)
 
 persistent_data = dict()
 account_method = None
@@ -372,7 +373,9 @@ def handle_subkey(parent, subkey, value, encryption_key, method, ofByteBooks, bu
         if ofByteBooks is None:
             persistent_data[parent][subkey] = value
         else:
-            persistent_data[parent][subkey] = dict()
+            if subkey not in persistent_data[parent]:
+                persistent_data[parent][subkey] = dict()
+
             persistent_data[parent][subkey][ofByteBooks] = value
     
 

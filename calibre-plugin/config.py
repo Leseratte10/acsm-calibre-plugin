@@ -424,16 +424,19 @@ class ConfigWidget(QWidget):
                 # Determine the ADE version we're emulating:
                 ver = containerdev.findall("./%s" % (adeptNS("version")))
 
-                # "Default" entry would be for the old 10.0.4 entry. 
-                # As 10.X is in the 3.0 range, assume we're on ADE 3.0.1 with hobbes version 10.0.85385
-                v_idx = VAR_VER_HOBBES_VERSIONS.index("10.0.85385")
+                # Default to BDE 5.0
+                v_idx = 0
 
                 for f in ver:
                     if f.get("name") == "hobbes":
                         hobbes_version = f.get("value")
 
                 if hobbes_version is not None:
-                    v_idx = VAR_VER_HOBBES_VERSIONS.index(hobbes_version)
+                    try: 
+                        v_idx = VAR_VER_HOBBES_VERSIONS.index(hobbes_version)
+                    except: 
+                        pass
+                    
             except:
                 return error_dialog(None, "Authorize eReader", "Error while determining ADE version", show=True, show_copy_button=False)
 
@@ -500,6 +503,7 @@ class ConfigWidget(QWidget):
             os.remove(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"))
         except:
             error_dialog(None, "Remove Digital Editions account", "There was an error while removing the authorization.", show=True, show_copy_button=False)
+            return
 
         
         # Show success, then close:
