@@ -94,23 +94,21 @@ class ConfigWidget(QWidget):
             self.button_anon_auth.clicked.connect(self.create_anon_auth)
             ua_group_box_layout.addWidget(self.button_anon_auth)
 
-            # TODO add support for importing from BDE 5.0
-
             if isosx:
                 self.button_import_MacADE = QtGui.QPushButton(self)
-                self.button_import_MacADE.setText(_("Import activation from Digital Editions < 5.0 (MacOS)"))
+                self.button_import_MacADE.setText(_("Import activation from Digital Editions (MacOS)"))
                 self.button_import_MacADE.clicked.connect(self.import_activation_from_MAC)
                 ua_group_box_layout.addWidget(self.button_import_MacADE)
 
             if iswindows:
                 self.button_import_WinADE = QtGui.QPushButton(self)
-                self.button_import_WinADE.setText(_("Import activation from Digital Editions < 5.0 (Windows)"))
+                self.button_import_WinADE.setText(_("Import activation from Digital Editions (Windows)"))
                 self.button_import_WinADE.clicked.connect(self.import_activation_from_Win)
                 ua_group_box_layout.addWidget(self.button_import_WinADE)
 
             if islinux:
                 self.button_import_LinuxWineADE = QtGui.QPushButton(self)
-                self.button_import_LinuxWineADE.setText(_("Import activation from Digital Editions < 5.0 (Wine)"))
+                self.button_import_LinuxWineADE.setText(_("Import activation from Digital Editions (Wine)"))
                 self.button_import_LinuxWineADE.clicked.connect(self.import_activation_from_LinuxWine)
                 ua_group_box_layout.addWidget(self.button_import_LinuxWineADE)
 
@@ -167,8 +165,8 @@ class ConfigWidget(QWidget):
             self.button_rented_books.setEnabled(False)
 
 
-        self.chkNotifyFulfillment = QtGui.QCheckBox("Notify ACS server after successful fulfillment")
-        self.chkNotifyFulfillment.setToolTip("Default: True\n\nIf this is enabled, the ACS server will receive a notification once the ACSM has successfully been converted. \nThis is not strictly necessary, but it is what ADE does, so it's probably safer to just do it as well.\nAlso, it is required to be able to return loaned books.")
+        self.chkNotifyFulfillment = QtGui.QCheckBox("Notify CS server after successful fulfillment")
+        self.chkNotifyFulfillment.setToolTip("Default: True\n\nIf this is enabled, the CS server will receive a notification once the ACSM has successfully been converted. \nThis is not strictly necessary, but it is what ADE does, so it's probably safer to just do it as well.\nAlso, it is required to be able to return loaned books.")
         self.chkNotifyFulfillment.setChecked(self.tempacsmprefs["notify_fulfillment"])
         layout.addWidget(self.chkNotifyFulfillment)
 
@@ -905,7 +903,7 @@ class ConfigWidget(QWidget):
                         
         createDeviceKeyFile()
         createDeviceFile(False, 0)
-        success, resp = createUser(0, None)
+        success, resp = createUser(0, None, None)
         if (success is False):
             return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 
@@ -1022,9 +1020,9 @@ class ConfigWidget(QWidget):
 
 
         # Get account types
-        types, authCert_bb, _ = getAuthMethodsAndCert()
+        types, authCert_bb, authCert_adobe = getAuthMethodsAndCert()
         
-        msg = "Please select your AdobeID provider. Usually, \"Adobe ID\" is the correct choice, even for ByteBooks accounts."
+        msg = "Please select your ID provider. In most cases, \"Adobe ID\" is the correct choice, even for ByteBooks accounts."
 
         acc_item, ok = QInputDialog.getItem(self, "Authorizing Digital Editions account", msg, types[1], 0, False)
         acc_type = "AdobeID"
@@ -1051,7 +1049,7 @@ class ConfigWidget(QWidget):
                 
         createDeviceKeyFile()
         createDeviceFile(False, vers_idx)
-        success, resp = createUser(vers_idx, authCert_bb)
+        success, resp = createUser(vers_idx, authCert_bb, authCert_adobe)
         if (success is False):
             return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 
@@ -1108,10 +1106,10 @@ class ConfigWidget(QWidget):
         filters = [("DER Files", ["der"])]
 
         account_uuid = None
-        export_filename = "adobe_encryption_key.der"
+        export_filename = "bytebooks_encryption_key.der"
         try: 
             account_uuid = getAccountUUID()
-            export_filename = "adobe_uuid_" + account_uuid + ".der"
+            export_filename = "bytebooks_uuid_" + account_uuid + ".der"
         except:
             pass
 

@@ -81,13 +81,21 @@ def GetUserNameREG():
         import _winreg as winreg
 
     try: 
-        DEVICE_KEY_PATH = r'Software\Adobe\Adept\Device'
+        DEVICE_KEY_PATH = r'Software\ByteBooks\Adept\Device'
         regkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, DEVICE_KEY_PATH)
         # Yes, it's actually implemented like that. Encode in UTF16 but only take the lowest byte of each character.
         userREG = winreg.QueryValueEx(regkey, 'username')[0].encode('utf-16-le')[::2]
         return userREG
     except: 
-        return None
+        # Try again with the old path.
+        try: 
+            DEVICE_KEY_PATH = r'Software\Adobe\Adept\Device'
+            regkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, DEVICE_KEY_PATH)
+            # Yes, it's actually implemented like that. Encode in UTF16 but only take the lowest byte of each character.
+            userREG = winreg.QueryValueEx(regkey, 'username')[0].encode('utf-16-le')[::2]
+            return userREG
+        except: 
+            return None
 
 
 from ctypes import Structure, c_uint, c_void_p, POINTER
@@ -182,12 +190,19 @@ def GetMasterKey():
         import _winreg as winreg
 
     try: 
-        DEVICE_KEY_PATH = r'Software\Adobe\Adept\Device'
+        DEVICE_KEY_PATH = r'Software\ByteBooks\Adept\Device'
         regkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, DEVICE_KEY_PATH)
         device = winreg.QueryValueEx(regkey, 'key')[0]
     except: 
-        print("Can't find encrypted device key.")
-        return None
+        # Try the old Adobe Path
+        try: 
+            DEVICE_KEY_PATH = r'Software\Adobe\Adept\Device'
+            regkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, DEVICE_KEY_PATH)
+            device = winreg.QueryValueEx(regkey, 'key')[0]
+        except: 
+            print("Can't find encrypted device key.")
+            return None
+        
 
     if verbose_logging:
         print("Encrypted key: " + str(device))

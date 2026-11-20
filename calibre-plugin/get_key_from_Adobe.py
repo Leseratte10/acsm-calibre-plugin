@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -55,8 +55,6 @@ def main():
         print("Empty credential, aborting")
         exit(1)
 
-    filename = "adobekey_" + VAR_MAIL + ".der"
-
     with tempfile.TemporaryDirectory() as temp_dir:
         update_account_path(temp_dir)
 
@@ -69,7 +67,7 @@ def main():
             exit(1)
 
 
-        success, resp = createUser(0, None)
+        success, resp = createUser(0, None, None)
         if (success is False):
             print("Error, couldn't create user: %s" % resp)
             exit(1)
@@ -83,10 +81,11 @@ def main():
 
         print("Exporting keys ...")
 
+        filename = "bytebooks_key_" + VAR_MAIL + ".der"
         try: 
             account_uuid = getAccountUUID()
             if (account_uuid is not None):
-                filename = "adobekey_" + VAR_MAIL + "_uuid_" + account_uuid + ".der"
+                filename = "bytebooks_key_" + VAR_MAIL + "_uuid_" + account_uuid + ".der"
         except: 
             pass
 

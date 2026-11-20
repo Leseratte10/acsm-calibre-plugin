@@ -153,7 +153,7 @@ def getAuthMethodsAndCert():
 
 
 
-def createUser(useVersionIndex = 0, authCert = None): 
+def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None): 
 
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
         return False, "Invalid Version index", [[], []]
@@ -190,7 +190,7 @@ def createUser(useVersionIndex = 0, authCert = None):
             )
 
     if (authURL is None or userInfoURL is None or certificate_bb is None):
-        return False, "Error: Unexpected reply from Adobe.", [[], []]
+        return False, "Error: Unexpected reply from activation service.", [[], []]
 
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authURL")).text = authURL
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "userInfoURL")).text = userInfoURL
@@ -204,14 +204,14 @@ def createUser(useVersionIndex = 0, authCert = None):
     certadobe.text = certificate_adobe
 
 
-    if authCert is None: 
+    if authCertBB is None or authCertAdobe is None: 
         # This is not supposed to happen, but if it does, then just query it again from Adobe.
         authenticationURL = authURL + "/AuthenticationServiceInfo?ofByteBooks=1"
         response2 = sendHTTPRequest(authenticationURL)
 
         adobe_response_xml2 = etree.fromstring(response2)
-        authcertificate_bb = adobe_response_xml2.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
-        authcertificate_adobe = next(
+        authCertBB = adobe_response_xml2.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
+        authCertAdobe = next(
                 c.text for c in adobe_response_xml2.findall(adNS("certificate"))
                 if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
             )
@@ -219,15 +219,13 @@ def createUser(useVersionIndex = 0, authCert = None):
 
     authcertbb = etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authenticationCertificate"))
     authcertbb.set("ofByteBooks", "true")
-    authcertbb.text = authcertificate_bb
+    authcertbb.text = authCertBB
     
     authcertadobe = etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authenticationCertificate"))
     authcertadobe.set("ofByteBooks", "false")
-    authcertadobe.text = authcertificate_adobe
+    authcertadobe.text = authCertAdobe
+
     
-    etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authenticationCertificate")).text = authCert
-
-
     f = open(get_activation_xml_path(), "w")
     f.write("<?xml version=\"1.0\"?>\n")
     f.write(etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
@@ -348,6 +346,8 @@ def convertAnonAuthToAccount(username, passwd):
     # If you have an anonymous authorization, you can convert that to an AdobeID. 
     # Important: You can only do this ONCE for each AdobeID. 
     # The AdobeID you are using for this must not be connected to any ADE install.
+
+    # TODO: This is untested for ByteBooks accounts.
 
     # This is intended for cases where people install ADE, use an anonymous auth, 
     # buy a couple books, and then decide to get a fresh AdobeID.
