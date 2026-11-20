@@ -20,7 +20,7 @@ def remove_overdue_books_from_list(loan_list):
 			timestamp = 0
 			continue
 
-		if (currenttime < timestamp):
+		if (currenttime < timestamp or timestamp == 0):
 			# Book still valid, keep it on the list.
 			templist.append(book)
 		

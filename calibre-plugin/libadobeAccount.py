@@ -11,6 +11,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 from lxml import etree
 import base64
 import locale, platform
+from xml.sax.saxutils import escape as xml_escape
 
 try:
     from Cryptodome.PublicKey import RSA
@@ -543,7 +544,7 @@ def signIn(account_type, username, passwd):
     if account_type != "anonymous": 
         username = credentialsXML.find("./%s" % (adNS("username"))).text
         # TODO: Should we always write this? Windows does, MacOS doesn't.
-        f.write("<adept:username method=\"%s\">%s</adept:username>\n" % (credentialsXML.find("./%s" % (adNS("username"))).get("method", account_type), username))
+        f.write("<adept:username method=\"%s\">%s</adept:username>\n" % (credentialsXML.find("./%s" % (adNS("username"))).get("method", account_type), xml_escape(username)))
 
     print(credentialsXML)
     print("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12")))
@@ -823,46 +824,43 @@ def buildActivateReq(useVersionIndex = 0):
 
     return True, ret
 
-
 def changeDeviceVersion(useVersionIndex = 0):
+    # Makes device.xml report the given emulated version.
+    # This runs on every plugin start, so only touch the file if something changes.
+
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
         return False, "Invalid Version index"
 
     try: 
-        build_id = VAR_VER_BUILD_IDS[useVersionIndex]
-    except:
-        return False, "Unknown build ID"
-
-    try: 
+        new_values = {
+            "hobbes": VAR_VER_HOBBES_VERSIONS[useVersionIndex],
+            "clientOS": VAR_VER_OS_IDENTIFIERS[useVersionIndex],
+        }
         devicexml = etree.parse(get_device_path())
-        new_hobbes = VAR_VER_HOBBES_VERSIONS[useVersionIndex]
-        new_os = VAR_VER_OS_IDENTIFIERS[useVersionIndex]
     except: 
         return False, "Error preparing version change"
 
-    
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-    ver = devicexml.findall("./%s" % (adNS("version")))
 
-    for f in ver:
-        if f.get("name") == "hobbes":
-            #print("Changing hobbes from {0} to {1}".format(f.attrib["value"], new_hobbes))
-            f.attrib["value"] = new_hobbes
-        if f.get("name") == "clientOS":
-            #print("Changing OS from {0} to {1}".format(f.attrib["value"], new_os))
-            f.attrib["value"] = new_os
+    changed = False
+    for f in devicexml.findall("./%s" % (adNS("version"))):
+        new_value = new_values.get(f.get("name"))
+        if new_value is not None and f.get("value") != new_value:
+            f.set("value", new_value)
+            changed = True
+
+    if not changed:
+        return True, ""
 
     try: 
-        f = open(get_device_path(), "w")
-        f.write("<?xml version=\"1.0\"?>\n")
-        f.write(etree.tostring(devicexml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
+        f = open(get_device_path(), "wb")
+        f.write(b"<?xml version=\"1.0\"?>\n")
+        f.write(etree.tostring(devicexml, encoding="utf-8", pretty_print=True, xml_declaration=False))
         f.close()
     except: 
         return False, "Failed to update device file."
 
     return True, ""
-        
-
 
 def activateDevice(useVersionIndex = 0, proxyData = None): 
 

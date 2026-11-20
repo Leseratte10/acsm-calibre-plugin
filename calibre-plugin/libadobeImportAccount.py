@@ -13,6 +13,8 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 from lxml import etree
 import base64
 import os, locale, platform
+from xml.sax.saxutils import escape as xml_escape
+
 
 try: 
     from Cryptodome.Cipher import AES as _AES
@@ -259,7 +261,7 @@ def finalize_write_config_Windows(data, key, buildID):
         if account_method is None:
             account_method = "AdobeID"
     
-        content += "<adept:username method=\"%s\">%s</adept:username>" % (account_method, data["credentials"]["username"])
+        content += "<adept:username method=\"%s\">%s</adept:username>" % (account_method, xml_escape(data["credentials"]["username"]))
 
 
     pkcs12_key = data["credentials"]["pkcs12"]
@@ -514,7 +516,7 @@ def recreateMacActivationFiles(path_to_activation, deviceKey, deviceFingerprint,
         language = "en"
 
     content += "<adept:version name=\"clientLocale\" value=\"%s\"/>\n" % (language)
-    content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (base64.b64encode(deviceFingerprint))
+    content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (base64.b64encode(deviceFingerprint).decode("latin-1"))
     content += "</adept:deviceInfo>"
 
     # Write device.xml

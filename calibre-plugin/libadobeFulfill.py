@@ -294,6 +294,7 @@ def operatorAuth(operatorURL):
         for member in operator_url_list:
             if member.text.strip() == operatorURL:
                 #print("Already authenticated to operator")
+                # We don't know which certificate it accepted; fulfill() finds out.
                 return None, None
     except:
         pass
@@ -371,6 +372,32 @@ def buildRights(license_token_node):
     return ret
 
 
+def signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL):
+    # type: (str, bool, str) -> str
+    # Signs the fulfill request with the Adobe key (use_adobe) or the ByteBooks
+    # key, sends it and returns the reply. Returns None if signing failed.
+
+    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
+    etree.register_namespace("adept", NSMAP["adept"])
+
+    fulfill_request_xml = etree.fromstring(fulfill_request)
+    signature = sign_node(fulfill_request_xml, not use_adobe)
+    if (signature is None):
+        return None
+
+    etree.SubElement(fulfill_request_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
+
+    fulfill_req_signed = "<?xml version=\"1.0\"?>\n" + etree.tostring(fulfill_request_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+
+    #print("will send:\n %s" % fulfill_req_signed)
+    #print("Sending fulfill request to %s" % fulfillURL)
+
+    # For debugging only
+    # fulfillURL = fulfillURL.replace("https:", "http:")
+
+    return sendRequestDocu(fulfill_req_signed, fulfillURL).decode("utf-8")
+
+
 def fulfill(acsm_file, do_notify = False):
 
     verbose_logging = False
@@ -436,36 +463,37 @@ def fulfill(acsm_file, do_notify = False):
         print("Fulfill request:")
         print(fulfill_request)
 
-    fulfill_request_xml = etree.fromstring(fulfill_request)
-    # Sign the request:
-    signature = sign_node(fulfill_request_xml, not use_adobe)
-    if (signature is None):
+    # If operatorAuth() just authenticated us, it knows which certificate the
+    # operator accepted. If we were already authenticated (earlier, or by ADE/BDE
+    # before an import), it returns None: then try ByteBooks first and fall back
+    # to Adobe if the operator rejects that, like doOperatorAuth() does for /Auth.
+    cert_type_known = use_adobe is not None
+    if not cert_type_known:
+        use_adobe = False
+
+    replyData = signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL)
+    if (replyData is None):
         return False, "Signing failed!"
 
-    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
-    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-    
-    etree.SubElement(fulfill_request_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
+    if "<error" in replyData and "E_ADEPT_INVALID_CERTIFICATE" in replyData and not cert_type_known:
+        print("Operator rejected the request signed with the ByteBooks certificate, this might be an older ACS server. Retrying with Adobe certificates.")
+        use_adobe = True
+        replyData = signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL)
+        if (replyData is None):
+            return False, "Signing failed!"
 
-    fulfill_req_signed = "<?xml version=\"1.0\"?>\n" + etree.tostring(fulfill_request_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-
-    #print("will send:\n %s" % fulfill_req_signed)
-    #print("Sending fulfill request to %s" % fulfillURL)
-
-    # For debugging only
-    # fulfillURL = fulfillURL.replace("https:", "http:")
-
-    replyData = sendRequestDocu(fulfill_req_signed, fulfillURL).decode("utf-8")
-
-    if "<error" in replyData: 
+    if "<error" in replyData:
         if "E_ADEPT_DISTRIBUTOR_AUTH" in replyData:
-            # This distributor *always* wants authentication, so force that again
+            # This distributor *always* wants authentication, so force that again.
+            # The auth tells us which certificate the operator accepted, so re-sign to match.
             ret, use_adobe = doOperatorAuth(fulfillURL)
 
             if (ret is not None):
                 return False, "doOperatorAuth error: %s" % ret
 
-            replyData = sendRequestDocu(fulfill_req_signed, fulfillURL).decode("utf-8")
+            replyData = signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL)
+            if (replyData is None):
+                return False, "Signing failed!"
             if "<error" in replyData:
                 return False, "Looks like there's been an error during Fulfillment even after auth: %s" % replyData
         else: 

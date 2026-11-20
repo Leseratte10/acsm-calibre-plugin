@@ -439,10 +439,11 @@ class ACSMInput(FileTypePlugin):
             ret = patch_drm_into_pdf(filename, rights_xml_str, pdf_tmp_file, resource)
             if (ret):
                 print("{0} v{1}: File successfully fulfilled ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+                return pdf_tmp_file
             else:
                 print("{0} v{1}: There was an error patching the PDF file.".format(PLUGIN_NAME, PLUGIN_VERSION))
+                return None
 
-            return pdf_tmp_file
         else: 
             print("{0} v{1}: Error: Unsupported file type ...".format(PLUGIN_NAME, PLUGIN_VERSION))
             return None

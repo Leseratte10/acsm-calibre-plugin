@@ -38,13 +38,6 @@ def main():
     if (VAR_PASS == "" and VAR_MAIL != ""):
         VAR_PASS = getpass.getpass("Please enter the password for your AdobeID: ")
 
-    if (VAR_VER is None):
-        VAR_VER = int(input("Please enter '1' for ADE 2.0 or '2' for ADE 3.0: "))
-
-    if VAR_VER >= len(VAR_VER_SUPP_CONFIG_NAMES):
-        print("Invalid version")
-        exit(1)
-
     if (VAR_MAIL != "" and VAR_PASS == ""):
         print("Empty password, aborting")
         exit(1)
@@ -52,12 +45,12 @@ def main():
 
     createDeviceKeyFile()
     
-    success = createDeviceFile(True, VAR_VER)
+    success = createDeviceFile(True, 0)
     if (success is False):
         print("Error, couldn't create device file.")
         exit(1)
 
-    success, resp = createUser(VAR_VER, None, None)
+    success, resp = createUser(0, None, None)
     if (success is False):
         print("Error, couldn't create user: %s" % resp)
         exit(1)
@@ -71,7 +64,7 @@ def main():
         print("Login unsuccessful: " + resp)
         exit(1)
 
-    success, resp = activateDevice(VAR_VER, None)
+    success, resp = activateDevice(0, None)
     if (success is False):
         print("Couldn't activate device: " + resp)
         exit(1)
