@@ -15,14 +15,9 @@ if "calibre" in sys.modules:
     # Bugfix for Calibre < 5:
     if sys.version_info[0] == 2:
         from calibre.utils.config import config_dir
-        for filename in ["ACSM Input.zip"]:
-            __zip_path = os.path.join(config_dir, "plugins", filename)
-            if __zip_path not in sys.path and os.path.exists(__zip_path):
-                sys.path.insert(0, __zip_path)
+        __zip_path = os.path.join(config_dir, "plugins", "ACSM Input.zip")
+        if __zip_path not in sys.path and os.path.exists(__zip_path):
+            sys.path.insert(0, __zip_path)
 
-            if os.path.exists(__zip_path):
-                # If we already included the new ZIP, don't also include the new one. 
-                # Maybe that helps with the update issues?
-                continue
 
 #@@CALIBRE_COMPAT_CODE_END@@
