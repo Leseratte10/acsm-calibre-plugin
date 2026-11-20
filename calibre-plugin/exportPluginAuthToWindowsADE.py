@@ -110,8 +110,8 @@ def GetMasterKey():
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.ACSMInput_Prefs()
-        verbose_logging = deacsmprefs["detailed_logging"]
+        acsmprefs = prefs.ACSMInput_Prefs()
+        verbose_logging = acsmprefs["detailed_logging"]
     except:
         pass
 

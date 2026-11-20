@@ -34,10 +34,11 @@ from zipfile import ZipFile
 # calibre modules and constants.
 from calibre.gui2 import (question_dialog, error_dialog, info_dialog,        # type: ignore
                         warning_dialog, choose_save_file, choose_files)
+from calibre.constants import isosx, iswindows, islinux                 # type: ignore
+
 # modules from this plugin's zipfile.
 from calibre_plugins.deacsm.__init__ import PLUGIN_NAME, PLUGIN_VERSION      # type: ignore
 import calibre_plugins.deacsm.prefs as prefs                                 # type: ignore
-from calibre.constants import isosx, iswindows, islinux                 # type: ignore
 
 
 #@@CALIBRE_COMPAT_CODE@@
@@ -54,17 +55,17 @@ class ConfigWidget(QWidget):
         self.plugin_path = plugin_path
 
         # get the prefs
-        self.deacsmprefs = prefs.ACSMInput_Prefs()
+        self.acsmprefs = prefs.ACSMInput_Prefs()
 
         # make a local copy
-        self.tempdeacsmprefs = {}
-        self.tempdeacsmprefs['path_to_account_data'] = self.deacsmprefs['path_to_account_data']
+        self.tempacsmprefs = {}
+        self.tempacsmprefs['path_to_account_data'] = self.acsmprefs['path_to_account_data']
 
-        self.tempdeacsmprefs['notify_fulfillment'] = self.deacsmprefs['notify_fulfillment']
-        self.tempdeacsmprefs['detailed_logging'] = self.deacsmprefs['detailed_logging']
-        self.tempdeacsmprefs['delete_acsm_after_fulfill'] = self.deacsmprefs['delete_acsm_after_fulfill']
+        self.tempacsmprefs['notify_fulfillment'] = self.acsmprefs['notify_fulfillment']
+        self.tempacsmprefs['detailed_logging'] = self.acsmprefs['detailed_logging']
+        self.tempacsmprefs['delete_acsm_after_fulfill'] = self.acsmprefs['delete_acsm_after_fulfill']
 
-        self.tempdeacsmprefs['list_of_rented_books'] = self.deacsmprefs['list_of_rented_books']
+        self.tempacsmprefs['list_of_rented_books'] = self.acsmprefs['list_of_rented_books']
 
         # Start Qt Gui dialog layout
         layout = QVBoxLayout(self)
@@ -161,25 +162,25 @@ class ConfigWidget(QWidget):
         # to determine if we should enable the button.
         RentedBooksDialog.remove_overdue_books_from_list()
 
-        if (len(self.tempdeacsmprefs["list_of_rented_books"]) == 0):
+        if (len(self.tempacsmprefs["list_of_rented_books"]) == 0):
             self.button_rented_books.setText(_("No loaned books available"))
             self.button_rented_books.setEnabled(False)
 
 
         self.chkNotifyFulfillment = QtGui.QCheckBox("Notify ACS server after successful fulfillment")
         self.chkNotifyFulfillment.setToolTip("Default: True\n\nIf this is enabled, the ACS server will receive a notification once the ACSM has successfully been converted. \nThis is not strictly necessary, but it is what ADE does, so it's probably safer to just do it as well.\nAlso, it is required to be able to return loaned books.")
-        self.chkNotifyFulfillment.setChecked(self.tempdeacsmprefs["notify_fulfillment"])
+        self.chkNotifyFulfillment.setChecked(self.tempacsmprefs["notify_fulfillment"])
         layout.addWidget(self.chkNotifyFulfillment)
 
         self.chkDetailedLogging = QtGui.QCheckBox("Enable verbose debug logging")
         self.chkDetailedLogging.setToolTip("Default: False\n\nIf this is enabled, the plugin debug logs will be more verbose which might be helpful in case of errors.\nHowever, it will also mean that private data like encryption keys or account credentials might end up in the logfiles.")
-        self.chkDetailedLogging.setChecked(self.tempdeacsmprefs["detailed_logging"])
+        self.chkDetailedLogging.setChecked(self.tempacsmprefs["detailed_logging"])
         self.chkDetailedLogging.toggled.connect(self.toggle_logging)
         layout.addWidget(self.chkDetailedLogging)
 
         self.chkDeleteAfterFulfill = QtGui.QCheckBox("Delete ACSM file after successful import")
         self.chkDeleteAfterFulfill.setToolTip("Default: False\n\nIf this is enabled, imported ACSM files will be automatically deleted after they've been converted into an EPUB or PDF. \nNote: This is experimental. It is possible that the ACSM will also be deleted if there's errors during import. \nIf you have an important ACSM file that you can't re-download if needed, do not enable this option.")
-        self.chkDeleteAfterFulfill.setChecked(self.tempdeacsmprefs["delete_acsm_after_fulfill"])
+        self.chkDeleteAfterFulfill.setChecked(self.tempacsmprefs["delete_acsm_after_fulfill"])
         self.chkDeleteAfterFulfill.toggled.connect(self.toggle_acsm_delete)
         layout.addWidget(self.chkDeleteAfterFulfill)
 
@@ -191,14 +192,13 @@ class ConfigWidget(QWidget):
 
 
         try: 
-            from libadobe import createDeviceKeyFile, update_account_path, are_ade_version_lists_valid
-            from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+            from libadobe import update_account_path, are_ade_version_lists_valid
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
 
 
-        update_account_path(self.deacsmprefs["path_to_account_data"])
+        update_account_path(self.acsmprefs["path_to_account_data"])
         self.resize(self.sizeHint())
 
         try: 
@@ -264,7 +264,7 @@ class ConfigWidget(QWidget):
             traceback.print_exc()
 
 
-        update_account_path(self.deacsmprefs["path_to_account_data"])
+        update_account_path(self.acsmprefs["path_to_account_data"])
 
         info_string, activated, mail = self.get_account_info()
 
@@ -409,7 +409,7 @@ class ConfigWidget(QWidget):
             # Okay, if we end up here, the user wants to authorize his eReader to his current AdobeID. 
             # Figure out what ADE version we're currently emulating: 
 
-            device_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml")
+            device_xml_path = os.path.join(self.acsmprefs["path_to_account_data"], "device.xml")
 
             try: 
                 containerdev = etree.parse(device_xml_path)
@@ -463,16 +463,16 @@ class ConfigWidget(QWidget):
             # If there is no authorization, there's nothing to delete
             return
 
-        msg = "Are you sure you want to remove the ADE authorization?\n"
+        msg = "Are you sure you want to remove the Digital Editions authorization?\n"
 
         if ade_mail is None:
             msg += "The current authorization is an anonymous login. It will be permanently lost if you proceed.\n\n"
         else:
-            msg += "You will use up one of your six activations if you want to authorize your account again in the future.\n\n"
+            msg += "You will use up one of your ten activations if you want to authorize your account again in the future.\n\n"
         
         msg += "Click 'Yes' to delete the authorization or 'No' to cancel."
 
-        ok = question_dialog(None, "Remove ADE account", msg)
+        ok = question_dialog(None, "Remove Digital Editions account", msg)
 
         if (not ok): 
             return
@@ -482,7 +482,7 @@ class ConfigWidget(QWidget):
         msg += "Click 'Yes' to create a backup before deleting, click 'No' to delete without backup."
 
 
-        ok = question_dialog(None, "Remove ADE account", msg)
+        ok = question_dialog(None, "Remove Digital Editions account", msg)
 
         if (ok): 
             # Create a backup:
@@ -493,15 +493,15 @@ class ConfigWidget(QWidget):
         
         # Okay, once we are here, we can be pretty sure the user actually wants to delete their authorization.
         try: 
-            os.remove(os.path.join(self.deacsmprefs["path_to_account_data"], "activation.xml"))
-            os.remove(os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml"))
-            os.remove(os.path.join(self.deacsmprefs["path_to_account_data"], "devicesalt"))
+            os.remove(os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml"))
+            os.remove(os.path.join(self.acsmprefs["path_to_account_data"], "device.xml"))
+            os.remove(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"))
         except:
-            error_dialog(None, "Remove ADE account", "There was an error while removing the authorization.", show=True, show_copy_button=False)
+            error_dialog(None, "Remove Digital Editions account", "There was an error while removing the authorization.", show=True, show_copy_button=False)
 
         
         # Show success, then close:
-        info_dialog(None, "Remove ADE account", "ADE authorization successfully removed.", show=True, show_copy_button=False)
+        info_dialog(None, "Remove Digital Editions account", "Authorization successfully removed.", show=True, show_copy_button=False)
             
         if ade_mail is None: 
             try: 
@@ -524,8 +524,8 @@ class ConfigWidget(QWidget):
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
 
-        activation_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "activation.xml")
-        device_xml_path = os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml")
+        activation_xml_path = os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml")
+        device_xml_path = os.path.join(self.acsmprefs["path_to_account_data"], "device.xml")
 
         container = None
         try: 
@@ -601,29 +601,27 @@ class ConfigWidget(QWidget):
             return False
 
 
-        update_account_path(self.deacsmprefs["path_to_account_data"])
+        update_account_path(self.acsmprefs["path_to_account_data"])
 
-        use_bytebooks = True
-        if (is_bytebooks_account()):
-            msg = "Which format do you want to export your account data in?\n\n"
-            msg += "Click 'Yes' to use the new ByteBooks format which will work with all ACS servers but won't work with older versions of this plugin (recommended).\n\n"
-            msg += "Click 'No' to use the old Adobe format which may not work with all ACS servers but will work with older versions of the plugin (not recommended). The backup may stop working after December 2026."
+#         use_bytebooks = True
+#         if (is_bytebooks_account()):
+#             msg = "Which format do you want to export your account data in?\n\n"
+#             msg += "Click 'Yes' to use the new ByteBooks format which will work with all ACS servers but won't work with older versions of this plugin (recommended).\n\n"
+#             msg += "Click 'No' to use the old Adobe format which may not work with all ACS servers but will work with older versions of the plugin (not recommended). The backup may stop working after December 2026."
+# 
+#             use_bytebooks = question_dialog(None, "Choose backup format", msg)
+# 
+#         if not use_bytebooks:
+#             # TODO: Implement removing all Bytebooks-specific add-ons from the activation.xml here.
+#             error_dialog(None, "Export failed", "Not implemented yet.", show=True, show_copy_button=False)
+#             return False
 
-            use_bytebooks = question_dialog(None, "Choose backup format", msg)
-
-        if not use_bytebooks:
-            # TODO: Implement removing all Bytebooks-specific add-ons from the activation.xml here.
-            error_dialog(None, "Export failed", "Not implemented yet.", show=True, show_copy_button=False)
-            return False
-
-
-        account_uuid = None
-        export_filename = "bytebooks_account_backup.zip"
         try: 
             account_uuid = getAccountUUID()
             export_filename = "bytebooks_account_backup_uuid_" + account_uuid + ".zip"
         except:
-            pass
+            account_uuid = None
+            export_filename = "bytebooks_account_backup.zip"
 
         filters = [("ZIP", ["zip"])]
         filename = choose_save_file(self, "Export activation files", _("Export activation files"), 
@@ -636,9 +634,9 @@ class ConfigWidget(QWidget):
 
         try: 
             with ZipFile(filename, 'w') as zipfile:
-                zipfile.write(os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml"), "device.xml")
-                zipfile.write(os.path.join(self.deacsmprefs["path_to_account_data"], "activation.xml"), "activation.xml")
-                zipfile.write(os.path.join(self.deacsmprefs["path_to_account_data"], "devicesalt"), "devicesalt")
+                zipfile.write(os.path.join(self.acsmprefs["path_to_account_data"], "device.xml"), "device.xml")
+                zipfile.write(os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml"), "activation.xml")
+                zipfile.write(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"), "devicesalt")
             
             return True
         except: 
@@ -657,6 +655,9 @@ class ConfigWidget(QWidget):
                     break
 
                 if line.strip().startswith("[Software\\\\Adobe\\\\Adept\\\\Activation\\\\0000"):
+                    return True
+
+                if line.strip().startswith("[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\0000"):
                     return True
         
         except:
@@ -839,15 +840,15 @@ class ConfigWidget(QWidget):
                 return error_dialog(None, "Import failed", "Can't find required files in this ZIP")
 
             try: 
-                output_device = open(os.path.join(self.deacsmprefs["path_to_account_data"], "device.xml"), "w")
+                output_device = open(os.path.join(self.acsmprefs["path_to_account_data"], "device.xml"), "w")
                 output_device.write(device.decode("utf-8"))
                 output_device.close()
 
-                output_activation = open(os.path.join(self.deacsmprefs["path_to_account_data"], "activation.xml"), "w")
+                output_activation = open(os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml"), "w")
                 output_activation.write(activation.decode("utf-8"))
                 output_activation.close()
 
-                output_salt = open(os.path.join(self.deacsmprefs["path_to_account_data"], "devicesalt"), "wb")
+                output_salt = open(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"), "wb")
                 output_salt.write(salt)
                 output_salt.close()
 
@@ -894,7 +895,7 @@ class ConfigWidget(QWidget):
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
 
-        update_account_path(self.deacsmprefs["path_to_account_data"])
+        update_account_path(self.acsmprefs["path_to_account_data"])
 
         msg = "You are about to create an anonymous authorization.\n"
         msg += "If you lose access to this authorization, all books linked to it will be lost / inaccessible. "
@@ -952,7 +953,7 @@ class ConfigWidget(QWidget):
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
 
-        update_account_path(self.deacsmprefs["path_to_account_data"])
+        update_account_path(self.acsmprefs["path_to_account_data"])
 
         # This MUST only be called on anonymous accounts. 
         # The button should be disabled if that's not the case, but just to make sure ...
@@ -1017,7 +1018,7 @@ class ConfigWidget(QWidget):
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
 
-        update_account_path(self.deacsmprefs["path_to_account_data"])
+        update_account_path(self.acsmprefs["path_to_account_data"])
 
 
         # Get account types
@@ -1102,7 +1103,7 @@ class ConfigWidget(QWidget):
             traceback.print_exc()
 
 
-        update_account_path(self.deacsmprefs["path_to_account_data"])
+        update_account_path(self.acsmprefs["path_to_account_data"])
 
         filters = [("DER Files", ["der"])]
 
@@ -1132,10 +1133,10 @@ class ConfigWidget(QWidget):
 
 
     def save_settings(self):
-        self.deacsmprefs.set('notify_fulfillment', self.chkNotifyFulfillment.isChecked())
-        self.deacsmprefs.set('detailed_logging', self.chkDetailedLogging.isChecked())
-        self.deacsmprefs.set('delete_acsm_after_fulfill', self.chkDeleteAfterFulfill.isChecked())
-        self.deacsmprefs.writeprefs()
+        self.acsmprefs.set('notify_fulfillment', self.chkNotifyFulfillment.isChecked())
+        self.acsmprefs.set('detailed_logging', self.chkDetailedLogging.isChecked())
+        self.acsmprefs.set('delete_acsm_after_fulfill', self.chkDeleteAfterFulfill.isChecked())
+        self.acsmprefs.writeprefs()
 
     def load_resource(self, name):
         with ZipFile(self.plugin_path, 'r') as zf:
@@ -1157,9 +1158,9 @@ class RentedBooksDialog(QDialog):
         # Delete rented books that are overdue: 
         overdue_books = []
 
-        deacsmprefs = prefs.ACSMInput_Prefs()
+        acsmprefs = prefs.ACSMInput_Prefs()
 
-        for book in deacsmprefs["list_of_rented_books"]:
+        for book in acsmprefs["list_of_rented_books"]:
             try: 
                 book_time_stamp = book["validUntil"]
                 timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%SZ")
@@ -1173,13 +1174,13 @@ class RentedBooksDialog(QDialog):
                 overdue_books.append(book)
                 continue
 
-        templist = deacsmprefs["list_of_rented_books"]
+        templist = acsmprefs["list_of_rented_books"]
 
         for book in overdue_books:
             templist.remove(book)
 
-        deacsmprefs.set("list_of_rented_books", templist)
-        deacsmprefs.writeprefs()
+        acsmprefs.set("list_of_rented_books", templist)
+        acsmprefs.writeprefs()
 
 
 
@@ -1191,7 +1192,7 @@ class RentedBooksDialog(QDialog):
         
 
         self.setWindowTitle("ACSM Input: Manage loaned Books")
-        self.deacsmprefs = prefs.ACSMInput_Prefs()
+        self.acsmprefs = prefs.ACSMInput_Prefs()
 
         # Delete rented books that are overdue: 
         RentedBooksDialog.remove_overdue_books_from_list()
@@ -1263,7 +1264,7 @@ class RentedBooksDialog(QDialog):
     def populate_list(self):
         self.listy.clear()
 
-        for book in self.deacsmprefs["list_of_rented_books"]:
+        for book in self.acsmprefs["list_of_rented_books"]:
 
             try: 
                 book_time_stamp = book["validUntil"]
@@ -1299,7 +1300,7 @@ class RentedBooksDialog(QDialog):
             traceback.print_exc()
 
         Ret_book = None
-        for book in self.deacsmprefs["list_of_rented_books"]:
+        for book in self.acsmprefs["list_of_rented_books"]:
             if book["loanID"] == userdata:
                 Ret_book = book
                 break
@@ -1329,7 +1330,7 @@ class RentedBooksDialog(QDialog):
 
         success = False
         done = False
-        templist = self.deacsmprefs["list_of_rented_books"]
+        templist = self.acsmprefs["list_of_rented_books"]
         while not done:
             done = True 
             for book in templist:
@@ -1338,7 +1339,7 @@ class RentedBooksDialog(QDialog):
                     templist.remove(book)
                     success = True
                     break
-        self.deacsmprefs.set("list_of_rented_books", templist)
+        self.acsmprefs.set("list_of_rented_books", templist)
 
         self.populate_list()
 

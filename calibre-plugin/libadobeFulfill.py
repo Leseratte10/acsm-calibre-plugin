@@ -376,8 +376,8 @@ def fulfill(acsm_file, do_notify = False):
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.ACSMInput_Prefs()
-        verbose_logging = deacsmprefs["detailed_logging"]
+        acsmprefs = prefs.ACSMInput_Prefs()
+        verbose_logging = acsmprefs["detailed_logging"]
     except:
         pass
 
@@ -595,21 +595,21 @@ def addLoanRecordToConfigFile(new_loan_record):
 
     try: 
         import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-        deacsmprefs = prefs.ACSMInput_Prefs()
+        acsmprefs = prefs.ACSMInput_Prefs()
     except: 
         print("Exception while reading config file")
         return False
     
-    deacsmprefs.refresh()
+    acsmprefs.refresh()
 
     # Check if that exact loan is already in the list, and if so, delete it:
     done = False
     while not done:
         done = True
-        for book in deacsmprefs["list_of_rented_books"]:
+        for book in acsmprefs["list_of_rented_books"]:
             if book["loanID"] == new_loan_record["loanID"]:
                 done = False
-                deacsmprefs["list_of_rented_books"].remove(book)
+                acsmprefs["list_of_rented_books"].remove(book)
                 break
 
 
@@ -617,8 +617,8 @@ def addLoanRecordToConfigFile(new_loan_record):
     # The config widget can then read this and present a list of not-yet-returned
     # books, and can then return them.
     # Also, the config widget is responsible for cleaning up that list once a book's validity period is up.
-    deacsmprefs["list_of_rented_books"].append(new_loan_record)
-    deacsmprefs.commit()
+    acsmprefs["list_of_rented_books"].append(new_loan_record)
+    acsmprefs.commit()
 
     return True
 
@@ -629,8 +629,8 @@ def tryReturnBook(bookData):
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.ACSMInput_Prefs()
-        verbose_logging = deacsmprefs["detailed_logging"]
+        acsmprefs = prefs.ACSMInput_Prefs()
+        verbose_logging = acsmprefs["detailed_logging"]
     except:
         pass
 
@@ -705,8 +705,8 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, forceO
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.ACSMInput_Prefs()
-        verbose_logging = deacsmprefs["detailed_logging"]
+        acsmprefs = prefs.ACSMInput_Prefs()
+        verbose_logging = acsmprefs["detailed_logging"]
     except:
         pass
 
