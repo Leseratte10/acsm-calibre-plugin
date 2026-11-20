@@ -85,7 +85,7 @@ class ConfigWidget(QWidget):
 
         if not activated: 
             self.button_link_account = QtGui.QPushButton(self)
-            self.button_link_account.setText(_("Link to ADE account"))
+            self.button_link_account.setText(_("Link to Digital Editions account"))
             self.button_link_account.clicked.connect(self.link_account)
             ua_group_box_layout.addWidget(self.button_link_account)
 
@@ -530,7 +530,7 @@ class ConfigWidget(QWidget):
             container = etree.parse(activation_xml_path)
             containerdev = etree.parse(device_xml_path)
         except (IOError, FileNotFoundError, OSError) as e:
-            return "Not authorized for any ADE ID", False, None
+            return "Not authorized for any ID", False, None
 
         try: 
             adeptNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)        
