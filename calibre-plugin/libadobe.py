@@ -609,6 +609,28 @@ ASN_ATTRIBUTE = 5   # aka "ATTRIBUTE"
 
 debug = False
 
+def attribute_sort_key(attribute):
+    # type: (str) -> tuple
+
+    # "Attributes are sorted first by their namespaces and
+    # then by their names; sorting is done bytewise on UTF-8
+    # representations."
+
+    # lxml returns attribute keys in Clark notation ("{namespace}name", or just "name"),
+    # so sorting the raw keys isn't quite right: a namespace that is a prefix of another one
+    # can sort after it ("{http://a/x}..." < "{http://a}..." because "/" < "}"), and attributes 
+    # without a namespace whose name starts with a non-ASCII character would sort after all 
+    # namespaced ones (because "{" < "\u00e9"). So split the key into namespace and local name, 
+    # with "" for "no namespace" (which then always comes first), and compare their UTF-8 bytes. 
+    # Comparing bytes instead of strings also keeps the order correct on Python 2 builds that 
+    # store unicode strings as UTF-16, where characters outside the BMP would sort wrongly.
+
+    q_attribute = etree.QName(attribute)
+    namespace = "" if q_attribute.namespace is None else q_attribute.namespace
+
+    return (namespace.encode("utf-8"), q_attribute.localname.encode("utf-8"))
+
+
 def hash_node_ctx(node, hash_ctx):
 
     qtag = etree.QName(node.tag)
@@ -629,14 +651,8 @@ def hash_node_ctx(node, hash_ctx):
     hash_do_append_string(hash_ctx, qtag.localname)
 
 
-    attrKeys = node.keys()
-
-    # Attributes need to be sorted
-    attrKeys.sort()
-    # TODO Implement UTF-8 bytewise sorting:
-    # "Attributes are sorted first by their namespaces and
-    # then by their names; sorting is done bytewise on UTF-8
-    # representations."
+    # Attributes need to be sorted, see attribute_sort_key() for the exact order.
+    attrKeys = sorted(node.keys(), key=attribute_sort_key)
 
     for attribute in attrKeys: 
         # Hash all the attributes

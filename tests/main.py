@@ -261,6 +261,59 @@ class TestAdobe(unittest.TestCase):
         self.assertEqual(sha_hash, "7f62c1c1db2e1c965fd8403a4e768735a5848689", "Invalid SHA hash for node signing (ultralong)")
 
 
+    def test_hash_node_attributeSortOrder(self): 
+        '''Check if XML hashing sorts attributes bytewise by namespace, then name'''
+
+        # "Attributes are sorted first by their namespaces and then by their names; 
+        # sorting is done bytewise on UTF-8 representations."
+        # Each attribute below is placed so that sorting lxml's raw "{namespace}name" keys
+        # would give a different order:
+        #  - "http://example.com/a" must come before "http://example.com/a/x" (prefix first),
+        #  - attributes without a namespace must all come before namespaced ones, 
+        #    including those whose name starts with a non-ASCII character,
+        #  - names are compared by UTF-8 bytes: "Alpha" < "zeta" < "\u00e9lan" < "\uf900" < "\U00020000".
+
+        import hashlib
+
+        mock_xml_str = u"""<adept:test xmlns:adept="http://ns.adobe.com/adept" 
+            xmlns:a="http://example.com/a" xmlns:ax="http://example.com/a/x" 
+            zeta="1" ax:a="2" \u00e9lan="3" a:b="4" Alpha="5" \uf900="6" \U00020000="7"/>"""
+
+        # Same attributes, different order in the source document
+        mock_xml_str_reordered = u"""<adept:test xmlns:adept="http://ns.adobe.com/adept" 
+            xmlns:a="http://example.com/a" xmlns:ax="http://example.com/a/x" 
+            \U00020000="7" a:b="4" \uf900="6" Alpha="5" ax:a="2" zeta="1" \u00e9lan="3"/>"""
+
+        expected_order = [
+            (u"", u"Alpha", u"5"),
+            (u"", u"zeta", u"1"),
+            (u"", u"\u00e9lan", u"3"),
+            (u"", u"\uf900", u"6"),
+            (u"", u"\U00020000", u"7"),
+            (u"http://example.com/a", u"b", u"4"),
+            (u"http://example.com/a/x", u"a", u"2"),
+        ]
+
+        # Build the expected hash input by hand, independent of the plugin's hashing helpers:
+        # each string is a 2-byte big-endian length followed by its UTF-8 bytes.
+        def asn_string(value):
+            data = value.encode("utf-8")
+            return bytearray([len(data) >> 8, len(data) & 0xff]) + bytearray(data)
+
+        expected_stream = bytearray([libadobe.ASN_NS_TAG]) + asn_string(u"http://ns.adobe.com/adept") + asn_string(u"test")
+        for namespace, name, value in expected_order:
+            expected_stream += bytearray([libadobe.ASN_ATTRIBUTE]) + asn_string(namespace) + asn_string(name) + asn_string(value)
+        expected_stream += bytearray([libadobe.ASN_CHILD, libadobe.ASN_END_TAG])
+
+        expected_hash = hashlib.sha1(bytes(expected_stream)).hexdigest().lower()
+
+        sha_hash = libadobe.hash_node(etree.fromstring(mock_xml_str)).hexdigest().lower()
+        self.assertEqual(sha_hash, expected_hash, "Attributes are not sorted bytewise by namespace, then name")
+
+        sha_hash_reordered = libadobe.hash_node(etree.fromstring(mock_xml_str_reordered)).hexdigest().lower()
+        self.assertEqual(sha_hash_reordered, expected_hash, "Attribute order in the document changes the hash")
+
+
 
     def test_sign_node_old(self):
 
