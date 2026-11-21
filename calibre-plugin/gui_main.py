@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -68,7 +68,7 @@ def create_menu_action_unique(ia, parent_menu, menu_text, image=None, tooltip=No
     return ac
 
 class ActualACSMInputGUIExtension(InterfaceAction):
-    name                        = "ACSM Input Plugin GUI Extension"
+    name = "ACSM Input Plugin GUI Extension"
     
     try: 
         popup_type = QToolButton.ToolButtonPopupMode.InstantPopup
@@ -81,7 +81,7 @@ class ActualACSMInputGUIExtension(InterfaceAction):
     # Text, icon, tooltip, keyboard shortcut
 
     def genesis(self): 
-        print("ACSM Input: GUI Plugin Genesis!")
+        print("ACSM Input: GUI Plugin loading...")
         self.menu = QMenu(self.gui)
 
         self.rebuild_menus()
@@ -110,6 +110,8 @@ class ActualACSMInputGUIExtension(InterfaceAction):
         from calibre.gui2 import info_dialog
         acsmprefs = prefs.ACSMInput_Prefs()
 
+        # Cleanup the loan list so we can show an info popup if there is none,
+        # instead of opening the full dialog.
         from libadobeLoans import remove_overdue_books_from_list
         acsmprefs.update_loan_list(remove_overdue_books_from_list)
         acsmprefs.writeprefs()

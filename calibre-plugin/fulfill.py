@@ -10,7 +10,6 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-# pyright: reportUndefinedVariable=false
 
 import sys, os, time, shutil
 
@@ -21,9 +20,6 @@ from libadobe import sendHTTPRequest_DL2FILE
 from libadobeFulfill import buildRights, fulfill
 from libpdf import patch_drm_into_pdf
 
-FILE_DEVICEKEY = "devicesalt"
-FILE_DEVICEXML = "device.xml"
-FILE_ACTIVATIONXML = "activation.xml"
 
 #######################################################################
 

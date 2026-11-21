@@ -637,7 +637,7 @@ def hash_node_ctx(node, hash_ctx):
             # Adobe HMAC and signature are not hashed
             return
         else: 
-            print("Warning: Found hmac or signature node in unexpected namespace " + qtag.namespace)
+            print("Warning: Found hmac or signature node in unexpected namespace " + str(qtag.namespace))
 
     hash_do_append_tag(hash_ctx, ASN_NS_TAG)
 

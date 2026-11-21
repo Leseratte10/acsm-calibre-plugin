@@ -121,9 +121,6 @@ class ACSMInput_Prefs():
             raise Exception("Why does the account folder not exist?")
             
 
-    def refresh(self):
-        return self.acsmprefs.refresh()
-
     def __getitem__(self,kind = None):
         if kind is not None:
             return self.acsmprefs[kind]
@@ -168,31 +165,4 @@ class ACSMInput_Prefs():
         self.update_loan_list(modify)
         return removed[0]
 
-    def addnamedvaluetoprefs(self, prefkind, keyname, keyvalue):
-        try:
-            if keyvalue not in self.acsmprefs[prefkind].values():
-                # ensure that the keyname is unique
-                # by adding a number (starting with 2) to the name if it is not
-                namecount = 1
-                newname = keyname
-                while newname in self.acsmprefs[prefkind]:
-                    namecount += 1
-                    newname = "{0:s}_{1:d}".format(keyname,namecount)
-                # add to the preferences
-                self.acsmprefs[prefkind][newname] = keyvalue
-                return (True, newname)
-        except:
-            traceback.print_exc()
-            pass
-        return (False, keyname)
-
-    def addvaluetoprefs(self, prefkind, prefsvalue):
-        # ensure the keyvalue isn't already in the preferences
-        try:
-            if prefsvalue not in self.acsmprefs[prefkind]:
-                self.acsmprefs[prefkind].append(prefsvalue)
-                return True
-        except:
-            traceback.print_exc()
-        return False
 

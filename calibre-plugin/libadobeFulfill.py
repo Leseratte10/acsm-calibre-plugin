@@ -549,14 +549,14 @@ def fulfill(acsm_file, do_notify = False):
 
     replyData = signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL)
     if (replyData is None):
-        return False, "Signing failed!"
+        return False, "Signing failed or response invalid."
 
     if "<error" in replyData and "E_ADEPT_INVALID_CERTIFICATE" in replyData and can_retry_with_adobe:
         print("Operator rejected the request signed with the ByteBooks certificate, this might be an older ACS server. Retrying with Adobe certificates.")
         use_adobe = True
         replyData = signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL)
         if (replyData is None):
-            return False, "Signing failed!"
+            return False, "Signing failed or response invalid."
 
     if "<error" in replyData:
         if "E_ADEPT_DISTRIBUTOR_AUTH" in replyData:
@@ -569,7 +569,7 @@ def fulfill(acsm_file, do_notify = False):
 
             replyData = signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL)
             if (replyData is None):
-                return False, "Signing failed!"
+                return False, "Signing failed or response invalid."
             if "<error" in replyData:
                 return False, "Looks like there's been an error during Fulfillment even after auth: %s" % replyData
         else: 
@@ -916,7 +916,7 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
                 url = url + "?ofByteBooks=1"
 
         try: 
-            code, msg = sendRequestDocuRC(doc_send, url)
+            code, msg = sendRequestDocuRC(doc_send, url, False)
         except:
             if not critical:
                 print("There was an error during an optional fulfillment notification:")
@@ -926,7 +926,9 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
                 continue
             else:
                 print("Error during critical notification:")
-                raise
+                import traceback
+                traceback.print_exc()
+                continue
 
         try: 
             msg = msg.decode("utf-8")
@@ -952,11 +954,6 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
             errmsg += "ERROR\n" + url + "\n" + msg + "\n\n"
             if critical:
                 errmsg_crit += "ERROR\n" + url + "\n" + msg + "\n\n"
-
-
-    if device is None and errmsg_crit != "":
-        errmsg_crit = ""
-        print("Skipping critical notification failure due to weird book.")
         
 
     if errmsg_crit == "": 

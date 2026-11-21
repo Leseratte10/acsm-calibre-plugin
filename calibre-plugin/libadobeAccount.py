@@ -1084,6 +1084,8 @@ def exportAccountEncryptionKeyDER(output_file):
         return False
 
 def exportAccountEncryptionKeyBytes():
+    # NOTE: This function seems unused, but should remain. It might be used by other plugins
+    # exporting the private key.
     try: 
         activationxml = etree.parse(get_activation_xml_path())
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)

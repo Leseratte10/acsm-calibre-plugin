@@ -390,7 +390,13 @@ def handle_subkey(parent, subkey, value, encryption_key, method, ofByteBooks, bu
         aes = AES(encryption_key, iv)
 
         value = base64.b64decode(persistent_data["credentials"]["privateLicenseKey"])
-        persistent_data["credentials"]["privateLicenseKey"] = base64.b64encode(aes.decrypt(value)).decode("latin-1")
+        decrypted_key = bytearray(aes.decrypt(value))
+
+        # Remove padding
+        decrypted_key = bytes(decrypted_key[:-decrypted_key[-1]])
+
+        persistent_data["credentials"]["privateLicenseKey"] = base64.b64encode(decrypted_key).decode("latin-1")
+
 
         return finalize_write_config_Windows(persistent_data, encryption_key, buildID)
     else: 
@@ -428,7 +434,7 @@ def handle_subkey(parent, subkey, value, encryption_key, method, ofByteBooks, bu
 
 def getMacCredential(type):
 
-    import os, re
+    import os, re, binascii
 
     # Just calling a native binary.
     # The python modules were all A) pretty complicated and B) are only intended
@@ -452,9 +458,11 @@ def getMacCredential(type):
     if m:
         hexform, stringform = m.groups()
         if hexform:
-            return bytes.fromhex(hexform)
+            return binascii.unhexlify(hexform)
+        elif isinstance(stringform, bytes):
+            return stringform
         else:
-            return bytes(stringform, 'latin-1')
+            return stringform.encode('latin-1')
         
     return None
 

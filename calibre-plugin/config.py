@@ -28,7 +28,11 @@ from PyQt5.QtWidgets import QShortcut
 from PyQt5 import QtCore
 
 from PyQt5 import Qt as QtGui
-from zipfile import ZipFile, BadZipFile
+try: 
+    from zipfile import ZipFile, BadZipFile
+except: 
+    # Python 2
+    from zipfile import ZipFile, BadZipfile as BadZipFile
 
 # calibre modules and constants.
 from calibre.gui2 import (question_dialog, error_dialog, info_dialog,        # type: ignore
@@ -56,12 +60,6 @@ class ConfigWidget(QWidget):
         # get the prefs
         self.acsmprefs = prefs.ACSMInput_Prefs()
 
-        # make a local copy for the toggle settings
-        # TODO: Why the heck do we do this again?
-        self.tempacsmprefs = {}
-        self.tempacsmprefs['notify_fulfillment'] = self.acsmprefs['notify_fulfillment']
-        self.tempacsmprefs['detailed_logging'] = self.acsmprefs['detailed_logging']
-        self.tempacsmprefs['delete_acsm_after_fulfill'] = self.acsmprefs['delete_acsm_after_fulfill']
 
         # Start Qt Gui dialog layout
         layout = QVBoxLayout(self)
@@ -167,18 +165,18 @@ class ConfigWidget(QWidget):
 
         self.chkNotifyFulfillment = QtGui.QCheckBox("Notify CS server after successful fulfillment")
         self.chkNotifyFulfillment.setToolTip("Default: True\n\nIf this is enabled, the CS server will receive a notification once the ACSM has successfully been converted. \nThis is not strictly necessary, but it is what ADE does, so it's probably safer to just do it as well.\nAlso, it is required to be able to return loaned books.")
-        self.chkNotifyFulfillment.setChecked(self.tempacsmprefs["notify_fulfillment"])
+        self.chkNotifyFulfillment.setChecked(self.acsmprefs["notify_fulfillment"])
         layout.addWidget(self.chkNotifyFulfillment)
 
         self.chkDetailedLogging = QtGui.QCheckBox("Enable verbose debug logging")
         self.chkDetailedLogging.setToolTip("Default: False\n\nIf this is enabled, the plugin debug logs will be more verbose which might be helpful in case of errors.\nHowever, it will also mean that private data like encryption keys or account credentials might end up in the logfiles.")
-        self.chkDetailedLogging.setChecked(self.tempacsmprefs["detailed_logging"])
+        self.chkDetailedLogging.setChecked(self.acsmprefs["detailed_logging"])
         self.chkDetailedLogging.toggled.connect(self.toggle_logging)
         layout.addWidget(self.chkDetailedLogging)
 
         self.chkDeleteAfterFulfill = QtGui.QCheckBox("Delete ACSM file after successful import")
         self.chkDeleteAfterFulfill.setToolTip("Default: False\n\nIf this is enabled, imported ACSM files will be automatically deleted after they've been converted into an EPUB or PDF. \nNote: This is experimental. It is possible that the ACSM will also be deleted if there's errors during import. \nIf you have an important ACSM file that you can't re-download if needed, do not enable this option.")
-        self.chkDeleteAfterFulfill.setChecked(self.tempacsmprefs["delete_acsm_after_fulfill"])
+        self.chkDeleteAfterFulfill.setChecked(self.acsmprefs["delete_acsm_after_fulfill"])
         self.chkDeleteAfterFulfill.toggled.connect(self.toggle_acsm_delete)
         layout.addWidget(self.chkDeleteAfterFulfill)
 
@@ -1137,7 +1135,7 @@ class ConfigWidget(QWidget):
 
         self.resize(self.sizeHint())
 
-        info_dialog(None, "Done", "Authorized to '" + acc_item + "' account " + mail, show=True, show_copy_button=False)
+        info_dialog(None, "Done", "Authorized to '" + acc_item + "' account " + str(mail), show=True, show_copy_button=False)
 
 
 
