@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <cpuid.h>
 #include <intsafe.h>
 
@@ -17,7 +18,23 @@ struct EncEntropy {
 	char user[13];
 };
 
-int main() {
+int main(int argc, char *argv[]) {
+	// Which install's device key to decrypt: "bytebooks" or "adobe". The plugin passes
+	// the one whose activation it imports, so the key always matches that activation.
+	// Without an argument, use ByteBooks if BDE has a device key, otherwise Adobe.
+	int force_adobe = 0;
+	int allow_fallback = 1;
+	if (argc > 1) {
+		if (strcmp(argv[1], "adobe") == 0) {
+			force_adobe = 1;
+		}
+		else if (strcmp(argv[1], "bytebooks") != 0) {
+			fprintf(stderr, "Usage: %s [bytebooks|adobe]\n", argv[0]);
+			return ERROR_INVALID_PARAMETER;
+		}
+		allow_fallback = 0;
+	}
+
 	// Get disk serial
 	DWORD serial;
 	if (GetVolumeInformation("c:\\\\", NULL, 0, &serial, NULL, NULL, NULL, 0) == 0) {
@@ -50,19 +67,23 @@ int main() {
 
 
 	// Get Encrypted adobe key
-	int force_adobe = 0;
 	BYTE key[BUFSIZE];
 	memset(&key, 0, sizeof(key)); 
 	DWORD key_size = BUFSIZE;
 
-	// BDE/ADE only write the "key" attribute to the Device key when the software is activated, so this should be fine.
-
-	LSTATUS key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\ByteBooks\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
-	if (key_retval != ERROR_SUCCESS) {
+	// BDE/ADE only write the "key" attribute to the Device key when the software is activated.
+	LSTATUS key_retval = ERROR_FILE_NOT_FOUND;
+	if (!force_adobe) {
+		key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\ByteBooks\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
+		if (key_retval != ERROR_SUCCESS && allow_fallback) {
+			force_adobe = 1;
+		}
+	}
+	if (force_adobe) {
 		key_size = BUFSIZE;
 		key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\Adobe\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
-		force_adobe = 1;
 	}
+	fprintf(stderr, "Using the %s device key\n", force_adobe ? "Adobe" : "ByteBooks");
 	if (key_retval != ERROR_SUCCESS) {
 		fprintf(stderr, "Error with RegGetValue: %ld\n", key_retval);
 		fprintf(stderr, "key_size: %ld\n", key_size);

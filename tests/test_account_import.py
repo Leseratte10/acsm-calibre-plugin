@@ -153,3 +153,41 @@ class TestAccountImport(unittest.TestCase):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+    def test_importWineKeySourceMatchesActivation(self):
+        '''Check if the Wine key helper is asked for the device key of the imported activation'''
+
+        import tempfile, shutil
+
+        try:
+            from unittest.mock import call
+        except ImportError:
+            from mock import call
+
+        # (activation trees in user.reg, expected use_bytebooks argument for GetMasterKey)
+        cases = [
+            (["Adobe"], False),
+            (["ByteBooks"], True),
+            (["Adobe", "ByteBooks"], True),
+        ]
+
+        for vendors, expected in cases:
+            temp_dir = tempfile.mkdtemp()
+            try:
+                reg = "WINE REGISTRY Version 2\n"
+                for vendor in vendors:
+                    reg += "\n[Software\\\\%s\\\\Adept\\\\Activation\\\\0000] 1700000000\n@=\"credentials\"\n" % (vendor)
+
+                f = open(os.path.join(temp_dir, "user.reg"), "w")
+                f.write(reg)
+                f.close()
+
+                # Without a key the import stops right after asking for it, which is all this test needs.
+                with patch("getEncryptionKeyLinux.GetMasterKey", return_value=None) as get_master_key:
+                    success, msg = libadobeImportAccount.importADEactivationLinuxWine(temp_dir)
+
+                self.assertFalse(success, "Import without a device key should fail")
+                self.assertEqual(get_master_key.call_args_list, [call(temp_dir, expected)],
+                                 "Wrong device key requested for activation trees %s" % (vendors))
+            finally:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+

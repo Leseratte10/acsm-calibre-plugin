@@ -45,16 +45,32 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
     except:
         pass
 
+    # Use the ByteBooks activation if there is one, otherwise the Adobe one
+    # (same rule as importADEactivationWindows). Only that tree gets imported,
+    # so the device key has to come from the same Digital Editions install.
+    try:
+        root_is_bytebooks = False
+        registry_file = open(os.path.join(wine_prefix_path, "user.reg"), "r")
+        for line in registry_file:
+            if line.strip().startswith("[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\"):
+                root_is_bytebooks = True
+                break
+        registry_file.close()
+    except:
+        traceback.print_exc()
+        return False, "There has been an error while reading through the Registry."
+
     # Get encryption key
     from getEncryptionKeyLinux import GetMasterKey
 
-    master_key = GetMasterKey(wine_prefix_path)
+    master_key = GetMasterKey(wine_prefix_path, root_is_bytebooks)
 
     if master_key is None:
-        err = "Could not access ADE encryption key. If you have just installed ADE in Wine, "
-        err += "please reboot your machine then try again. Also, make sure neither ADE nor any other "
+        de_name = "BDE" if root_is_bytebooks else "ADE"
+        err = "Could not access " + de_name + " encryption key. If you have just installed " + de_name + " in Wine, "
+        err += "please reboot your machine then try again. Also, make sure neither " + de_name + " nor any other "
         err += "software is running in WINE while you're trying to import the authorization. "
-        err += "If it still doesn't work but ADE in that particular WINEPREFIX is working fine, "
+        err += "If it still doesn't work but " + de_name + " in that particular WINEPREFIX is working fine, "
         err += "please open a bug report."
 
         return False, err
@@ -65,16 +81,6 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
 
     # Loop through the registry:
     try: 
-        # Use the ByteBooks activation if there is one, otherwise the Adobe one
-        # (same rule as importADEactivationWindows). Only that tree gets imported.
-        root_is_bytebooks = False
-        registry_file = open(os.path.join(wine_prefix_path, "user.reg"), "r")
-        for line in registry_file:
-            if line.strip().startswith("[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\"):
-                root_is_bytebooks = True
-                break
-        registry_file.close()
-
         if root_is_bytebooks:
             activation_prefix = "[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\"
         else: 
