@@ -88,7 +88,11 @@ def download(replyData):
         filetype = ".pdf"
 
     filename = book_name + filetype
-    shutil.move(filename_tmp, filename)
+    filename = filename.replace("/", "").replace("\\", "")
+    try: 
+        shutil.move(filename_tmp, filename)
+    except: 
+        shutil.move(filename_tmp, "Book" + filetype)
 
     if filetype == ".epub":
         # Store EPUB rights / encryption stuff

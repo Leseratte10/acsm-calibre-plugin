@@ -74,28 +74,24 @@ def GetUserNameWINAPI():
     # Yes, it's actually implemented like that. Encode in UTF16 but only take the lowest byte of each character.
     return buffer.value.encode('utf-16-le')[::2]
 
-def GetUserNameREG():
+def GetUserNameREG(use_bytebooks = True):
     try:
         import winreg
     except ImportError:
         import _winreg as winreg
 
-    try: 
+    if use_bytebooks:
         DEVICE_KEY_PATH = r'Software\ByteBooks\Adept\Device'
+    else: 
+        DEVICE_KEY_PATH = r'Software\Adobe\Adept\Device'
+
+    try: 
         regkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, DEVICE_KEY_PATH)
         # Yes, it's actually implemented like that. Encode in UTF16 but only take the lowest byte of each character.
         userREG = winreg.QueryValueEx(regkey, 'username')[0].encode('utf-16-le')[::2]
         return userREG
     except: 
-        # Try again with the old path.
-        try: 
-            DEVICE_KEY_PATH = r'Software\Adobe\Adept\Device'
-            regkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, DEVICE_KEY_PATH)
-            # Yes, it's actually implemented like that. Encode in UTF16 but only take the lowest byte of each character.
-            userREG = winreg.QueryValueEx(regkey, 'username')[0].encode('utf-16-le')[::2]
-            return userREG
-        except: 
-            return None
+        return None
 
 
 from ctypes import Structure, c_uint, c_void_p, POINTER
@@ -122,7 +118,7 @@ def CryptUnprotectData(indata, entropy):
         return None
     return string_at(outdata.pbData, outdata.cbData)
 
-def GetMasterKey(): 
+def GetMasterKey(use_bytebooks = True): 
 
     import os
 
@@ -164,7 +160,7 @@ def GetMasterKey():
     # Search for the username in the registry:
     user = None
 
-    user_from_registry = GetUserNameREG()
+    user_from_registry = GetUserNameREG(use_bytebooks)
     current_user_name = GetUserNameWINAPI()
 
     if (user_from_registry is not None):
@@ -189,20 +185,19 @@ def GetMasterKey():
     except ImportError:
         import _winreg as winreg
 
-    try: 
+
+    if use_bytebooks:
         DEVICE_KEY_PATH = r'Software\ByteBooks\Adept\Device'
+    else: 
+        DEVICE_KEY_PATH = r'Software\Adobe\Adept\Device'
+    
+    try: 
         regkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, DEVICE_KEY_PATH)
         device = winreg.QueryValueEx(regkey, 'key')[0]
     except: 
-        # Try the old Adobe Path
-        try: 
-            DEVICE_KEY_PATH = r'Software\Adobe\Adept\Device'
-            regkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, DEVICE_KEY_PATH)
-            device = winreg.QueryValueEx(regkey, 'key')[0]
-        except: 
-            print("Can't find encrypted device key.")
-            return None
-        
+        print("Can't find encrypted device key.")
+        return None
+    
 
     if verbose_logging:
         print("Encrypted key: " + str(device))
@@ -229,4 +224,8 @@ def GetMasterKey():
 
 
 if __name__ == "__main__":
-    GetMasterKey()
+    print("ByteBooks: ")
+    GetMasterKey(True)
+    print("Adobe: ")
+    GetMasterKey(False)
+

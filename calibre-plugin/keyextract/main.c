@@ -48,15 +48,42 @@ int main() {
 	fprintf(stderr, "CPUID Signature (hex): %08x\n", signature);
 
 
+
+	// Get Encrypted adobe key
+	int force_adobe = 0;
+	BYTE key[BUFSIZE];
+	memset(&key, 0, sizeof(key)); 
+	DWORD key_size = BUFSIZE;
+	LSTATUS key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\ByteBooks\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
+	if (key_retval != ERROR_SUCCESS) {
+		key_size = BUFSIZE;
+		key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\Adobe\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
+		force_adobe = 1;
+	}
+	if (key_retval != ERROR_SUCCESS) {
+		fprintf(stderr, "Error with RegGetValue: %ld\n", key_retval);
+		fprintf(stderr, "key_size: %ld\n", key_size);
+		return key_retval;
+	}
+	fprintf(stderr, "Encrypted key (hex): ");
+	for (size_t i = 0; i < key_size; i++ )
+	{
+	   fprintf(stderr, "%02x", key[i]);
+	}
+	fprintf(stderr, "\n");
+
+
 	// Get windows user
 	wchar_t wideuser[BUFSIZE];
 	// RegGetValueW/GetUserNameW only sets bytes as needed for length of username, but we need null bytes to fill the rest
 	memset(&wideuser, 0, sizeof(wideuser)); 
 	DWORD wideuser_size = BUFSIZE;
-	LSTATUS user_retval = RegGetValueW(HKEY_CURRENT_USER, L"Software\\ByteBooks\\Adept\\Device", L"username", RRF_RT_REG_SZ, NULL, &wideuser, &wideuser_size);
-	if (user_retval != ERROR_SUCCESS) {
-		wideuser_size = BUFSIZE;
+	LSTATUS user_retval;
+	if (force_adobe) {
 		user_retval = RegGetValueW(HKEY_CURRENT_USER, L"Software\\Adobe\\Adept\\Device", L"username", RRF_RT_REG_SZ, NULL, &wideuser, &wideuser_size);
+	}
+	else {
+		user_retval = RegGetValueW(HKEY_CURRENT_USER, L"Software\\ByteBooks\\Adept\\Device", L"username", RRF_RT_REG_SZ, NULL, &wideuser, &wideuser_size);
 	}
 	if (user_retval != ERROR_SUCCESS) {
 		fprintf(stderr, "Error with RegGetValue: %ld\n", user_retval);
@@ -77,27 +104,6 @@ int main() {
 	for (unsigned int i = 0; i < 13; i++) {
 		user[i] = ((char *)wideuser)[i*2];
 	}
-
-	// Get Encrypted adobe key
-	BYTE key[BUFSIZE];
-	memset(&key, 0, sizeof(key)); 
-	DWORD key_size = BUFSIZE;
-	LSTATUS key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\ByteBooks\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
-	if (key_retval != ERROR_SUCCESS) {
-		key_size = BUFSIZE;
-		key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\Adobe\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
-	}
-	if (key_retval != ERROR_SUCCESS) {
-		fprintf(stderr, "Error with RegGetValue: %ld\n", key_retval);
-		fprintf(stderr, "key_size: %ld\n", key_size);
-		return key_retval;
-	}
-	fprintf(stderr, "Encrypted key (hex): ");
-	for (size_t i = 0; i < key_size; i++ )
-	{
-	   fprintf(stderr, "%02x", key[i]);
-	}
-	fprintf(stderr, "\n");
 
 
 	// Assemble "entropy" (passphrase) for key

@@ -61,8 +61,27 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
 
         return False, err
 
+    global persistent_data, account_method
+    persistent_data = dict()
+    account_method = None
+
     # Loop through the registry:
     try: 
+        # Use the ByteBooks activation if there is one, otherwise the Adobe one
+        # (same rule as importADEactivationWindows). Only that tree gets imported.
+        root_is_bytebooks = False
+        registry_file = open(os.path.join(wine_prefix_path, "user.reg"), "r")
+        for line in registry_file:
+            if line.strip().startswith("[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\"):
+                root_is_bytebooks = True
+                break
+        registry_file.close()
+
+        if root_is_bytebooks:
+            activation_prefix = "[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\"
+        else: 
+            activation_prefix = "[Software\\\\Adobe\\\\Adept\\\\Activation\\\\"
+
         registry_file = open(os.path.join(wine_prefix_path, "user.reg"), "r")
         waiting_for_element = False
         current_parent = None
@@ -70,11 +89,18 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
         current_value = None
         current_ofbytebooks = None
         current_method = None
+
         while True: 
             line = registry_file.readline()
             if not line:
                 break
             line = line.strip()
+
+            if line.startswith("["):
+                # Start of a new registry key. Only collect values from keys inside the
+                # activation tree picked above, and stop as soon as we leave it.
+                waiting_for_element = line.startswith(activation_prefix)
+                continue
 
             if waiting_for_element:
                 if (line.lower().startswith("@=")): 
@@ -87,9 +113,9 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
 
                 if (line.lower().startswith('"ofbytebooks"=')): 
                     val = line.split('=', 1)[1].strip()[1:-1]
-                    if val == "1" or val.lower() == "true" or val == True:
+                    if str(val).lower() == "true" or val == True:
                         current_ofbytebooks = True
-                    elif val == "0" or val.lower() == "false" or val == False:
+                    elif str(val).lower() == "false" or val == False:
                         current_ofbytebooks = False
                     else:
                         print("Warning: Invalid ofByteBooks value while importing.")
@@ -117,12 +143,6 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
                     current_method = None
 
 
-            else: 
-                if (line.startswith("[Software\\\\Adobe\\\\Adept\\\\Activation\\\\")):
-                    waiting_for_element = True
-                if (line.startswith("[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\")):
-                    waiting_for_element = True
-
                                 
         registry_file.close()
         return handle_subkey(None, None, None, master_key, None, None, buildIDtoEmulate)
@@ -146,27 +166,38 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
         print("This function is for Windows only!")
         return False, "Windows only!"
 
-    # Get encryption key:
-    from getEncryptionKeyWindows import GetMasterKey
-
-    master_key = GetMasterKey()
-
-    if master_key is None: 
-        return False, "Could not access ADE encryption key"
-
     # Dump data from registry:
     try:
         import winreg
     except ImportError:
         import _winreg as winreg
 
+    root_is_bytebooks = None
     try: 
         activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\ByteBooks\Adept\Activation')
+        root_is_bytebooks = True
     except: 
         try: 
             activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Adobe\Adept\Activation')
+            root_is_bytebooks = False
         except: 
             return False, "Could not locate ADE activation"
+
+    # Get encryption key:
+    from getEncryptionKeyWindows import GetMasterKey
+
+    master_key = GetMasterKey(root_is_bytebooks)
+
+    if master_key is None: 
+        if root_is_bytebooks:
+            return False, "Could not access BDE encryption key"
+        else:
+            return False, "Could not access ADE encryption key"
+
+
+    global persistent_data, account_method
+    persistent_data = dict()
+    account_method = None
 
     i = 0
     while True:
@@ -192,9 +223,9 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
                     method = None
                 try: 
                     val = winreg.QueryValueEx(activation_child, 'ofByteBooks')[0]
-                    if val == "1" or val.lower() == "true" or val == True:
+                    if str(val).lower() == "true" or val == True:
                         ofbytebooks = True
-                    elif val == "0" or val.lower() == "false" or val == False:
+                    elif str(val).lower() == "false" or val == False:
                         ofbytebooks = False
                     else:
                         print("Warning: Invalid ofByteBooks value while importing: " + str(val))

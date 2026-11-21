@@ -302,7 +302,7 @@ class ACSMInput(FileTypePlugin):
             acsmprefs = prefs.ACSMInput_Prefs()
             update_account_path(acsmprefs["path_to_account_data"])
             # This is needed to correctly update to an emulated ByteBooks Digital Edition 5.0 for older activations.
-            changeDeviceVersion(0)
+            changeDeviceVersion(0, onlyIfUnknown=True)
 
         except Exception as e:
             traceback.print_exc()

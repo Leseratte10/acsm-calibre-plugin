@@ -39,7 +39,10 @@ def createDeviceFile(randomSerial, useVersionIndex = 0):
 
     # Original implementation: Device::createDeviceFile(const std::string& hobbes, bool randomSerial)
 
-    if useVersionIndex is not None and useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
+    if useVersionIndex is None: 
+        return False
+    
+    if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
         return False
 
     build_id = VAR_VER_BUILD_IDS[useVersionIndex]
@@ -219,6 +222,8 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
 
 
     if authCertBB is None or authCertAdobe is None: 
+        # TODO: I am unsure whether authCertAdobe will still be sent by the ByteBooks servers in 2027. 
+        # After the cutoff, verify and remove the authCertAdobe condition from this branch if necessary. 
         # This is not supposed to happen, but if it does, then just query it again from Adobe.
         authenticationURL = authURL + "/AuthenticationServiceInfo?ofByteBooks=1"
         response2 = sendHTTPRequest(authenticationURL, True)
@@ -397,6 +402,8 @@ def convertAnonAuthToAccount(username, passwd):
 
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/AddSignInDirect?ofByteBooks=1"
     linkResponse = sendRequestDocu(linkRequest, signInURL, True)
+    if linkResponse is None: 
+        return False, "Error while calling AddSignInDirect"
 
     try: 
         credentialsXML = etree.fromstring(linkResponse)
@@ -493,7 +500,11 @@ def signIn(account_type, username, passwd):
     activationxml = etree.parse(get_activation_xml_path())
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-    authcertificate_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
+    try: 
+        authcertificate_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
+    except: 
+        # TODO: Is this really a situation that can happen? I'd assume ByteBooks will always send their cert ...
+        authcertificate_bb = None
 
     try: 
         authcertificate_adobe = next(
@@ -503,9 +514,12 @@ def signIn(account_type, username, passwd):
     except: 
         authcertificate_adobe = None
 
+    if authcertificate_bb is None and authcertificate_adobe is None: 
+        return False, "Server response missing auth certificate."
+
     
     # Type = "AdobeID" or "anonymous". For "anonymous", username and passwd need to be the empty string.
-    signInRequest = buildSignInRequest(account_type, username, passwd, authcertificate_bb)
+    signInRequest = buildSignInRequest(account_type, username, passwd, authcertificate_bb if authcertificate_bb is not None else authcertificate_adobe)
 
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/SignInDirect?ofByteBooks=1"
 
@@ -548,13 +562,31 @@ def signIn(account_type, username, passwd):
             return False, "Invalid main tag " + credentialsXML.tag
     
     except: 
-        return False, "Invalid response to login request (please open a bug report)"
+        return False, "Invalid or empty response to login request (please open a bug report)"
 
     # Got correct credentials
 
     private_key_data_encrypted = credentialsXML.find("./%s" % (adNS("encryptedPrivateLicenseKey"))).text
     private_key_data_encrypted = base64.b64decode(private_key_data_encrypted)
     private_key_data = decrypt_with_device_key(private_key_data_encrypted)
+
+
+
+    try: 
+        pkcs12_bb = credentialsXML.find("./%s[@ofByteBooks='true']" % (adNS("pkcs12"))).text
+    except: 
+        pkcs12_bb = None
+    try: 
+        pkcs12_adobe = next(
+                c.text for c in credentialsXML.findall("./%s" % (adNS("pkcs12")))
+                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+            )
+    except: 
+        pkcs12_adobe = None
+
+    if pkcs12_bb is None and pkcs12_adobe is None: 
+        return False, "No pkcs12 in response"
+
 
 
     # Okay, now we got the credential response correct. Now "just" apply all these to the main activation.xml
@@ -575,21 +607,16 @@ def signIn(account_type, username, passwd):
         # TODO: Should we always write this? Windows does, MacOS doesn't.
         f.write("<adept:username method=\"%s\">%s</adept:username>\n" % (credentialsXML.find("./%s" % (adNS("username"))).get("method", account_type), xml_escape(username)))
 
-    pkcs12_bb = credentialsXML.find("./%s[@ofByteBooks='true']" % (adNS("pkcs12"))).text
-    try: 
-        pkcs12_adobe = next(
-                c.text for c in credentialsXML.findall("./%s" % (adNS("pkcs12")))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-    except: 
-        pkcs12_adobe = None
-
-    f.write("<adept:pkcs12 ofByteBooks=\"true\">%s</adept:pkcs12>\n" % (pkcs12_bb))
+    if pkcs12_bb is not None:
+        f.write("<adept:pkcs12 ofByteBooks=\"true\">%s</adept:pkcs12>\n" % (pkcs12_bb))
 
     if pkcs12_adobe is not None: 
         f.write("<adept:pkcs12 ofByteBooks=\"false\">%s</adept:pkcs12>\n" % (pkcs12_adobe))
 
-    license_cert_bb = credentialsXML.find("./%s[@ofByteBooks='true']" % (adNS("licenseCertificate"))).text
+    try: 
+        license_cert_bb = credentialsXML.find("./%s[@ofByteBooks='true']" % (adNS("licenseCertificate"))).text
+    except: 
+        license_cert_bb = None
 
     try: 
         license_cert_adobe = next(
@@ -598,14 +625,16 @@ def signIn(account_type, username, passwd):
             )
     except: 
         license_cert_adobe = None
-    
-    f.write("<adept:licenseCertificate ofByteBooks=\"true\">%s</adept:licenseCertificate>\n" % (license_cert_bb))
+
+    if license_cert_bb is not None:
+        f.write("<adept:licenseCertificate ofByteBooks=\"true\">%s</adept:licenseCertificate>\n" % (license_cert_bb))
 
     if license_cert_adobe is not None: 
         f.write("<adept:licenseCertificate ofByteBooks=\"false\">%s</adept:licenseCertificate>\n" % (license_cert_adobe))
 
     f.write("<adept:privateLicenseKey>%s</adept:privateLicenseKey>\n" % (base64.b64encode(private_key_data).decode("latin-1")))
-    f.write("<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>\n" % (authcertificate_bb))
+    if authcertificate_bb is not None:
+        f.write("<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>\n" % (authcertificate_bb))
     if authcertificate_adobe is not None: 
         f.write("<adept:authenticationCertificate ofByteBooks=\"false\">%s</adept:authenticationCertificate>\n" % (authcertificate_adobe))
     f.write("</adept:credentials>\n")
@@ -902,14 +931,13 @@ def buildActivateReq(useVersionIndex = 0):
 
     return True, ret
 
-def changeDeviceVersion(useVersionIndex = 0):
+def changeDeviceVersion(useVersionIndex = 0, onlyIfUnknown = False):
     # Makes device.xml report the given emulated version.
-    # This runs on every plugin start, so only touch the file if something changes.
 
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
         return False, "Invalid Version index"
 
-    try: 
+    try:
         new_values = {
             "hobbes": VAR_VER_HOBBES_VERSIONS[useVersionIndex],
             "clientOS": VAR_VER_OS_IDENTIFIERS[useVersionIndex],
@@ -919,6 +947,17 @@ def changeDeviceVersion(useVersionIndex = 0):
         return False, "Error preparing version change"
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+
+    if onlyIfUnknown:
+        hobbes_version = None
+        for f in devicexml.findall("./%s" % (adNS("version"))):
+            if f.get("name") == "hobbes":
+                hobbes_version = f.get("value")
+    
+        if hobbes_version in VAR_VER_HOBBES_VERSIONS:
+            return True, ""
+
 
     changed = False
     for f in devicexml.findall("./%s" % (adNS("version"))):

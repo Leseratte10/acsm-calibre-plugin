@@ -539,6 +539,9 @@ class ConfigWidget(QWidget):
             containerdev = etree.parse(device_xml_path)
         except (IOError, FileNotFoundError, OSError) as e:
             return "Not authorized for any ID", False, None
+        except (etree.XMLSyntaxError):
+            return "Authorization XML files corrupted", False, None
+
 
         try: 
             adeptNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)        
@@ -885,10 +888,13 @@ class ConfigWidget(QWidget):
         
         self.resize(self.sizeHint())
 
-        if ade_mail is None: 
-            info_dialog(None, "Done", "Successfully imported an anonymous authorization.", show=True, show_copy_button=False)
+        if activated:
+            if ade_mail is None: 
+                info_dialog(None, "Done", "Successfully imported an anonymous authorization.", show=True, show_copy_button=False)
+            else: 
+                info_dialog(None, "Done", "Successfully imported authorization for " + ade_mail, show=True, show_copy_button=False)
         else: 
-            info_dialog(None, "Done", "Successfully imported authorization for " + ade_mail, show=True, show_copy_button=False)
+            error_dialog(None, "Import failed", "That didn't work:\n" + info_string, show=True, show_copy_button=False)
 
            
 
@@ -1271,7 +1277,6 @@ class RentedBooksDialog(QDialog):
             except: 
                 # Invalid book timestamp
                 info = "(unknown time remaining)"
-                continue
 
 
             book_name = book["book_name"]

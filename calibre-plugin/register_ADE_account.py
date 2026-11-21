@@ -10,9 +10,9 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-import getpass, sys
+import getpass
 
-from libadobe import createDeviceKeyFile, VAR_VER_SUPP_CONFIG_NAMES
+from libadobe import createDeviceKeyFile
 from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
 
 # These are the only two variables you'll need to change
@@ -22,14 +22,12 @@ from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
 
 VAR_MAIL = ""
 VAR_PASS = ""
-VAR_VER = None # 1 for ADE2.0, 2 for ADE3.0
 #################################################################
 
 def main():
 
     global VAR_MAIL
     global VAR_PASS
-    global VAR_VER
 
 
     if (VAR_MAIL == ""):
