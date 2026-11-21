@@ -106,7 +106,7 @@ from calibre.utils.lock import singleinstance       # type: ignore
 try:
     from calibre.utils.lock import SingleInstance       # type: ignore
 except:
-    from calibre_plugins.deacsm.singleinstance_helper import SingleInstance
+    from calibre_plugins.deacsm.singleinstance_helper import SingleInstance     # type: ignore
 
 import os, shutil, traceback, sys, time, io
 import zipfile
@@ -116,7 +116,7 @@ from lxml import etree
 
 class ACSMInput(FileTypePlugin):
     name                        = PLUGIN_NAME
-    description                 = "Takes an Adobe ACSM file and converts that into a useable EPUB or PDF file. Formerly known as DeACSM. Based on the libgourou library by Grégory Soutadé"
+    description                 = "Takes an Adobe / ByteBooks ACSM file and converts that into a useable EPUB or PDF file. Formerly known as DeACSM."
     supported_platforms         = ['linux', 'osx', 'windows']
     author                      = "Leseratte10"
     version                     = PLUGIN_VERSION_TUPLE
@@ -133,8 +133,8 @@ class ACSMInput(FileTypePlugin):
         However, we want to load the GUI plugin, too, so we have to trick
         Calibre into believing that there's actually a 2nd plugin.
         """
-        from calibre.customize.ui import _initialized_plugins
-        from calibre_plugins.deacsm.gui_main_wrapper import ACSMInputGUIExtension
+        from calibre.customize.ui import _initialized_plugins       # type: ignore
+        from calibre_plugins.deacsm.gui_main_wrapper import ACSMInputGUIExtension       # type: ignore
 
         def init_plg(plg_type):
             for plugin in _initialized_plugins:
@@ -166,7 +166,7 @@ class ACSMInput(FileTypePlugin):
             # Patch Calibre to consider "ACSM" a book. This makes ACSM files show up
             # in the "Add Book" file selection, and it also makes the auto-add feature useable.
             try: 
-                from calibre.ebooks import BOOK_EXTENSIONS
+                from calibre.ebooks import BOOK_EXTENSIONS  # type: ignore
                 if ("acsm" not in BOOK_EXTENSIONS):
                     BOOK_EXTENSIONS.append("acsm")
             except:
@@ -376,8 +376,8 @@ class ACSMInput(FileTypePlugin):
             # If src is present, it is used. If it isn't, ADE uses /Download instead.
             # If downloadType is "simple", it does a GET. If it's anything else, it does a POST including a bunch of data.
             print("{0} v{1}: FulfillmentResult does not contain the <src> tag. This may be an ACSM with download type 'auth'?".format(PLUGIN_NAME, PLUGIN_VERSION))
-            print("{0} v{1}: Please download the book through ADE (so the ACSM file is 'used').".format(PLUGIN_NAME, PLUGIN_VERSION))
-            print("{0} v{1}: After that, please open a bug report and attach the ACSM file.".format(PLUGIN_NAME, PLUGIN_VERSION))
+            print("{0} v{1}: Please go into the plugin settings, make sure 'Enable verbose debug logging' is enabled, then try again.".format(PLUGIN_NAME, PLUGIN_VERSION))
+            print("{0} v{1}: After that, please open a bug report and attach the full log file.".format(PLUGIN_NAME, PLUGIN_VERSION))
             return None
 
         license_token_node = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken")))

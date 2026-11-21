@@ -473,7 +473,7 @@ def fulfill(acsm_file, do_notify = False):
 
     verbose_logging = False
     try: 
-        import calibre_plugins.deacsm.prefs as prefs
+        import calibre_plugins.deacsm.prefs as prefs  # type: ignore
         acsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = acsmprefs["detailed_logging"]
     except:
@@ -552,7 +552,7 @@ def fulfill(acsm_file, do_notify = False):
         return False, "Signing failed or response invalid."
 
     if "<error" in replyData and "E_ADEPT_INVALID_CERTIFICATE" in replyData and can_retry_with_adobe:
-        print("Operator rejected the request signed with the ByteBooks certificate, this might be an older ACS server. Retrying with Adobe certificates.")
+        print("Operator rejected the request signed with the ByteBooks certificate, this might be an older ACS server. Retrying with Adobe certificates...")
         use_adobe = True
         replyData = signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL)
         if (replyData is None):
@@ -712,9 +712,6 @@ def addLoanRecordToConfigFile(new_loan_record):
 
     # Add all necessary information for a book return to the JSON array, replacing
     # an older record of the same loan if there is one.
-    # The config widget can then read this and present a list of not-yet-returned
-    # books, and can then return them.
-    # Also, the config widget is responsible for cleaning up that list once a book's validity period is up.
     acsmprefs.add_loan(new_loan_record)
 
     return True
@@ -725,7 +722,7 @@ def tryReturnBook(bookData):
 
     verbose_logging = False
     try: 
-        import calibre_plugins.deacsm.prefs as prefs
+        import calibre_plugins.deacsm.prefs as prefs    # type: ignore
         acsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = acsmprefs["detailed_logging"]
     except:
@@ -805,7 +802,7 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
 
     verbose_logging = False
     try: 
-        import calibre_plugins.deacsm.prefs as prefs
+        import calibre_plugins.deacsm.prefs as prefs    # type: ignore
         acsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = acsmprefs["detailed_logging"]
     except:
