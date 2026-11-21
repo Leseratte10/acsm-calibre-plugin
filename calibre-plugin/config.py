@@ -156,8 +156,7 @@ class ConfigWidget(QWidget):
         # to determine if we should enable the button.
 
         from libadobeLoans import remove_overdue_books_from_list
-        new_booklist = remove_overdue_books_from_list(self.acsmprefs["list_of_rented_books"])
-        self.acsmprefs.set("list_of_rented_books", new_booklist)
+        self.acsmprefs.update_loan_list(remove_overdue_books_from_list)
         self.acsmprefs.writeprefs()
 
 
@@ -1213,8 +1212,7 @@ class RentedBooksDialog(QDialog):
         self.acsmprefs = prefs.ACSMInput_Prefs()
 
         from libadobeLoans import remove_overdue_books_from_list
-        new_booklist = remove_overdue_books_from_list(self.acsmprefs["list_of_rented_books"])
-        self.acsmprefs.set("list_of_rented_books", new_booklist)
+        self.acsmprefs.update_loan_list(remove_overdue_books_from_list)
         self.acsmprefs.writeprefs()
 
         # Start Qt Gui dialog layout
@@ -1354,18 +1352,7 @@ class RentedBooksDialog(QDialog):
         userdata = str(self.listy.currentItem().data(QtCore.Qt.UserRole))
         print("Deleting book entry %s (ID %s)" % (self.listy.currentItem().text(), userdata))
 
-        success = False
-        done = False
-        templist = self.acsmprefs["list_of_rented_books"]
-        while not done:
-            done = True 
-            for book in templist:
-                if book["loanID"] == userdata:
-                    done = False
-                    templist.remove(book)
-                    success = True
-                    break
-        self.acsmprefs.set("list_of_rented_books", templist)
+        success = self.acsmprefs.remove_loan(userdata)
 
         self.populate_list()
 

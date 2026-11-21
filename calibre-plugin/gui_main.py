@@ -111,8 +111,7 @@ class ActualACSMInputGUIExtension(InterfaceAction):
         acsmprefs = prefs.ACSMInput_Prefs()
 
         from libadobeLoans import remove_overdue_books_from_list
-        new_booklist = remove_overdue_books_from_list(acsmprefs["list_of_rented_books"])
-        acsmprefs.set("list_of_rented_books", new_booklist)
+        acsmprefs.update_loan_list(remove_overdue_books_from_list)
         acsmprefs.writeprefs()
 
         if (len(acsmprefs["list_of_rented_books"]) == 0):

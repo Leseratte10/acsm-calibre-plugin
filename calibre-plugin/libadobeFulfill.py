@@ -709,26 +709,13 @@ def addLoanRecordToConfigFile(new_loan_record):
     except: 
         print("Exception while reading config file")
         return False
-    
-    acsmprefs.refresh()
 
-    # Check if that exact loan is already in the list, and if so, delete it:
-    done = False
-    while not done:
-        done = True
-        for book in acsmprefs["list_of_rented_books"]:
-            if book["loanID"] == new_loan_record["loanID"]:
-                done = False
-                acsmprefs["list_of_rented_books"].remove(book)
-                break
-
-
-    # Add all necessary information for a book return to the JSON array.
+    # Add all necessary information for a book return to the JSON array, replacing
+    # an older record of the same loan if there is one.
     # The config widget can then read this and present a list of not-yet-returned
     # books, and can then return them.
     # Also, the config widget is responsible for cleaning up that list once a book's validity period is up.
-    acsmprefs["list_of_rented_books"].append(new_loan_record)
-    acsmprefs.commit()
+    acsmprefs.add_loan(new_loan_record)
 
     return True
 
