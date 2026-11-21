@@ -1,5 +1,5 @@
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -7,9 +7,12 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
+
 from lxml import etree
-import base64
+import base64, traceback
 import os, locale, platform
+from xml.sax.saxutils import escape as xml_escape
+
 
 try: 
     from Cryptodome.Cipher import AES as _AES
@@ -42,33 +45,66 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
     except:
         pass
 
+    # Use the ByteBooks activation if there is one, otherwise the Adobe one
+    # (same rule as importADEactivationWindows). Only that tree gets imported,
+    # so the device key has to come from the same Digital Editions install.
+    try:
+        root_is_bytebooks = False
+        registry_file = open(os.path.join(wine_prefix_path, "user.reg"), "r")
+        for line in registry_file:
+            if line.strip().startswith("[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\"):
+                root_is_bytebooks = True
+                break
+        registry_file.close()
+    except:
+        traceback.print_exc()
+        return False, "There has been an error while reading through the Registry."
+
     # Get encryption key
     from getEncryptionKeyLinux import GetMasterKey
 
-    master_key = GetMasterKey(wine_prefix_path)
+    master_key = GetMasterKey(wine_prefix_path, root_is_bytebooks)
 
     if master_key is None:
-        err = "Could not access ADE encryption key. If you have just installed ADE in Wine, "
-        err += "please reboot your machine then try again. Also, make sure neither ADE nor any other "
+        de_name = "BDE" if root_is_bytebooks else "ADE"
+        err = "Could not access " + de_name + " encryption key. If you have just installed " + de_name + " in Wine, "
+        err += "please reboot your machine then try again. Also, make sure neither " + de_name + " nor any other "
         err += "software is running in WINE while you're trying to import the authorization. "
-        err += "If it still doesn't work but ADE in that particular WINEPREFIX is working fine, "
+        err += "If it still doesn't work but " + de_name + " in that particular WINEPREFIX is working fine, "
         err += "please open a bug report."
 
         return False, err
 
+    global persistent_data, account_method
+    persistent_data = dict()
+    account_method = None
+
     # Loop through the registry:
     try: 
+        if root_is_bytebooks:
+            activation_prefix = "[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\"
+        else: 
+            activation_prefix = "[Software\\\\Adobe\\\\Adept\\\\Activation\\\\"
+
         registry_file = open(os.path.join(wine_prefix_path, "user.reg"), "r")
         waiting_for_element = False
         current_parent = None
         current_name = None
         current_value = None
+        current_ofbytebooks = None
         current_method = None
+
         while True: 
             line = registry_file.readline()
             if not line:
                 break
             line = line.strip()
+
+            if line.startswith("["):
+                # Start of a new registry key. Only collect values from keys inside the
+                # activation tree picked above, and stop as soon as we leave it.
+                waiting_for_element = line.startswith(activation_prefix)
+                continue
 
             if waiting_for_element:
                 if (line.lower().startswith("@=")): 
@@ -77,6 +113,18 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
                 
                 if (line.lower().startswith('"value"=')): 
                     current_value = line.split('=', 1)[1].strip()[1:-1]
+                    continue
+
+                if (line.lower().startswith('"ofbytebooks"=')): 
+                    # This attribute is a string, not an int.
+                    val = line.split('=', 1)[1].strip()[1:-1]
+                    if str(val).lower() == "true" or val == True:
+                        current_ofbytebooks = True
+                    elif str(val).lower() == "false" or val == False:
+                        current_ofbytebooks = False
+                    else:
+                        print("Warning: Invalid ofByteBooks value while importing.")
+                        current_ofbytebooks = False
                     continue
             
                 if (line.lower().startswith('"method"=')): 
@@ -89,27 +137,25 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
                         current_parent = current_name
                         current_name = None
                         current_method = None
+                        current_ofbytebooks = None
                         current_value = None
                         waiting_for_element = False
                         continue
-                    handle_subkey(current_parent, current_name, current_value, master_key, current_method, None)
+                    handle_subkey(current_parent, current_name, current_value, master_key, current_method, current_ofbytebooks, None)
                     current_name = None
                     current_value = None
+                    current_ofbytebooks = None
                     current_method = None
 
 
-            else: 
-                if (line.startswith("[Software\\\\Adobe\\\\Adept\\\\Activation\\\\")):
-                    waiting_for_element = True
-
                                 
         registry_file.close()
-        return handle_subkey(None, None, None, master_key, None, buildIDtoEmulate)
+        return handle_subkey(None, None, None, master_key, None, None, buildIDtoEmulate)
 
     except: 
         # There was an error hunting through the registry. 
-        raise
-        pass
+        traceback.print_exc()
+        return False, "There has been an error while reading through the Registry."
 
 def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
     # Tries to import the system activation from Adobe Digital Editions on Windows into the plugin
@@ -125,26 +171,40 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
         print("This function is for Windows only!")
         return False, "Windows only!"
 
-    # Get encryption key:
-    from getEncryptionKeyWindows import GetMasterKey
-
-    master_key = GetMasterKey()
-
-    if master_key is None: 
-        return False, "Could not access ADE encryption key"
-
-    PRIVATE_LICENCE_KEY_PATH = r'Software\Adobe\Adept\Activation'
-
     # Dump data from registry:
     try:
         import winreg
     except ImportError:
         import _winreg as winreg
 
+    root_is_bytebooks = None
     try: 
-        activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, PRIVATE_LICENCE_KEY_PATH)
+        winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\ByteBooks\Adept\Activation\0000')
+        activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\ByteBooks\Adept\Activation')
+        root_is_bytebooks = True
     except: 
-        return False, "Could not locate ADE activation"
+        try: 
+            winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Adobe\Adept\Activation\0000')
+            activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Adobe\Adept\Activation')
+            root_is_bytebooks = False
+        except: 
+            return False, "Could not locate ADE activation"
+
+    # Get encryption key:
+    from getEncryptionKeyWindows import GetMasterKey
+
+    master_key = GetMasterKey(root_is_bytebooks)
+
+    if master_key is None: 
+        if root_is_bytebooks:
+            return False, "Could not access BDE encryption key"
+        else:
+            return False, "Could not access ADE encryption key"
+
+
+    global persistent_data, account_method
+    persistent_data = dict()
+    account_method = None
 
     i = 0
     while True:
@@ -168,8 +228,19 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
                     method = winreg.QueryValueEx(activation_child, 'method')[0]
                 except:
                     method = None
+                try: 
+                    val = winreg.QueryValueEx(activation_child, 'ofByteBooks')[0]
+                    if str(val).lower() == "true" or val == True:
+                        ofbytebooks = True
+                    elif str(val).lower() == "false" or val == False:
+                        ofbytebooks = False
+                    else:
+                        print("Warning: Invalid ofByteBooks value while importing: " + str(val))
+                        ofbytebooks = False
+                except:
+                    ofbytebooks = None
 
-                handle_subkey(ParentKeyType, SubKeyType, value, master_key, method, None)
+                handle_subkey(ParentKeyType, SubKeyType, value, master_key, method, ofbytebooks, None)
             except:
                 pass
 
@@ -177,7 +248,7 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
         
         i = i + 1
 
-    return handle_subkey(None, None, None, master_key, None, buildIDtoEmulate)
+    return handle_subkey(None, None, None, master_key, None, None, buildIDtoEmulate)
 
 persistent_data = dict()
 account_method = None
@@ -185,14 +256,7 @@ account_method = None
 def finalize_write_config_Windows(data, key, buildID):
     # Okay, finally got all the data that's needed - recreate all the files.
 
-     # Create devicekey file:
-    f = open(get_devkey_path(), "wb")
-    f.write(key)
-    f.close()
-
     # Create activation.xml
-    f = open(get_activation_xml_path(), "w")
-
     content = '<?xml version="1.0"?>\n'
     content += "<activationInfo xmlns=\"http://ns.adobe.com/adept\">\n"
     content += '<adept:activationServiceInfo xmlns:adept="http://ns.adobe.com/adept">\n'
@@ -200,8 +264,25 @@ def finalize_write_config_Windows(data, key, buildID):
     content += "<adept:authURL>%s</adept:authURL>" % (data["activationServiceInfo"]["authURL"])
     content += "<adept:userInfoURL>%s</adept:userInfoURL>" % (data["activationServiceInfo"]["userInfoURL"])
     content += "<adept:activationURL>%s</adept:activationURL>" % (data["activationServiceInfo"]["activationURL"])
-    content += "<adept:certificate>%s</adept:certificate>" % (data["activationServiceInfo"]["certificate"])
-    content += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (data["activationServiceInfo"]["authenticationCertificate"])
+    
+    cert_key = data["activationServiceInfo"]["certificate"]
+    if isinstance(cert_key, dict):
+        if True in cert_key:
+            content += "<adept:certificate ofByteBooks=\"true\">%s</adept:certificate>" % (cert_key[True])
+        if False in cert_key:
+            content += "<adept:certificate ofByteBooks=\"false\">%s</adept:certificate>" % (cert_key[False])
+    else: 
+        content += "<adept:certificate>%s</adept:certificate>" % (cert_key)
+
+    authcert_key = data["activationServiceInfo"]["authenticationCertificate"]
+    if isinstance(authcert_key, dict):
+        if True in authcert_key:
+            content += "<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>" % (authcert_key[True])
+        if False in authcert_key:
+            content += "<adept:authenticationCertificate ofByteBooks=\"false\">%s</adept:authenticationCertificate>" % (authcert_key[False])
+    else: 
+        content += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (authcert_key)
+
     content += '</adept:activationServiceInfo>\n'
 
     content += '<adept:credentials xmlns:adept="http://ns.adobe.com/adept">'
@@ -211,12 +292,38 @@ def finalize_write_config_Windows(data, key, buildID):
         if account_method is None:
             account_method = "AdobeID"
     
-        content += "<adept:username method=\"%s\">%s</adept:username>" % (account_method, data["credentials"]["username"])
+        content += "<adept:username method=\"%s\">%s</adept:username>" % (account_method, xml_escape(data["credentials"]["username"]))
+
+
+    pkcs12_key = data["credentials"]["pkcs12"]
+    if isinstance(pkcs12_key, dict):
+        if True in pkcs12_key:
+            content += "<adept:pkcs12 ofByteBooks=\"true\">%s</adept:pkcs12>" % (pkcs12_key[True])
+        if False in pkcs12_key:
+            content += "<adept:pkcs12 ofByteBooks=\"false\">%s</adept:pkcs12>" % (pkcs12_key[False])
+    else: 
+        content += "<adept:pkcs12>%s</adept:pkcs12>" % (pkcs12_key)
+
+    licenseCertificate_key = data["credentials"]["licenseCertificate"]
+    if isinstance(licenseCertificate_key, dict):
+        if True in licenseCertificate_key:
+            content += "<adept:licenseCertificate ofByteBooks=\"true\">%s</adept:licenseCertificate>" % (licenseCertificate_key[True])
+        if False in licenseCertificate_key:
+            content += "<adept:licenseCertificate ofByteBooks=\"false\">%s</adept:licenseCertificate>" % (licenseCertificate_key[False])
+    else: 
+        content += "<adept:licenseCertificate>%s</adept:licenseCertificate>" % (licenseCertificate_key)
     
-    content += "<adept:pkcs12>%s</adept:pkcs12>" % (data["credentials"]["pkcs12"])
-    content += "<adept:licenseCertificate>%s</adept:licenseCertificate>" % (data["credentials"]["licenseCertificate"])
     content += "<adept:privateLicenseKey>%s</adept:privateLicenseKey>" % (data["credentials"]["privateLicenseKey"])
-    content += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (data["credentials"]["authenticationCertificate"])
+
+    authCertificate_key = data["credentials"]["authenticationCertificate"]
+    if isinstance(authCertificate_key, dict):
+        if True in authCertificate_key:
+            content += "<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>" % (authCertificate_key[True])
+        if False in authCertificate_key:
+            content += "<adept:authenticationCertificate ofByteBooks=\"false\">%s</adept:authenticationCertificate>" % (authCertificate_key[False])
+    else: 
+        content += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (authCertificate_key)
+
     content += '</adept:credentials>\n'
 
     content += '<activationToken xmlns="http://ns.adobe.com/adept">'
@@ -227,24 +334,21 @@ def finalize_write_config_Windows(data, key, buildID):
     content += '</activationToken>\n'
     content += '</activationInfo>\n'
 
-    f.write(content)
-    f.close()
-
     # Re-create device.xml from scratch:
 
-    content = '<?xml version="1.0"?>\n'
-    content += '<adept:deviceInfo xmlns:adept="http://ns.adobe.com/adept">\n'
-    content += "<adept:deviceType>%s</adept:deviceType>\n" % (data["activationToken"]["deviceType"])
-    content += "<adept:deviceClass>%s</adept:deviceClass>\n" % ("Desktop")
-    content += "<adept:deviceSerial>%s</adept:deviceSerial>\n" % (makeSerial(False))
-    content += "<adept:deviceName>%s</adept:deviceName>\n" % (platform.uname()[1])
+    dev_content = '<?xml version="1.0"?>\n'
+    dev_content += '<adept:deviceInfo xmlns:adept="http://ns.adobe.com/adept">\n'
+    dev_content += "<adept:deviceType>%s</adept:deviceType>\n" % (data["activationToken"]["deviceType"])
+    dev_content += "<adept:deviceClass>%s</adept:deviceClass>\n" % ("Desktop")
+    dev_content += "<adept:deviceSerial>%s</adept:deviceSerial>\n" % (makeSerial(False))
+    dev_content += "<adept:deviceName>%s</adept:deviceName>\n" % (platform.uname()[1])
 
     version_idx = VAR_VER_BUILD_IDS.index(buildID)
     hobbes_ver = VAR_VER_HOBBES_VERSIONS[version_idx]
     clientOS = VAR_VER_OS_IDENTIFIERS[version_idx]
 
-    content += "<adept:version name=\"hobbes\" value=\"%s\"/>\n" % (hobbes_ver)
-    content += "<adept:version name=\"clientOS\" value=\"%s\"/>\n" % (clientOS)
+    dev_content += "<adept:version name=\"hobbes\" value=\"%s\"/>\n" % (hobbes_ver)
+    dev_content += "<adept:version name=\"clientOS\" value=\"%s\"/>\n" % (clientOS)
 
     language = None
     try: 
@@ -255,19 +359,30 @@ def finalize_write_config_Windows(data, key, buildID):
         # Can sometimes happen on MacOS with default English language
         language = "en"
 
-    content += "<adept:version name=\"clientLocale\" value=\"%s\"/>\n" % (language)
-    content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (data["activationToken"]["fingerprint"])
-    content += "</adept:deviceInfo>"
+    dev_content += "<adept:version name=\"clientLocale\" value=\"%s\"/>\n" % (language)
+    dev_content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (data["activationToken"]["fingerprint"])
+    dev_content += "</adept:deviceInfo>"
 
-    # Write device.xml
-    f = open(get_device_path(), "w")
-    f.write(content)
+    # Content prepared, now write all three files.
+
+    # Create devicekey file:
+    f = open(get_devkey_path(), "wb")
+    f.write(key)
     f.close()
 
+    # Create activation file
+    f = open(get_activation_xml_path(), "wb")
+    f.write(content.encode("utf-8"))
+    f.close()
+
+    # Create device file
+    f = open(get_device_path(), "wb")
+    f.write(dev_content.encode("utf-8"))
+    f.close()
 
     return True, "Done"
 
-def handle_subkey(parent, subkey, value, encryption_key, method, buildID):
+def handle_subkey(parent, subkey, value, encryption_key, method, ofByteBooks, buildID):
 
     if parent is None: 
         # We're done collecting sub keys - decrypt the private key, then finalize config.
@@ -283,7 +398,13 @@ def handle_subkey(parent, subkey, value, encryption_key, method, buildID):
         aes = AES(encryption_key, iv)
 
         value = base64.b64decode(persistent_data["credentials"]["privateLicenseKey"])
-        persistent_data["credentials"]["privateLicenseKey"] = base64.b64encode(aes.decrypt(value)).decode("latin-1")
+        decrypted_key = bytearray(aes.decrypt(value))
+
+        # Remove padding
+        decrypted_key = bytes(decrypted_key[:-decrypted_key[-1]])
+
+        persistent_data["credentials"]["privateLicenseKey"] = base64.b64encode(decrypted_key).decode("latin-1")
+
 
         return finalize_write_config_Windows(persistent_data, encryption_key, buildID)
     else: 
@@ -293,17 +414,35 @@ def handle_subkey(parent, subkey, value, encryption_key, method, buildID):
             account_method = method
 
         # Not encrypted
-        try: 
-            persistent_data[parent][subkey] = value
-        except KeyError:
+        if not parent in persistent_data:
             persistent_data[parent] = dict()
+
+        stored_variants = subkey in persistent_data[parent] and isinstance(persistent_data[parent][subkey], dict)
+
+        if ofByteBooks is None and not stored_variants:
+            # Plain value, and no ByteBooks / Adobe variants of this key so far.
             persistent_data[parent][subkey] = value
+        else:
+            # This key exists in a ByteBooks and an Adobe variant. An entry without the
+            # ofByteBooks flag counts as Adobe (same as everywhere else in the plugin),
+            # so store it as False. A plain value stored earlier for the same key is
+            # converted the same way, so the two styles can be mixed in any order.
+            if ofByteBooks is None:
+                ofByteBooks = False
+
+            if subkey not in persistent_data[parent]:
+                persistent_data[parent][subkey] = dict()
+            elif not stored_variants:
+                persistent_data[parent][subkey] = { False: persistent_data[parent][subkey] }
+
+            persistent_data[parent][subkey][ofByteBooks] = value
+    
 
     return None
 
 def getMacCredential(type):
 
-    import os, re
+    import os, re, binascii
 
     # Just calling a native binary.
     # The python modules were all A) pretty complicated and B) are only intended
@@ -327,16 +466,32 @@ def getMacCredential(type):
     if m:
         hexform, stringform = m.groups()
         if hexform:
-            return bytes.fromhex(hexform)
+            return binascii.unhexlify(hexform)
+        elif isinstance(stringform, bytes):
+            return stringform
         else:
-            return bytes(stringform, 'latin-1')
+            return stringform.encode('latin-1')
         
     return None
 
 
+def findMacActivationDat(home):
+    # Returns the path of the BDE or ADE activation.dat in the given home folder, or None.
+    # Use the ByteBooks activation if there is one, otherwise the Adobe one (same rule as
+    # the Windows and Wine imports). Both keep their keys in the same keychain entries.
+
+    for vendor in ["ByteBooks", "Adobe"]:
+        de_folder = os.path.join(home, "Library", "Application Support", vendor, "Digital Editions")
+        for dirpath, dirnames, filenames in os.walk(de_folder):
+            if "activation.dat" in filenames:
+                return os.path.join(dirpath, "activation.dat")
+
+    return None
+
+
 def importADEactivationMac(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
-    # Tries to import the system activation from Adobe Digital Editions on a Mac into the plugin
-    # This can be used to "clone" the ADE activation so you don't need to waste an additional activation.
+    # Tries to import the system activation from ByteBooks or Adobe Digital Editions on a Mac into the plugin
+    # This can be used to "clone" the BDE/ADE activation so you don't need to waste an additional activation.
 
     import sys
 
@@ -349,29 +504,13 @@ def importADEactivationMac(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
         print("This function is for MacOS only!")
         return False, "MacOS only!"
 
-    import subprocess
-    import warnings
-    warnings.filterwarnings('ignore', category=FutureWarning)
+    ActDatPath = findMacActivationDat(os.path.expanduser("~"))
 
-    home = os.getenv('HOME')
-    cmdline = 'find "' + home + '/Library/Application Support/Adobe/Digital Editions" -name "activation.dat"'
-    cmdline = cmdline.encode(sys.getfilesystemencoding())
-    p2 = subprocess.Popen(cmdline, shell=True, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=False)
-    out1, out2 = p2.communicate()
-    reslst = out1.split(b'\n')
-    cnt = len(reslst)
-    ActDatPath = b"activation.dat"
-    for j in range(cnt):
-        resline = reslst[j]
-        pp = resline.find(b'activation.dat')
-        if pp >= 0:
-            ActDatPath = resline
-            break
-
-    
-    if not os.path.exists(ActDatPath):
+    if ActDatPath is None:
         print("Activation file does not exist ...")
         return False, "Activation file not found"
+
+    print("Importing activation from %s" % (ActDatPath))
 
 
     # activation.xml is at ActDatPath.
@@ -434,12 +573,12 @@ def recreateMacActivationFiles(path_to_activation, deviceKey, deviceFingerprint,
         language = "en"
 
     content += "<adept:version name=\"clientLocale\" value=\"%s\"/>\n" % (language)
-    content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (base64.b64encode(deviceFingerprint))
+    content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (base64.b64encode(deviceFingerprint).decode("latin-1"))
     content += "</adept:deviceInfo>"
 
     # Write device.xml
-    f = open(get_device_path(), "w")
-    f.write(content)
+    f = open(get_device_path(), "wb")
+    f.write(content.encode("utf-8"))
     f.close()
 
     return True, "Success"

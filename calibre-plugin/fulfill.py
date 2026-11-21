@@ -10,7 +10,6 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-# pyright: reportUndefinedVariable=false
 
 import sys, os, time, shutil
 
@@ -21,9 +20,6 @@ from libadobe import sendHTTPRequest_DL2FILE
 from libadobeFulfill import buildRights, fulfill
 from libpdf import patch_drm_into_pdf
 
-FILE_DEVICEKEY = "devicesalt"
-FILE_DEVICEXML = "device.xml"
-FILE_ACTIVATIONXML = "activation.xml"
 
 #######################################################################
 
@@ -39,7 +35,7 @@ def download(replyData):
 
 
     download_url = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("src"))).text
-    resource_id = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("resource"))).text
+    #resource_id = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("resource"))).text
     license_token_node = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken")))
 
     rights_xml_str = buildRights(license_token_node)
@@ -62,9 +58,12 @@ def download(replyData):
     print(download_url)
 
     filename_tmp = book_name + ".tmp"
+    
+    # Prevent Book names like "../../" from writing outside of the folder
+    filename_tmp = filename_tmp.replace("/", "").replace("\\", "")
 
     dl_start_time = int(time.time() * 1000)
-    ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp)
+    ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp, False)
     dl_end_time = int(time.time() * 1000)
     print("Download took %d milliseconds" % (dl_end_time - dl_start_time))
 
@@ -85,7 +84,13 @@ def download(replyData):
         filetype = ".pdf"
 
     filename = book_name + filetype
-    shutil.move(filename_tmp, filename)
+    filename = filename.replace("/", "").replace("\\", "")
+    try: 
+        shutil.move(filename_tmp, filename)
+    except: 
+        shutil.move(filename_tmp, "Book" + filetype)
+        filename = "Book" + filetype
+
 
     if filetype == ".epub":
         # Store EPUB rights / encryption stuff

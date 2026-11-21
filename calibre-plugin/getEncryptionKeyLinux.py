@@ -12,16 +12,19 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 #@@CALIBRE_COMPAT_CODE@@
 
-import sys, binascii, traceback
+import binascii, traceback
 
-def GetMasterKey(wineprefix): 
+def GetMasterKey(wineprefix, use_bytebooks = None):
+    # use_bytebooks: True / False makes the helper decrypt the ByteBooks / Adobe device key,
+    # so it matches the activation that's being imported. None keeps the old behaviour
+    # (ByteBooks if BDE has a device key, otherwise Adobe).
     import subprocess, os, re
 
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.ACSMInput_Prefs()
-        verbose_logging = deacsmprefs["detailed_logging"]
+        acsmprefs = prefs.ACSMInput_Prefs()
+        verbose_logging = acsmprefs["detailed_logging"]
     except:
         pass
 
@@ -52,7 +55,7 @@ def GetMasterKey(wineprefix):
         pass
 
     
-    env_dict = os.environ
+    env_dict = os.environ.copy()
     env_dict["PYTHONPATH"] = ""
     env_dict["WINEPREFIX"] = wineprefix
     #env_dict["WINEDEBUG"] = "-all,+crypt"
@@ -60,16 +63,8 @@ def GetMasterKey(wineprefix):
 
     try: 
         from calibre.utils.config import config_dir
-        from calibre_plugins.deacsm.__init__ import maindir as plg_maindir
-        
-        if plg_maindir is not None: 
-            print("FOUND MOD DIR!")
-            moddir = os.path.join(plg_maindir,"modules")
-        else: 
-            pluginsdir = os.path.join(config_dir,"plugins")
-            maindir = os.path.join(pluginsdir,"ACSMInput")
-            moddir = os.path.join(maindir,"modules")
-    except: 
+        moddir = os.path.join(config_dir, "plugins", "ACSMInput", "modules")
+    except ImportError: 
         import os
         moddir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "keyextract")
 
@@ -103,7 +98,11 @@ def GetMasterKey(wineprefix):
         traceback.print_exc()
 
     # calls decrypt_win32.exe or decrypt_win64.exe
-    proc = subprocess.Popen(["wine", "decrypt_" + winearch + ".exe"], shell=False, cwd=moddir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    helper_cmd = ["wine", "decrypt_" + winearch + ".exe"]
+    if use_bytebooks is not None:
+        helper_cmd.append("bytebooks" if use_bytebooks else "adobe")
+
+    proc = subprocess.Popen(helper_cmd, shell=False, cwd=moddir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env_dict)
     prog_stdout, prog_stderr = proc.communicate()
 
     if verbose_logging:

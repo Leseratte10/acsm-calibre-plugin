@@ -4,7 +4,7 @@
 # Calibre plugin for ACSM files.
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 https://github.com/Leseratte10/acsm-calibre-plugin
 
@@ -108,7 +108,7 @@ try:
 except:
     from calibre_plugins.deacsm.singleinstance_helper import SingleInstance
 
-import os, shutil, traceback, sys, time, io, random
+import os, shutil, traceback, sys, time, io
 import zipfile
 from lxml import etree
 
@@ -194,18 +194,7 @@ class ACSMInput(FileTypePlugin):
                 traceback.print_exc()
                 pass
                 
-            self.maindir_old = os.path.join(self.pluginsdir,"DeACSM")
             self.maindir = os.path.join(self.pluginsdir,"ACSMInput")
-
-            # Do NOT try to migrate data, that just screws everything up. 
-            # If this is a fresh install of the plugin and there's no old data, 
-            # use the new path. Otherwise, if there's already data at the old location,
-            # continue to use that.
-
-            if os.path.exists(self.maindir_old):
-                # We have the old folder, continue to use that
-                self.maindir = self.maindir_old
-
 
             if not os.path.exists(self.maindir):
                 os.mkdir(self.maindir)
@@ -304,14 +293,19 @@ class ACSMInput(FileTypePlugin):
                     )
 
 
-            from libadobe import createDeviceKeyFile, update_account_path, sendHTTPRequest
-            from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
-            from libadobeFulfill import buildRights, fulfill
+            from libadobe import update_account_path
+            from libadobeAccount import changeDeviceVersion
 
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-            deacsmprefs = prefs.ACSMInput_Prefs()
-            update_account_path(deacsmprefs["path_to_account_data"])
+            acsmprefs = prefs.ACSMInput_Prefs()
+            update_account_path(acsmprefs["path_to_account_data"])
+            # This is needed to correctly update to an emulated ByteBooks Digital Edition 5.0 for older activations.
+            try: 
+                changeDeviceVersion(0, onlyIfUnknown=True)
+            except TypeError:
+                #print("Type error, this can happen during an update from an older version.")
+                pass
 
         except Exception as e:
             traceback.print_exc()
@@ -368,7 +362,7 @@ class ACSMInput(FileTypePlugin):
 
 
         from libadobe import sendHTTPRequest_DL2FILE
-        from libadobeFulfill import buildRights, fulfill
+        from libadobeFulfill import buildRights
         from libpdf import patch_drm_into_pdf
 
 
@@ -379,6 +373,8 @@ class ACSMInput(FileTypePlugin):
         try: 
             download_url = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("src"))).text
         except: 
+            # If src is present, it is used. If it isn't, ADE uses /Download instead.
+            # If downloadType is "simple", it does a GET. If it's anything else, it does a POST including a bunch of data.
             print("{0} v{1}: FulfillmentResult does not contain the <src> tag. This may be an ACSM with download type 'auth'?".format(PLUGIN_NAME, PLUGIN_VERSION))
             print("{0} v{1}: Please download the book through ADE (so the ACSM file is 'used').".format(PLUGIN_NAME, PLUGIN_VERSION))
             print("{0} v{1}: After that, please open a bug report and attach the ACSM file.".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -398,7 +394,7 @@ class ACSMInput(FileTypePlugin):
         filename_tmp = self.temporary_file(".blob").name
 
         dl_start_time = int(time.time() * 1000)
-        ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp)
+        ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp, False)
         dl_end_time = int(time.time() * 1000)
 
         print("Download took %d ms (HTTP %d)" % (dl_end_time - dl_start_time, ret))
@@ -446,10 +442,11 @@ class ACSMInput(FileTypePlugin):
             ret = patch_drm_into_pdf(filename, rights_xml_str, pdf_tmp_file, resource)
             if (ret):
                 print("{0} v{1}: File successfully fulfilled ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+                return pdf_tmp_file
             else:
                 print("{0} v{1}: There was an error patching the PDF file.".format(PLUGIN_NAME, PLUGIN_VERSION))
+                return None
 
-            return pdf_tmp_file
         else: 
             print("{0} v{1}: Error: Unsupported file type ...".format(PLUGIN_NAME, PLUGIN_VERSION))
             return None
@@ -496,7 +493,7 @@ class ACSMInput(FileTypePlugin):
             # We need to check if it's an ACSM file
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-            deacsmprefs = prefs.ACSMInput_Prefs()
+            acsmprefs = prefs.ACSMInput_Prefs()
 
             print("{0} v{1}: Trying to parse file {2}".format(PLUGIN_NAME, PLUGIN_VERSION, os.path.basename(path_to_ebook)))
 
@@ -522,7 +519,7 @@ class ACSMInput(FileTypePlugin):
 
             print("{0} v{1}: Try to fulfill ...".format(PLUGIN_NAME, PLUGIN_VERSION))
 
-            success, replyData = fulfill(path_to_ebook, deacsmprefs["notify_fulfillment"])
+            success, replyData = fulfill(path_to_ebook, acsmprefs["notify_fulfillment"])
 
             if (success is False):
                 print("{0} v{1}: Hey, that didn't work: \n".format(PLUGIN_NAME, PLUGIN_VERSION) + replyData)
@@ -541,7 +538,7 @@ class ACSMInput(FileTypePlugin):
                     # this is set to True
                     # If there's any errors whatsoever during export / plugin execution,
                     # this will be set back to False to prevent deletion.
-                    delete_src_file = deacsmprefs["delete_acsm_after_fulfill"]
+                    delete_src_file = acsmprefs["delete_acsm_after_fulfill"]
 
                     try: 
                         from calibre.customize.ui import _initialized_plugins, is_disabled

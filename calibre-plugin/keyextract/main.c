@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <cpuid.h>
 #include <intsafe.h>
 
@@ -17,7 +18,23 @@ struct EncEntropy {
 	char user[13];
 };
 
-int main() {
+int main(int argc, char *argv[]) {
+	// Which install's device key to decrypt: "bytebooks" or "adobe". The plugin passes
+	// the one whose activation it imports, so the key always matches that activation.
+	// Without an argument, use ByteBooks if BDE has a device key, otherwise Adobe.
+	int force_adobe = 0;
+	int allow_fallback = 1;
+	if (argc > 1) {
+		if (strcmp(argv[1], "adobe") == 0) {
+			force_adobe = 1;
+		}
+		else if (strcmp(argv[1], "bytebooks") != 0) {
+			fprintf(stderr, "Usage: %s [bytebooks|adobe]\n", argv[0]);
+			return ERROR_INVALID_PARAMETER;
+		}
+		allow_fallback = 0;
+	}
+
 	// Get disk serial
 	DWORD serial;
 	if (GetVolumeInformation("c:\\\\", NULL, 0, &serial, NULL, NULL, NULL, 0) == 0) {
@@ -48,16 +65,55 @@ int main() {
 	fprintf(stderr, "CPUID Signature (hex): %08x\n", signature);
 
 
+
+	// Get Encrypted adobe key
+	BYTE key[BUFSIZE];
+	memset(&key, 0, sizeof(key)); 
+	DWORD key_size = BUFSIZE;
+
+	// BDE/ADE only write the "key" attribute to the Device key when the software is activated.
+	LSTATUS key_retval = ERROR_FILE_NOT_FOUND;
+	if (!force_adobe) {
+		key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\ByteBooks\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
+		if (key_retval != ERROR_SUCCESS && allow_fallback) {
+			force_adobe = 1;
+		}
+	}
+	if (force_adobe) {
+		key_size = BUFSIZE;
+		key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\Adobe\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
+	}
+	fprintf(stderr, "Using the %s device key\n", force_adobe ? "Adobe" : "ByteBooks");
+	if (key_retval != ERROR_SUCCESS) {
+		fprintf(stderr, "Error with RegGetValue: %ld\n", key_retval);
+		fprintf(stderr, "key_size: %ld\n", key_size);
+		return key_retval;
+	}
+	fprintf(stderr, "Encrypted key (hex): ");
+	for (size_t i = 0; i < key_size; i++ )
+	{
+	   fprintf(stderr, "%02x", key[i]);
+	}
+	fprintf(stderr, "\n");
+
+
 	// Get windows user
 	wchar_t wideuser[BUFSIZE];
 	// RegGetValueW/GetUserNameW only sets bytes as needed for length of username, but we need null bytes to fill the rest
 	memset(&wideuser, 0, sizeof(wideuser)); 
 	DWORD wideuser_size = BUFSIZE;
-	LSTATUS user_retval = RegGetValueW(HKEY_CURRENT_USER, L"Software\\Adobe\\Adept\\Device", L"username", RRF_RT_REG_SZ, NULL, &wideuser, &wideuser_size);
+	LSTATUS user_retval;
+	if (force_adobe) {
+		user_retval = RegGetValueW(HKEY_CURRENT_USER, L"Software\\Adobe\\Adept\\Device", L"username", RRF_RT_REG_SZ, NULL, &wideuser, &wideuser_size);
+	}
+	else {
+		user_retval = RegGetValueW(HKEY_CURRENT_USER, L"Software\\ByteBooks\\Adept\\Device", L"username", RRF_RT_REG_SZ, NULL, &wideuser, &wideuser_size);
+	}
 	if (user_retval != ERROR_SUCCESS) {
 		fprintf(stderr, "Error with RegGetValue: %ld\n", user_retval);
 		fprintf(stderr, "wideuser_size: %ld\n", wideuser_size);
 		fprintf(stderr, "Falling back to GetUserNameW\n");
+		wideuser_size = BUFSIZE;
 		if (GetUserNameW(wideuser, &wideuser_size) == 0) {
 			DWORD err = GetLastError();
 			fprintf(stderr, "Error with GetUserName: %ld\n", err);
@@ -73,23 +129,6 @@ int main() {
 	for (unsigned int i = 0; i < 13; i++) {
 		user[i] = ((char *)wideuser)[i*2];
 	}
-
-	// Get Encrypted adobe key
-	BYTE key[BUFSIZE];
-	memset(&key, 0, sizeof(key)); 
-	DWORD key_size = BUFSIZE;
-	LSTATUS key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\Adobe\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
-	if (key_retval != ERROR_SUCCESS) {
-		fprintf(stderr, "Error with RegGetValue: %ld\n", key_retval);
-		fprintf(stderr, "key_size: %ld\n", key_size);
-		return key_retval;
-	}
-	fprintf(stderr, "Encrypted key (hex): ");
-	for (size_t i = 0; i < key_size; i++ )
-	{
-	   fprintf(stderr, "%02x", key[i]);
-	}
-	fprintf(stderr, "\n");
 
 
 	// Assemble "entropy" (passphrase) for key

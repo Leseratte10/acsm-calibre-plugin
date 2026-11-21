@@ -1,5 +1,5 @@
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -9,15 +9,12 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 from lxml import etree
 import base64
-import random
-import time
 
 #@@CALIBRE_COMPAT_CODE@@
 
 from libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
 from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
-from libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
-from libadobe import VAR_VER_BUILD_IDS, VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER
+from libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_HOBBES_VERSIONS
 
 
  
@@ -71,53 +68,42 @@ def buildFulfillRequest(acsm):
         clientVersion = VAR_VER_SUPP_VERSIONS[v_idx]
 
     except:
-        # Version not present, probably the "old" 10.0.4 entry. 
-        # As 10.X is in the 3.0 range, assume we're on ADE 3.0
-        clientVersion = "3.0.1.91394"
+        clientVersion = VAR_VER_SUPP_VERSIONS[0]
 
-    if clientVersion == "ADE WIN 9,0,1131,27": 
-        # Ancient ADE 1.7.2 does this request differently
-        request = "<fulfill xmlns=\"http://ns.adobe.com/adept\">\n"
-        request += "<user>%s</user>\n" % (user_uuid)
-        request += "<device>%s</device>\n" % (device_uuid)
-        request += "<deviceType>%s</deviceType>\n" % (device_type)
-        request += etree.tostring(acsm, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-        request += "</fulfill>"
-        return request, False
 
-    else: 
-        request = ""
-        request += "<?xml version=\"1.0\"?>"
-        request += "<adept:fulfill xmlns:adept=\"http://ns.adobe.com/adept\">"
-        request += "<adept:user>%s</adept:user>" % (user_uuid)
-        request += "<adept:device>%s</adept:device>" % (device_uuid)
-        request += "<adept:deviceType>%s</adept:deviceType>" % (device_type)
-        request += etree.tostring(acsm, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-        request += "<adept:targetDevice>"
 
-        request += "<adept:softwareVersion>%s</adept:softwareVersion>" % (version)
-        request += "<adept:clientOS>%s</adept:clientOS>" % (clientOS)
-        request += "<adept:clientLocale>%s</adept:clientLocale>" % (clientLocale)
-        request += "<adept:clientVersion>%s</adept:clientVersion>" % (clientVersion)
-        request += "<adept:deviceType>%s</adept:deviceType>" % (device_type)
-        request += "<adept:productName>%s</adept:productName>" % ("ADOBE Digitial Editions")
-        # YES, this typo ("Digitial" instead of "Digital") IS present in ADE!!
-        request += "<adept:fingerprint>%s</adept:fingerprint>" % (fingerprint)
+    request = ""
+    request += "<?xml version=\"1.0\"?>"
+    request += "<adept:fulfill xmlns:adept=\"http://ns.adobe.com/adept\">"
+    request += "<adept:user>%s</adept:user>" % (user_uuid)
+    request += "<adept:device>%s</adept:device>" % (device_uuid)
+    request += "<adept:deviceType>%s</adept:deviceType>" % (device_type)
+    request += etree.tostring(acsm, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+    request += "<adept:targetDevice>"
 
-        request += "<adept:activationToken>"
-        request += "<adept:user>%s</adept:user>" % (user_uuid)
-        request += "<adept:device>%s</adept:device>" % (device_uuid)
-        request += "</adept:activationToken>"
-        request += "</adept:targetDevice>"
-        request += "</adept:fulfill>"
-        return request, True
+    request += "<adept:softwareVersion>%s</adept:softwareVersion>" % (version)
+    request += "<adept:clientOS>%s</adept:clientOS>" % (clientOS)
+    request += "<adept:clientLocale>%s</adept:clientLocale>" % (clientLocale)
+    request += "<adept:clientVersion>%s</adept:clientVersion>" % (clientVersion)
+    request += "<adept:deviceType>%s</adept:deviceType>" % (device_type)
+    request += "<adept:productName>%s</adept:productName>" % ("ByteBooks Digitial Editions")
+    # YES, this typo ("Digitial" instead of "Digital") IS present in BDE, just like it was in ADE.
+    request += "<adept:fingerprint>%s</adept:fingerprint>" % (fingerprint)
+
+    request += "<adept:activationToken>"
+    request += "<adept:user>%s</adept:user>" % (user_uuid)
+    request += "<adept:device>%s</adept:device>" % (device_uuid)
+    request += "</adept:activationToken>"
+    request += "</adept:targetDevice>"
+    request += "</adept:fulfill>"
+    return request
 
     
 
 
 
-def buildInitLicenseServiceRequest(authURL):
-    # type: (str) -> str
+def buildInitLicenseServiceRequest(authURL, force_adobe):
+    # type: (str, bool) -> str
 
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
@@ -135,12 +121,9 @@ def buildInitLicenseServiceRequest(authURL):
     ret += "<adept:user>%s</adept:user>" % (user_uuid)
     ret += "</adept:licenseServiceRequest>"
 
-    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
-    etree.register_namespace("adept", NSMAP["adept"])
-
     req_xml = etree.fromstring(ret)
 
-    signature = sign_node(req_xml)
+    signature = sign_node(req_xml, not force_adobe)
     if (signature is None):
         return None
 
@@ -149,21 +132,41 @@ def buildInitLicenseServiceRequest(authURL):
     return "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
 
 
-def getDecryptedCert(pkcs12_b64_string = None): 
+def getDecryptedCert(pkcs12_b64_string = None, force_bytebooks = False): 
     
     if pkcs12_b64_string is None: 
         activationxml = etree.parse(get_activation_xml_path())
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-        pkcs12_b64_string = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("pkcs12"))).text
+        try: 
+            certificate_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12"))).text
+        except AttributeError:
+            # When old activation.xmls are loaded in the new plugin.
+            certificate_bb = None
+
+        try: 
+            certificate_adobe = next(
+                c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
+                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+            )
+        except:
+            certificate_adobe = None
+
+        if certificate_bb is None and certificate_adobe is None: 
+            return None
+        elif certificate_adobe is None: 
+            pkcs12_b64_string = certificate_bb
+        elif certificate_bb is None:
+            pkcs12_b64_string = certificate_adobe
+        elif force_bytebooks and certificate_bb is not None:
+            pkcs12_b64_string = certificate_bb
+        else: 
+            pkcs12_b64_string = certificate_adobe
 
     pkcs12_data = base64.b64decode(pkcs12_b64_string)
 
-    try: 
-        from libadobe import devkey_bytes as devkey_adobe
-    except: 
-        pass
-
+    from libadobe import devkey_bytes as devkey_adobe
+    
     if devkey_adobe is not None: 
         devkey_bytes = devkey_adobe
     else: 
@@ -176,12 +179,12 @@ def getDecryptedCert(pkcs12_b64_string = None):
     except: 
         return None
 
-def buildAuthRequest():
+def buildAuthRequest(use_bytebooks = False):
 
     activationxml = etree.parse(get_activation_xml_path())
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)     
 
-    my_cert = getDecryptedCert()
+    my_cert = getDecryptedCert(None, use_bytebooks)
     if my_cert is None: 
         print("Can't decrypt pkcs12 with devkey!")
         return None
@@ -191,32 +194,124 @@ def buildAuthRequest():
     ret += "<adept:credentials xmlns:adept=\"http://ns.adobe.com/adept\">\n"
     ret += "<adept:user>%s</adept:user>\n" % (activationxml.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text)
     ret += "<adept:certificate>%s</adept:certificate>\n" % (base64.b64encode(my_cert).decode("utf-8"))
-    ret += "<adept:licenseCertificate>%s</adept:licenseCertificate>\n" % (activationxml.find("./%s/%s" % (adNS("credentials"), adNS("licenseCertificate"))).text)
-    ret += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>\n" % (activationxml.find("./%s/%s" % (adNS("credentials"), adNS("authenticationCertificate"))).text)
+
+    try: 
+        license_cert_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("licenseCertificate"))).text
+        auth_cert_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("authenticationCertificate"))).text
+    except AttributeError:
+        # When old activation.xmls are loaded by the new plugin.
+        license_cert_bb = None
+        auth_cert_bb = None
+
+
+    try: 
+        license_cert_adobe = next(
+                c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("licenseCertificate")))
+                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+            )
+
+        auth_cert_adobe = next(
+                c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("authenticationCertificate")))
+                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+            )
+    except: 
+        license_cert_adobe = None
+        auth_cert_adobe = None
+
+
+
+    if use_bytebooks and license_cert_bb is not None and auth_cert_bb is not None:
+        ret += "<adept:licenseCertificate>%s</adept:licenseCertificate>\n" % (license_cert_bb)
+        ret += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>\n" % (auth_cert_bb)
+
+    elif auth_cert_adobe is None or license_cert_adobe is None: 
+        print("Adobe cert is not available.")
+        return None
+    else: 
+        ret += "<adept:licenseCertificate>%s</adept:licenseCertificate>\n" % (license_cert_adobe)
+        ret += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>\n" % (auth_cert_adobe)
+
     ret += "</adept:credentials>"
 
 
     return ret
 
 
-def doOperatorAuth(operatorURL):
-    # type: (str) -> str
+def getAvailableCertTypes():
+    # type: () -> tuple
+    # Returns (has_bytebooks, has_adobe): whether the activation contains a complete set of
+    # credentials (pkcs12, licenseCertificate and authenticationCertificate) of each type.
+    # Entries without an ofByteBooks attribute (older activations) count as Adobe,
+    # same as everywhere else in the plugin.
 
-    auth_req = buildAuthRequest()
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+    activationxml = etree.parse(get_activation_xml_path())
 
+    def has_complete_set(bytebooks):
+        for tag in ["pkcs12", "licenseCertificate", "authenticationCertificate"]:
+            found = False
+            for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS(tag))):
+                flag = c.get("ofByteBooks")
+                if bytebooks:
+                    matches = (flag == "true")
+                else:
+                    matches = (flag is None or flag == "false")
+                if matches and c.text:
+                    found = True
+                    break
+            if not found:
+                return False
+        return True
+
+    return has_complete_set(True), has_complete_set(False)
+
+def is_bytebooks_account():
+    return getAvailableCertTypes()[0]
+
+def doOperatorAuth(operatorURL, force_adobe = False):
+    # type: (str, bool) -> tuple
+    # Returns (error, use_adobe): error is None on success, and use_adobe then 
+    # says which certificate the operator accepted.
+
+    has_bytebooks, has_adobe = getAvailableCertTypes()
+
+    if not has_bytebooks and not has_adobe:
+        return "The activation doesn't contain a complete set of certificates", None
+
+    # Use the ByteBooks certificate if we have one, otherwise go straight to Adobe.
+    use_adobe = force_adobe or not has_bytebooks
+
+    if use_adobe and not has_adobe:
+        return "The activation doesn't contain Adobe certificates", None
+
+    auth_req = buildAuthRequest(not use_adobe)
     if auth_req is None:
-        return "Failed to create auth request"
+        return "Failed to create auth request - buildAuthRequest returned None", None
 
 
     authURL = operatorURL
-    if authURL.endswith("Fulfill"):
-        authURL = authURL.replace("/Fulfill", "")
-
-
-    replyData = sendRequestDocu(auth_req, authURL + "/Auth").decode("utf-8")
+    # I don't think this is needed since callers shouldn't have this flag in their URLs.
+    # authURL = authURL.replace('?ofByteBooks=1', '')
+    if authURL.endswith("/Fulfill"):
+        authURL = authURL[:-8]
+    
+    
+    # The operator is the distributor's own ACS server, not ByteBooks. Don't validate TLS here,
+    # same as for /Fulfill: lots of distributors have invalid or expired certs.
+    
+    try: 
+        if not use_adobe:
+            replyData = sendRequestDocu(auth_req, authURL + "/Auth?ofByteBooks=1", False).decode("utf-8")
+        else:
+            replyData = sendRequestDocu(auth_req, authURL + "/Auth", False).decode("utf-8")
+    except: 
+        return "ERROR: /Auth returned invalid data or no data at all.", None
 
     if not "<success" in replyData:
-        return "ERROR: Operator responded with %s\n" % replyData
+        if "<error" in replyData and 'E_ADEPT_INVALID_CERTIFICATE' in replyData and not use_adobe and has_adobe:
+            print("Operator auth using ByteBooks certificate failed, this might be an older ACS server. Retrying with Adobe certificates.")
+            return doOperatorAuth(operatorURL, True)
+        return "ERROR: Operator responded with %s\n" % replyData, None
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }    
@@ -226,24 +321,30 @@ def doOperatorAuth(operatorURL):
 
     activationURL = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("activationURL"))).text
 
-    init_license_service_request = buildInitLicenseServiceRequest(authURL)
+    init_license_service_request = buildInitLicenseServiceRequest(authURL, use_adobe)
 
     if (init_license_service_request is None):
-        return "Creating license request failed!"
+        return "Creating license request failed!", None
 
 
-    resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService").decode("utf-8")
-    if "<error" in resp: 
-        return "Looks like that failed: %s" % resp
-    elif "<success" in resp: 
-        return None
+    try:
+        if use_adobe:
+            resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService", True).decode("utf-8")
+        else:
+            resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService?ofByteBooks=1", True).decode("utf-8")
+    except: 
+        return "ERROR: /InitLicenseService returned invalid data or no data at all.", None
+
+    if "<error" in resp:
+        return "Looks like that failed: %s" % resp, None
+    elif "<success" in resp:
+        return None, use_adobe
     else: 
-        return "Useless response: %s" % resp
+        return "Useless response: %s" % resp, None
 
 
 
 def operatorAuth(operatorURL):
-    # type: (str) -> str
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }    
@@ -256,14 +357,17 @@ def operatorAuth(operatorURL):
         for member in operator_url_list:
             if member.text.strip() == operatorURL:
                 #print("Already authenticated to operator")
-                return None
+                # We don't know which certificate it accepted; fulfill() finds out.
+                return None, None
     except:
         pass
 
     
-    ret = doOperatorAuth(operatorURL)
+    ret, reqtype = doOperatorAuth(operatorURL)
     if (ret is not None):
-        return "doOperatorAuth error: %s" % ret
+        return ("doOperatorAuth error: %s" % ret), None
+
+    #reqtype is now a boolean. If true, Adobe, if false, ByteBooks.
 
     # Check if list exists:
     list = activationxml.find("./%s" % (adNS("operatorURLList")))
@@ -274,16 +378,16 @@ def operatorAuth(operatorURL):
         etree.SubElement(x, etree.QName(NSMAP["adept"], "user")).text = user_uuid
         list = activationxml.find("./%s" % (adNS("operatorURLList")))
         if list is None: 
-            return "Err, this list should not be none right now ..."
+            return "Err, this list should not be none right now ...", None
     
     etree.SubElement(list, etree.QName(NSMAP["adept"], "operatorURL")).text = operatorURL
 
-    f = open(get_activation_xml_path(), "w")
-    f.write("<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8"))
+    f = open(get_activation_xml_path(), "wb")
+    f.write(b"<?xml version=\"1.0\"?>\n")
+    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
     f.close()
 
-    return None
+    return None, reqtype
 
 
 
@@ -321,8 +425,8 @@ def buildRights(license_token_node):
     if not found:
         print("Did not find the licenseService certificate in the activation data.")
         print("This usually means it failed to download from the distributor's servers.")
-        print("Please try to download an ACSM book from the Adobe Sample Library, then if that was successful, ")
-        print("try your ACSM book file again.")
+        print("Please try to download an ACSM book from the ByteBooks Sample Library,")
+        print("then if that was successful, try your ACSM book file again.")
         return None
 
     ret += "</adept:licenseServiceInfo>\n"
@@ -331,30 +435,54 @@ def buildRights(license_token_node):
     return ret
 
 
+def signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL):
+    # type: (str, bool, str) -> str
+    # Signs the fulfill request with the Adobe key (use_adobe) or the ByteBooks
+    # key, sends it and returns the reply. Returns None if signing failed.
+
+    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
+    etree.register_namespace("adept", NSMAP["adept"])
+
+    fulfill_request_xml = etree.fromstring(fulfill_request)
+    signature = sign_node(fulfill_request_xml, not use_adobe)
+    if (signature is None):
+        return None
+
+    if not use_adobe:
+        fulfillURL = fulfillURL + "?ofByteBooks=1"
+
+    etree.SubElement(fulfill_request_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
+
+    fulfill_req_signed = "<?xml version=\"1.0\"?>\n" + etree.tostring(fulfill_request_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+
+    #print("will send:\n %s" % fulfill_req_signed)
+    #print("Sending fulfill request to %s" % fulfillURL)
+
+    # For debugging only
+    # fulfillURL = fulfillURL.replace("https:", "http:")
+
+    try: 
+        ret = sendRequestDocu(fulfill_req_signed, fulfillURL, False).decode("utf-8")
+        return ret
+    except: 
+        print("Fulfillment request failed ...")
+        return None
+
+
 def fulfill(acsm_file, do_notify = False):
 
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.ACSMInput_Prefs()
-        verbose_logging = deacsmprefs["detailed_logging"]
+        acsmprefs = prefs.ACSMInput_Prefs()
+        verbose_logging = acsmprefs["detailed_logging"]
     except:
         pass
 
-    # Get pkcs12: 
-
-    pkcs12 = None
+    
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     acsmxml = None
-    try: 
-        activationxml = etree.parse(get_activation_xml_path())
-        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-        pkcs12 = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("pkcs12"))).text
-    except: 
-        return False, "Activation not found or invalid"
-
-    if pkcs12 is None or len(pkcs12) == 0:
-        return False, "Activation missing"
-
+    
     try: 
         acsmxml = etree.parse(acsm_file)
     except: 
@@ -383,28 +511,6 @@ def fulfill(acsm_file, do_notify = False):
         pass
 
 
-    fulfill_request, adept_ns = buildFulfillRequest(acsmxml)
-
-    if verbose_logging:
-        print("Fulfill request:")
-        print(fulfill_request)
-
-    fulfill_request_xml = etree.fromstring(fulfill_request)
-    # Sign the request:
-    signature = sign_node(fulfill_request_xml)
-    if (signature is None):
-        return False, "Signing failed!"
-
-    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
-    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-    
-    if adept_ns:
-        # "new" ADE
-        etree.SubElement(fulfill_request_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
-    else: 
-        # ADE 1.7.2
-        etree.SubElement(fulfill_request_xml, etree.QName("signature")).text = signature
-
     # Get operator URL: 
     operatorURL = None
     try: 
@@ -417,34 +523,53 @@ def fulfill(acsm_file, do_notify = False):
 
     fulfillURL = operatorURL + "/Fulfill"
 
-    ret = operatorAuth(fulfillURL)
+    ret, use_adobe = operatorAuth(fulfillURL)
     if (ret is not None):
         return False, "operatorAuth error: %s" % ret
 
-    if adept_ns:
-        # "new" ADE
-        fulfill_req_signed = "<?xml version=\"1.0\"?>\n" + etree.tostring(fulfill_request_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-    else: 
-        # ADE 1.7.2
-        fulfill_req_signed = etree.tostring(fulfill_request_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
 
-    #print("will send:\n %s" % fulfill_req_signed)
-    #print("Sending fulfill request to %s" % fulfillURL)
+    fulfill_request = buildFulfillRequest(acsmxml)
 
-    # For debugging only
-    # fulfillURL = fulfillURL.replace("https:", "http:")
+    if verbose_logging:
+        print("Fulfill request:")
+        print(fulfill_request)
 
-    replyData = sendRequestDocu(fulfill_req_signed, fulfillURL).decode("utf-8")
+    # If operatorAuth() just authenticated us, it knows which certificate the
+    # operator accepted. If we were already authenticated (earlier, or by ADE/BDE
+    # before an import), it returns None: then use ByteBooks if we have it, and
+    # only fall back to Adobe if the operator rejects that AND we have Adobe
+    # certificates.
 
-    if "<error" in replyData: 
+    can_retry_with_adobe = False
+    if use_adobe is None:
+        has_bytebooks, has_adobe = getAvailableCertTypes()
+        use_adobe = not has_bytebooks
+        can_retry_with_adobe = has_bytebooks and has_adobe
+
+
+    replyData = signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL)
+    if (replyData is None):
+        return False, "Signing failed or response invalid."
+
+    if "<error" in replyData and "E_ADEPT_INVALID_CERTIFICATE" in replyData and can_retry_with_adobe:
+        print("Operator rejected the request signed with the ByteBooks certificate, this might be an older ACS server. Retrying with Adobe certificates.")
+        use_adobe = True
+        replyData = signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL)
+        if (replyData is None):
+            return False, "Signing failed or response invalid."
+
+    if "<error" in replyData:
         if "E_ADEPT_DISTRIBUTOR_AUTH" in replyData:
-            # This distributor *always* wants authentication, so force that again
-            ret = doOperatorAuth(fulfillURL)
+            # This distributor *always* wants authentication, so force that again.
+            # The auth tells us which certificate the operator accepted, so re-sign to match.
+            ret, use_adobe = doOperatorAuth(fulfillURL)
 
             if (ret is not None):
                 return False, "doOperatorAuth error: %s" % ret
 
-            replyData = sendRequestDocu(fulfill_req_signed, fulfillURL).decode("utf-8")
+            replyData = signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL)
+            if (replyData is None):
+                return False, "Signing failed or response invalid."
             if "<error" in replyData:
                 return False, "Looks like there's been an error during Fulfillment even after auth: %s" % replyData
         else: 
@@ -460,18 +585,20 @@ def fulfill(acsm_file, do_notify = False):
 
     licenseURL = adobe_fulfill_response.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("licenseURL"))).text
 
-    if adept_ns:
-        if do_notify:
-            print("Notifying server ...")
-            success, response = performFulfillmentNotification(adobe_fulfill_response)
-            if not success: 
-                print("Some errors occurred during notify: ")
-                print(response)
-                print("The book was probably still downloaded correctly.")
-        else:
-            print("Not notifying any server since that was disabled.")
-    else: 
-        print("Skipping notify, not supported properly with ADE 1.7.2")
+
+    notify_success = False
+    if do_notify:
+        print("Notifying server ...")
+        success, response = performFulfillmentNotification(adobe_fulfill_response, not use_adobe)
+        if not success: 
+            print("Some errors occurred during notify: ")
+            print(response)
+            print("The book was probably still downloaded correctly.")
+        else: 
+            notify_success = True
+    else:
+        print("Not notifying any server since that was disabled.")
+
 
 
     is_returnable = False
@@ -482,13 +609,15 @@ def fulfill(acsm_file, do_notify = False):
     except: 
         pass
 
-    if (is_returnable and do_notify and adept_ns):
+    if (is_returnable and notify_success):
         # Only support loan returning if we also notified ACS. 
         # Otherwise the server gets confused and we don't want that.
-        # Also, only do that for new-ish ADE and not for ADE 1.7.2
-        updateLoanReturnData(adobe_fulfill_response)
+        try: 
+            updateLoanReturnData(adobe_fulfill_response, False, use_adobe)
+        except: 
+            print("Warning: Could not add loan return data to loan record. You may not be able to return this book.")
 
-    success, response = fetchLicenseServiceCertificate(licenseURL, operatorURL)
+    success, response = fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe)
 
     if success is False: 
         print("Why did the license download fail?")
@@ -499,7 +628,7 @@ def fulfill(acsm_file, do_notify = False):
 
 
 
-def updateLoanReturnData(fulfillmentResultToken, forceTestBehaviour=False):
+def updateLoanReturnData(fulfillmentResultToken, forceTestBehaviour=False, use_adobe=False):
 
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
@@ -558,7 +687,8 @@ def updateLoanReturnData(fulfillmentResultToken, forceTestBehaviour=False):
             "device": deviceUUID,
             "loanID": fulfillment_id,
             "operatorURL": operatorURL,
-            "validUntil": dsp_until
+            "validUntil": dsp_until, 
+            "useByteBooks": not use_adobe
         }
 
     if forceTestBehaviour:
@@ -575,30 +705,17 @@ def addLoanRecordToConfigFile(new_loan_record):
 
     try: 
         import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-        deacsmprefs = prefs.ACSMInput_Prefs()
+        acsmprefs = prefs.ACSMInput_Prefs()
     except: 
         print("Exception while reading config file")
         return False
-    
-    deacsmprefs.refresh()
 
-    # Check if that exact loan is already in the list, and if so, delete it:
-    done = False
-    while not done:
-        done = True
-        for book in deacsmprefs["list_of_rented_books"]:
-            if book["loanID"] == new_loan_record["loanID"]:
-                done = False
-                deacsmprefs["list_of_rented_books"].remove(book)
-                break
-
-
-    # Add all necessary information for a book return to the JSON array.
+    # Add all necessary information for a book return to the JSON array, replacing
+    # an older record of the same loan if there is one.
     # The config widget can then read this and present a list of not-yet-returned
     # books, and can then return them.
     # Also, the config widget is responsible for cleaning up that list once a book's validity period is up.
-    deacsmprefs["list_of_rented_books"].append(new_loan_record)
-    deacsmprefs.commit()
+    acsmprefs.add_loan(new_loan_record)
 
     return True
 
@@ -609,8 +726,8 @@ def tryReturnBook(bookData):
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.ACSMInput_Prefs()
-        verbose_logging = deacsmprefs["detailed_logging"]
+        acsmprefs = prefs.ACSMInput_Prefs()
+        verbose_logging = acsmprefs["detailed_logging"]
     except:
         pass
 
@@ -623,6 +740,11 @@ def tryReturnBook(bookData):
     except: 
         print("Invalid book data!")
         return False, "Invalid book data"
+
+    try: 
+        use_bytebooks = bookData["useByteBooks"]
+    except: 
+        use_bytebooks = False
 
 
     req_data = "<?xml version=\"1.0\"?>"
@@ -639,20 +761,28 @@ def tryReturnBook(bookData):
 
     full_text_xml = etree.fromstring(req_data)
 
-    signature = sign_node(full_text_xml)
+    signature = sign_node(full_text_xml, use_bytebooks)
     if (signature is None):
         print("SIGN ERROR!")
         return False, "Sign error"
 
     etree.SubElement(full_text_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
 
-    print("Notifying loan return server %s" % (operatorURL + "/LoanReturn"))
+    return_server = operatorURL + "/LoanReturn"
+    if use_bytebooks:
+        return_server += "?ofByteBooks=1"
+
+    print("Notifying loan return server %s" % (return_server))
     doc_send = "<?xml version=\"1.0\"?>\n" + etree.tostring(full_text_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
     if verbose_logging:
         print(doc_send)
 
 
-    retval = sendRequestDocu(doc_send, operatorURL + "/LoanReturn").decode("utf-8")
+    try:
+        retval = sendRequestDocu(doc_send, return_server, False).decode("utf-8")
+    except: 
+        print("Error while returning!")
+        return False, "sendRequest failed."
 
     if "<error" in retval: 
         print("Loan return failed: %s" % (retval))
@@ -661,7 +791,7 @@ def tryReturnBook(bookData):
         print("Loan return successful")
         if verbose_logging:
             print(retval)
-        bl, txt = performFulfillmentNotification(etree.fromstring(retval), True, user=user, device=device)
+        bl, txt = performFulfillmentNotification(etree.fromstring(retval), use_bytebooks, user=user, device=device)
         if not bl: 
             print("Error while notifying of book return. Book's probably still been returned properly.")
         return True, retval
@@ -671,13 +801,13 @@ def tryReturnBook(bookData):
 
 
 
-def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False, user = None, device = None):
+def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user = None, device = None):
 
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.ACSMInput_Prefs()
-        verbose_logging = deacsmprefs["detailed_logging"]
+        acsmprefs = prefs.ACSMInput_Prefs()
+        verbose_logging = acsmprefs["detailed_logging"]
     except:
         pass
 
@@ -754,33 +884,9 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
         
         full_text = "<adept:notification xmlns:adept=\"http://ns.adobe.com/adept\">"
         full_text += "<adept:user>%s</adept:user>" % user
-        full_text += "<adept:device>%s</adept:device>" % device
-
-
-        # ADE 4.0 apparently changed the order of these two elements. 
-        # I still don't know exactly how this order is determined, but in most cases
-        # ADE 4+ has the body first, then the nonce, while ADE 3 and lower usually has nonce first, then body.
-        # It probably doesn't matter, but still, we want to behave exactly like ADE, so check the version number: 
-
-        devicexml = etree.parse(get_device_path())
-        for f in devicexml.findall("./%s" % (adNS("version"))):
-            if f.get("name") == "hobbes":
-                version = f.get("value")
-
-        try: 
-            v_idx = VAR_VER_HOBBES_VERSIONS.index(version)
-            clientVersion = VAR_VER_BUILD_IDS[v_idx]
-        except:
-            clientVersion = 0
-        
-        if (clientVersion >= VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER):
-            full_text += etree.tostring(body, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-            full_text += addNonce()
-        else:
-            full_text += addNonce()
-            full_text += etree.tostring(body, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-            
-
+        full_text += "<adept:device>%s</adept:device>" % device       
+        full_text += etree.tostring(body, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+        full_text += addNonce()
         full_text += "</adept:notification>"
 
             
@@ -789,7 +895,7 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
 
         full_text_xml = etree.fromstring(full_text)
 
-        signature = sign_node(full_text_xml)
+        signature = sign_node(full_text_xml, use_bytebooks)
         if (signature is None):
             print("SIGN ERROR!")
             continue
@@ -803,8 +909,14 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
             print("Notify payload XML:")
             print(doc_send)
 
+        if use_bytebooks:
+            if "?" in url: 
+                url = url + "&ofByteBooks=1"
+            else: 
+                url = url + "?ofByteBooks=1"
+
         try: 
-            code, msg = sendRequestDocuRC(doc_send, url)
+            code, msg = sendRequestDocuRC(doc_send, url, False)
         except:
             if not critical:
                 print("There was an error during an optional fulfillment notification:")
@@ -814,7 +926,9 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
                 continue
             else:
                 print("Error during critical notification:")
-                raise
+                import traceback
+                traceback.print_exc()
+                continue
 
         try: 
             msg = msg.decode("utf-8")
@@ -840,11 +954,6 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
             errmsg += "ERROR\n" + url + "\n" + msg + "\n\n"
             if critical:
                 errmsg_crit += "ERROR\n" + url + "\n" + msg + "\n\n"
-
-
-    if device is None and errmsg_crit != "":
-        errmsg_crit = ""
-        print("Skipping critical notification failure due to weird book.")
         
 
     if errmsg_crit == "": 
@@ -853,9 +962,19 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
     return False, errmsg
 
 
+def quote_query_value(value):
+    try: 
+        from urllib.parse import quote
+    except ImportError:
+        from urllib import quote
 
+    # Python 2's quote() raises KeyError on unicode with non-ASCII characters,
+    # so always hand it UTF-8 bytes. Python 3's quote() accepts bytes as well.
+    if not isinstance(value, bytes):
+        value = value.encode("utf-8")
+    return quote(value)
 
-def fetchLicenseServiceCertificate(licenseURL, operatorURL):
+def fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe = False):
 
     # Check if we already have a cert for this URL: 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
@@ -877,17 +996,16 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL):
     list = activationxml.find("./%s" % (adNS("licenseServices")))
 
     if list is None: 
-        x = etree.SubElement(activationxml.getroot(), etree.QName(NSMAP["adept"], "licenseServices"), nsmap=NSMAP)
-        list = activationxml.find("./%s" % (adNS("licenseServices")))
-        if list is None: 
-            return False, "Err, this list should not be none right now ..."
+        list = etree.SubElement(activationxml.getroot(), etree.QName(NSMAP["adept"], "licenseServices"), nsmap=NSMAP)
     
     info_entry = etree.SubElement(list, etree.QName(NSMAP["adept"], "licenseServiceInfo"))
 
-    licenseServiceInfoReq = operatorURL + "/LicenseServiceInfo?licenseURL=" + licenseURL
+    licenseServiceInfoReq = operatorURL + "/LicenseServiceInfo?licenseURL=" + quote_query_value(licenseURL) 
+    if not use_adobe:
+        licenseServiceInfoReq = licenseServiceInfoReq + "&ofByteBooks=1"
 
     try: 
-        response = sendHTTPRequest(licenseServiceInfoReq).decode("utf-8")
+        response = sendHTTPRequest(licenseServiceInfoReq, False).decode("utf-8")
     except: 
         return False, "HTTP download for the licenseServiceInfo failed ... why?"
 
@@ -909,9 +1027,9 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL):
     etree.SubElement(info_entry, etree.QName(NSMAP["adept"], "licenseURL")).text = server_lic_url
     etree.SubElement(info_entry, etree.QName(NSMAP["adept"], "certificate")).text = server_cert
 
-    f = open(get_activation_xml_path(), "w")
-    f.write("<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8"))
+    f = open(get_activation_xml_path(), "wb")
+    f.write(b"<?xml version=\"1.0\"?>\n")
+    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
     f.close()
 
     return True, "Done"

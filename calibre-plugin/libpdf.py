@@ -47,7 +47,7 @@ class BackwardReader:
                 self.file.seek(current_pos-to_read, 0)
                 buffer = self.file.read(to_read) + buffer
                 self.file.seek(current_pos-to_read, 0)
-                if current_pos is to_read:
+                if current_pos == to_read:
                     if sys.version_info[0] >= 3:
                         buffer = bytes([0x0a]) + buffer
                     else:

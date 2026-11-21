@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -20,11 +20,13 @@ import ssl
 try: 
     import urllib.request as ulib
     import urllib.error as uliberror
+    import http.client as ulibhttp
 except: 
     import urllib2 as ulib
     import urllib2 as uliberror
+    import httplib as ulibhttp
 
-from datetime import datetime, timedelta
+import datetime
 
 from lxml import etree
 
@@ -49,8 +51,16 @@ from oscrypto import keys
 from oscrypto.asymmetric import dump_certificate, dump_private_key
 
 
-VAR_ACS_SERVER_HTTP = "http://adeactivate.adobe.com/adept"
-VAR_ACS_SERVER_HTTPS = "https://adeactivate.adobe.com/adept"
+VAR_ACS_SERVER_HTTPS = "https://activate.dtsbytebooks.com/adept"
+
+# Network timeout in seconds. It applies to connecting and to every single read while
+# waiting for or receiving a reply, so a slow but working download is not cut off.
+VAR_HTTP_TIMEOUT = 30
+
+# Errors that urllib does not wrap in a URLError, like a timeout or a dropped connection
+# while waiting for or reading the reply. These all count as "server not reachable".
+# (URLError is a subclass of these, so catch it first if it needs separate handling.)
+HTTP_CONNECTION_ERRORS = (IOError, OSError, ulibhttp.HTTPException)
 
 FILE_DEVICEKEY = "devicesalt"
 FILE_DEVICEXML = "device.xml"
@@ -58,40 +68,22 @@ FILE_ACTIVATIONXML = "activation.xml"
 
 
 # Lists of different ADE "versions" we know about
-VAR_VER_SUPP_CONFIG_NAMES = [ "ADE 1.7.2", "ADE 2.0.1", "ADE 3.0.1", "ADE 4.0.3", "ADE 4.5.10", "ADE 4.5.11" ]
-VAR_VER_SUPP_VERSIONS = [ "ADE WIN 9,0,1131,27", "2.0.1.78765", "3.0.1.91394", "4.0.3.123281", 
-                            "com.adobe.adobedigitaleditions.exe v4.5.10.186048", 
-                            "com.adobe.adobedigitaleditions.exe v4.5.11.187303" ]
-VAR_VER_HOBBES_VERSIONS = [ "9.0.1131.27", "9.3.58046", "10.0.85385", "12.0.123217", "12.5.4.186049", "12.5.4.187298" ]
-VAR_VER_OS_IDENTIFIERS = [ "Windows Vista", "Windows Vista", "Windows 8", "Windows 8", "Windows 8", "Windows 8" ]
+VAR_VER_SUPP_CONFIG_NAMES = [ "BDE 5.0.76" ]
+VAR_VER_SUPP_VERSIONS = [ "com.dtsbytebooks.digitaleditions.exe v5.0.76" ]
+VAR_VER_HOBBES_VERSIONS = [ "12.5.4.HOBBES_VERSION_BUILD_NUMBER_X" ] 
+# Yes, that last version is correct, looks like ByteBooks messed up their placeholder.
+VAR_VER_OS_IDENTIFIERS = [ "Windows 8" ]
 
 
-# "Missing" versions:
-# 1.7.1, 2.0, 3.0, 4.0, 4.0.1, 4.0.2, 4.5 to 4.5.9
-# 4.5.7.179634
 
 # This is a list of ALL versions we know (and can potentially use if present in a config file).
-# Must have the same length / size as the four lists above.
-VAR_VER_BUILD_IDS = [ 1131, 78765, 91394, 123281, 186048, 187303 ]
-# Build ID 185749 also exists, that's a different (older) variant of 4.5.10. 
+VAR_VER_BUILD_IDS = [ 76 ]
 
 # This is a list of versions that can be used for new authorizations:
-VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE = [ 78765, 91394, 123281, 187303 ]
+VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE = [ 76 ]
 
-# This is a list of versions to be displayed in the version changer.
-VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO = [ 1131, 78765, 91394, 123281, 187303 ]
-
-# Versions >= this one are using HTTPS
-# According to changelogs, this is implemented as of ADE 4.0.1 - no idea what build ID that is.
-VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT = 123281
-
-# Versions >= this are using a different order for the XML elements in a FulfillmentNotification.
-# This doesn't matter for fulfillment at all, but I want to emulate ADE as accurately as possible.
-# Implemented as of ADE 4.0.0, no idea what exact build number that is.
-VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER = 123281
-
-# Default build ID to use - ADE 2.0.1
-VAR_VER_DEFAULT_BUILD_ID = 78765
+# Default build ID to use - ADE 5.0
+VAR_VER_DEFAULT_BUILD_ID = 76
 
 
 
@@ -135,15 +127,17 @@ def get_activation_xml_path():
 def update_account_path(folder_path):
     # type: (str) -> None
 
-    global FILE_DEVICEKEY, FILE_DEVICEXML, FILE_ACTIVATIONXML
+    global FILE_DEVICEKEY, FILE_DEVICEXML, FILE_ACTIVATIONXML, devkey_bytes
 
     FILE_DEVICEKEY = os.path.join(folder_path, "devicesalt")
     FILE_DEVICEXML = os.path.join(folder_path, "device.xml")
     FILE_ACTIVATIONXML = os.path.join(folder_path, "activation.xml")
 
+    # force reloading the device key when it is next used.
+    devkey_bytes = None
+
 
 def createDeviceKeyFile():
-    # Original implementation: Device::createDeviceKeyFile()
 
     DEVICE_KEY_SIZE = 16
     global devkey_bytes
@@ -244,8 +238,69 @@ def makeFingerprint(serial):
 
 ############################################## HTTP stuff:
 
-def sendHTTPRequest_DL2FILE(URL, outputfile):
-    # type: (str, str) -> int
+calibre_ca_locations = None
+
+def get_calibre_ca_locations():
+    # type: () -> tuple
+    # Returns (cafile, capath) for the Mozilla CA bundle that ships with Calibre.
+    # Newer Calibre versions ship it as a hashed directory ("mozilla-ca-certs"),
+    # older ones as a single PEM file ("mozilla-ca-certs.pem").
+    # Returns (None, None) outside of Calibre (standalone scripts, tests) or if
+    # this Calibre install doesn't contain the bundle (some distro packages strip it).
+
+    global calibre_ca_locations
+    if calibre_ca_locations is not None:
+        return calibre_ca_locations
+
+    cafile = None
+    capath = None
+    try:
+        from calibre.utils.resources import get_path    # type: ignore
+
+        # allow_user_override=False, same as Calibre itself uses for its CA files,
+        # so a file in the user's Calibre config folder can't replace the trusted CAs.
+        path = get_path("mozilla-ca-certs", allow_user_override=False)
+        if os.path.isdir(path):
+            capath = path
+        else:
+            path = get_path("mozilla-ca-certs.pem", allow_user_override=False)
+            if os.path.isfile(path):
+                cafile = path
+    except Exception:
+        pass
+
+    calibre_ca_locations = (cafile, capath)
+    return calibre_ca_locations
+
+
+def create_ssl_context(validate_tls):
+    # type: (bool) -> ssl.SSLContext
+
+    ctx = ssl.create_default_context()
+
+    if validate_tls:
+        # Also trust the CA bundle that ships with Calibre. Windows only downloads root
+        # certificates into its store when Windows itself needs one, so verification can
+        # fail for a perfectly valid server certificate whose root Windows hasn't fetched yet.
+        cafile, capath = get_calibre_ca_locations()
+        if cafile is not None or capath is not None:
+            try:
+                ctx.load_verify_locations(cafile=cafile, capath=capath)
+            except Exception:
+                # A broken bundle must not stop us from using the system certificates.
+                print("Couldn't load Calibre's CA certificates, using the system ones only.")
+    else:
+        # It appears as if lots of book distributors have either invalid or expired certs ...
+        # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
+        # Order matters here, too: check_hostname must be disabled before CERT_NONE.
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+    return ctx
+
+
+def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
+    # type: (str, str, bool) -> int
 
     headers = {
         "Accept": "*/*",
@@ -253,54 +308,34 @@ def sendHTTPRequest_DL2FILE(URL, outputfile):
         # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
     }
 
-    # Ignore SSL:
-    # It appears as if lots of book distributors have either invalid or expired certs ...
-    # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
-    # Not the best solution, but it works.
+    ctx = create_ssl_context(validate_tls)
+
+
     try: 
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-        # This is needed due to an Adobe change. 
-        # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
-        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
-        # just enforce TLSv1.2 here.
-    except:
-        ctx = ssl.create_default_context()
+        req = ulib.Request(url=URL, headers=headers)
+        handler = ulib.urlopen(req, context=ctx, timeout=VAR_HTTP_TIMEOUT)
 
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+        with open(outputfile, "wb") as f:
+            chunksize = 16 * 1024
+            while True:
+                chunk = handler.read(chunksize)
+                if not chunk:
+                    break
+                f.write(chunk)
 
+    except uliberror.HTTPError as err: 
+        # This happens with HTTP 500 and related errors.
+        return err.code
 
-    req = ulib.Request(url=URL, headers=headers)
-    handler = ulib.urlopen(req, context=ctx)
-
-    chunksize = 16 * 1024
-
-    ret_code = handler.getcode()
-
-
-    loc = None
-    try: 
-        loc = req.headers.get("Location")
-    except:
-        pass
-
-    if loc is not None: 
-        return sendHTTPRequest_DL2FILE(loc)
-
-    if ret_code != 200:
-        return ret_code
-
-    with open(outputfile, "wb") as f:
-        while True: 
-            chunk = handler.read(chunksize)
-            if not chunk: 
-                break
-            f.write(chunk)
+    except HTTP_CONNECTION_ERRORS as err:
+        # Server not reachable, timeout, or the connection broke during the download.
+        print("Download failed: %s" % (err))
+        return 900
 
     return 200
 
-def sendHTTPRequest_getSimple(URL):
-    # type: (str) -> str
+def sendHTTPRequest_getSimple(URL, validate_tls = True):
+    # type: (str, bool) -> str
 
     headers = {
         "Accept": "*/*",
@@ -308,63 +343,27 @@ def sendHTTPRequest_getSimple(URL):
         # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
     }
 
-    # Ignore SSL:
-    # It appears as if lots of book distributors have either invalid or expired certs ...
-    # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
-    # Not the best solution, but it works.
-    try: 
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-        # This is needed due to an Adobe change. 
-        # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
-        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
-        # just enforce TLSv1.2 here.
-    except:
-        ctx = ssl.create_default_context()
+    ctx = create_ssl_context(validate_tls)
 
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-
+    # Callers handle the exceptions, including the ones for a timeout.
     req = ulib.Request(url=URL, headers=headers)
-    handler = ulib.urlopen(req, context=ctx)
+    handler = ulib.urlopen(req, context=ctx, timeout=VAR_HTTP_TIMEOUT)
 
     content = handler.read()
 
-    loc = None
-    try: 
-        loc = req.headers.get("Location")
-    except:
-        pass
-
-    if loc is not None: 
-        return sendHTTPRequest_getSimple(loc)
-
     return content
 
-def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
-    # type: (str, bytes, str, bool) -> str
+def sendPOSTHTTPRequest(URL, document, contenttype, returnRC = False, validate_tls = True):
+    # type: (str, bytes, str, bool, bool) -> str
 
     headers = {
         "Accept": "*/*",
         "User-Agent": "book2png",
         # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
-        "Content-Type": type
+        "Content-Type": contenttype
     }
 
-    # Ignore SSL:
-    # It appears as if lots of book distributors have either invalid or expired certs ...
-    # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
-    # Not the best solution, but it works.
-    try: 
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-        # This is needed due to an Adobe change. 
-        # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
-        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
-        # just enforce TLSv1.2 here.
-    except:
-        ctx = ssl.create_default_context()
-
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    ctx = create_ssl_context(validate_tls)
 
     # Make sure URL has a protocol
     # Some vendors (see issue #22) apparently don't include "http://" in some of their URLs.
@@ -376,7 +375,16 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
 
     req = ulib.Request(url=URL, headers=headers, data=document)
     try: 
-        handler = ulib.urlopen(req, context=ctx)
+        handler = ulib.urlopen(req, context=ctx, timeout=VAR_HTTP_TIMEOUT)
+
+        ret_code = handler.getcode()
+        if (ret_code == 204 and returnRC):
+            return 204, ""
+        if (ret_code != 200):
+            print("Post request returned something other than 200 - returned %d" % (ret_code))
+
+        content = handler.read()
+
     except uliberror.HTTPError as err: 
         # This happens with HTTP 500 and related errors.
         print("Post request caused HTTPError %d" % (err.code))
@@ -386,29 +394,30 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
             return None
 
     except uliberror.URLError as err: 
-        # This happens if the hostname cannot be resolved.
-        print("Post request failed with URLError")
+        # This happens if the hostname cannot be resolved, or (with validate_tls)
+        # if the server's certificate chain can't be verified.
+        print("Post request failed with URLError: %s" % (err.reason))
         if returnRC:
             return 900, "Post request failed with URLError"
         else: 
             return None
 
-    ret_code = handler.getcode()
-    if (ret_code == 204 and returnRC):
-        return 204, ""
-    if (ret_code != 200):
-        print("Post request returned something other than 200 - returned %d" % (ret_code))
+    except ssl.CertificateError as err:
+        # Hostname mismatch with validate_tls. Python 2 and Python < 3.7 raise this
+        # directly instead of wrapping it in a URLError like Python 3.7+ does.
+        print("Post request failed, certificate does not match host: %s" % (err))
+        if returnRC:
+            return 900, "Post request failed with CertificateError"
+        else:
+            return None
 
-    content = handler.read()
-
-    loc = None
-    try: 
-        loc = req.headers.get("Location")
-    except:
-        pass
-
-    if loc is not None: 
-        return sendPOSTHTTPRequest(loc, document, type, returnRC)
+    except HTTP_CONNECTION_ERRORS as err:
+        # Timeout, or the connection broke while waiting for or reading the reply.
+        print("Post request failed with %s: %s" % (type(err).__name__, err))
+        if returnRC:
+            return 900, "Post request failed with " + type(err).__name__
+        else:
+            return None
 
     if returnRC:
         return ret_code, content
@@ -416,18 +425,18 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
     return content
 
 
-def sendHTTPRequest(URL):
-    # type: (str) -> str
-    return sendHTTPRequest_getSimple(URL)
+def sendHTTPRequest(URL, validate_tls = True):
+    # type: (str, bool) -> str
+    return sendHTTPRequest_getSimple(URL, validate_tls)
 
 
-def sendRequestDocu(document, URL):
-    # type: (str, str) -> str
-    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", False)
+def sendRequestDocu(document, URL, validate_tls = True):
+    # type: (str, str, bool) -> str
+    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", False, validate_tls)
 
-def sendRequestDocuRC(document, URL):
-    # type: (str, str) -> str
-    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", True)
+def sendRequestDocuRC(document, URL, validate_tls = True):
+    # type: (str, str, bool) -> str
+    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", True, validate_tls)
 
 
 
@@ -489,8 +498,15 @@ def addNonce():
     # What Adobe does instead is save the current time on program start, then increase tmp
     # every time a Nonce is needed. 
 
-    dt = datetime.utcnow()
-    sec = (dt - datetime(1970,1,1)).total_seconds()
+    if sys.version_info < (3, 7, 0):
+        # https://blog.miguelgrinberg.com/post/it-s-time-for-a-change-datetime-utcnow-is-now-deprecated 
+        dt = datetime.datetime.utcnow()
+        sec = (dt - datetime.datetime(1970,1,1)).total_seconds()
+    else: 
+        dt = datetime.datetime.now(datetime.timezone.utc)
+        sec = (dt - datetime.datetime(1970,1,1, tzinfo=datetime.timezone.utc)).total_seconds()
+
+
     Ntime = int(sec * 1000)
     # Ntime is now milliseconds since 1970
 
@@ -513,7 +529,7 @@ def addNonce():
 
     ret += "<adept:nonce>%s</adept:nonce>" % (base64.b64encode(final).decode("utf-8"))
 
-    m10m = dt + timedelta(minutes=10)
+    m10m = dt + datetime.timedelta(minutes=10)
     m10m_str = m10m.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     ret += "<adept:expiration>%s</adept:expiration>" % (m10m_str)
@@ -529,7 +545,7 @@ def get_cert_from_pkcs12(_pkcs12, _key):
 
 
 
-def sign_node(node):
+def sign_node(node, prefer_bytebooks):
 
     sha_hash = hash_node(node)
     sha_hash = sha_hash.digest()
@@ -537,7 +553,6 @@ def sign_node(node):
     # print("Hash is " + sha_hash.hex())
 
     global devkey_bytes
-    global pkcs12
 
     if devkey_bytes is None: 
         f = open(FILE_DEVICEKEY, "rb")
@@ -546,12 +561,42 @@ def sign_node(node):
 
     # Get private key
 
+
+    activationxml = etree.parse(FILE_ACTIVATIONXML)
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    # If prefer_bytebooks is set, this function will first try to use the ByteBooks cert. 
+    # If it isn't, it tries the Adobe cert. 
+    # If the requested one isn't found, it uses the other one.
+
     try: 
-        activationxml = etree.parse(FILE_ACTIVATIONXML)
-        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-        pkcs12 = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("pkcs12"))).text
+        pkcs12bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12"))).text
     except: 
+        pkcs12bb = None
+
+    try: 
+        pkcs12adobe = next(
+                        c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
+                        if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+                        )
+    except: 
+        pkcs12adobe = None
+
+
+    if pkcs12adobe is None and pkcs12bb is None: 
         return None
+
+    if prefer_bytebooks:
+        if pkcs12bb is not None: 
+            pkcs12 = pkcs12bb
+        else: 
+            pkcs12 = pkcs12adobe
+    else: 
+        if pkcs12adobe is not None: 
+            pkcs12 = pkcs12adobe
+        else: 
+            pkcs12 = pkcs12bb
+
 
     my_pkcs12 = base64.b64decode(pkcs12)
     my_priv_key, _, _ = keys.parse_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))
@@ -587,6 +632,28 @@ ASN_ATTRIBUTE = 5   # aka "ATTRIBUTE"
 
 debug = False
 
+def attribute_sort_key(attribute):
+    # type: (str) -> tuple
+
+    # "Attributes are sorted first by their namespaces and
+    # then by their names; sorting is done bytewise on UTF-8
+    # representations."
+
+    # lxml returns attribute keys in Clark notation ("{namespace}name", or just "name"),
+    # so sorting the raw keys isn't quite right: a namespace that is a prefix of another one
+    # can sort after it ("{http://a/x}..." < "{http://a}..." because "/" < "}"), and attributes 
+    # without a namespace whose name starts with a non-ASCII character would sort after all 
+    # namespaced ones (because "{" < "\u00e9"). So split the key into namespace and local name, 
+    # with "" for "no namespace" (which then always comes first), and compare their UTF-8 bytes. 
+    # Comparing bytes instead of strings also keeps the order correct on Python 2 builds that 
+    # store unicode strings as UTF-16, where characters outside the BMP would sort wrongly.
+
+    q_attribute = etree.QName(attribute)
+    namespace = "" if q_attribute.namespace is None else q_attribute.namespace
+
+    return (namespace.encode("utf-8"), q_attribute.localname.encode("utf-8"))
+
+
 def hash_node_ctx(node, hash_ctx):
 
     qtag = etree.QName(node.tag)
@@ -596,7 +663,7 @@ def hash_node_ctx(node, hash_ctx):
             # Adobe HMAC and signature are not hashed
             return
         else: 
-            print("Warning: Found hmac or signature node in unexpected namespace " + qtag.namespace)
+            print("Warning: Found hmac or signature node in unexpected namespace " + str(qtag.namespace))
 
     hash_do_append_tag(hash_ctx, ASN_NS_TAG)
 
@@ -607,14 +674,8 @@ def hash_node_ctx(node, hash_ctx):
     hash_do_append_string(hash_ctx, qtag.localname)
 
 
-    attrKeys = node.keys()
-
-    # Attributes need to be sorted
-    attrKeys.sort()
-    # TODO Implement UTF-8 bytewise sorting:
-    # "Attributes are sorted first by their namespaces and
-    # then by their names; sorting is done bytewise on UTF-8
-    # representations."
+    # Attributes need to be sorted, see attribute_sort_key() for the exact order.
+    attrKeys = sorted(node.keys(), key=attribute_sort_key)
 
     for attribute in attrKeys: 
         # Hash all the attributes
@@ -645,21 +706,24 @@ def hash_node_ctx(node, hash_ctx):
         # So there's a loop going over the text, hashing 32k chunks.
 
         text = node.text.strip()
-        textlen = len(text)
-        if textlen > 0:
+
+        if isinstance(text, bytes):
+            text_bytes = text
+        else:
+            text_bytes = text.encode("utf-8")
+
+        text_bytes_len = len(text_bytes)
+
+        if text_bytes_len > 0:
             done = 0
-            remaining = 0
             while True: 
-                remaining = textlen - done
-                if remaining > 0x7fff:
-                    #print("Warning: Why are we hashing a node larger than 32k?")
-                    remaining = 0x7fff
-
                 hash_do_append_tag(hash_ctx, ASN_TEXT)
-                hash_do_append_string(hash_ctx, text[done:done+remaining]) 
+                hashed_len = hash_do_append_string(hash_ctx, text_bytes[done:]) 
+                if hashed_len is None or hashed_len == 0:
+                    raise Exception("Error during hashing")
 
-                done += remaining
-                if done >= textlen:
+                done += hashed_len
+                if done >= text_bytes_len:
                     break
 
     for child in node: 
@@ -672,26 +736,38 @@ def hash_node_ctx(node, hash_ctx):
 
 
 
-def hash_do_append_string(hash_ctx, string):
-    # type: (SHA.SHA1Hash, str) -> None
+def hash_do_append_string(hash_ctx, data):
+    # type: (SHA.SHA1Hash, str|bytes) -> None|int
 
-    if sys.version_info[0] >= 3: 
-        str_bytes = bytes(string, encoding="utf-8")
+    if (isinstance(data, bytes)):
+        str_bytes = data
     else:
-        str_bytes = bytes(string)
+        str_bytes = data.encode("utf-8")
+
+        if len(str_bytes) > 0x7fff:
+            # Trying to hash string longer than 0x7FFF, can't safely split.
+            # This should never occur as long strings get handed into this function as bytes.
+            return None
+    
 
     length = len(str_bytes)
+
+    if length >= 0x7fff:
+        length = 0x7fff
+
     len_upper = int(length / 256)
     len_lower = int(length & 0xFF)
 
     hash_do_append_raw_bytes(hash_ctx, [len_upper, len_lower])
-    hash_do_append_raw_bytes(hash_ctx, str_bytes)
+    hash_do_append_raw_bytes(hash_ctx, str_bytes[:length])
+
+    return length
 
 def hash_do_append_tag(hash_ctx, tag):
     # type: (SHA.SHA1Hash, int) -> None
 
     if (tag > 5):
-        return
+        raise Exception("Tried to hash a tag outside of the valid range")
     
     hash_do_append_raw_bytes(hash_ctx, [tag])
 

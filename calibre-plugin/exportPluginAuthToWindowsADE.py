@@ -13,7 +13,8 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-# In progress ...
+# This implementation is currently in progress. It's outdated
+# and will not work in its current form. Please ignore it.
 
 try:
     from ctypes import windll
@@ -110,8 +111,8 @@ def GetMasterKey():
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.ACSMInput_Prefs()
-        verbose_logging = deacsmprefs["detailed_logging"]
+        acsmprefs = prefs.ACSMInput_Prefs()
+        verbose_logging = acsmprefs["detailed_logging"]
     except:
         pass
 
