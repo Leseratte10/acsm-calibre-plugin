@@ -112,6 +112,7 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
                     continue
 
                 if (line.lower().startswith('"ofbytebooks"=')): 
+                    # This attribute is a string, not an int.
                     val = line.split('=', 1)[1].strip()[1:-1]
                     if str(val).lower() == "true" or val == True:
                         current_ofbytebooks = True

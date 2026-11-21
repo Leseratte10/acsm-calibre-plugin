@@ -819,7 +819,7 @@ def buildActivateReqProxy(useVersionIndex = 0, proxyData = None):
     ret += "<adept:clientVersion>%s</adept:clientVersion>" % (VAR_VER_SUPP_VERSIONS[useVersionIndex])
     ret += "<adept:deviceType>%s</adept:deviceType>" % (local_device_xml.find("./%s" % (adNS("deviceType"))).text)
     ret += "<adept:productName>%s</adept:productName>" % ("ByteBooks Digitial Editions")
-    # YES, this typo ("Digitial" instead of "Digital") IS present in ADE!!
+    # YES, this typo ("Digitial" instead of "Digital") IS present in ADE and BDE.
 
     ret += "<adept:fingerprint>%s</adept:fingerprint>" % (local_device_xml.find("./%s" % (adNS("fingerprint"))).text)
 

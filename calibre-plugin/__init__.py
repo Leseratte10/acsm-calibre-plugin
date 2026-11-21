@@ -295,14 +295,17 @@ class ACSMInput(FileTypePlugin):
 
             from libadobe import createDeviceKeyFile, update_account_path, sendHTTPRequest
             from libadobeAccount import changeDeviceVersion
-            from libadobeFulfill import buildRights, fulfill
 
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
             acsmprefs = prefs.ACSMInput_Prefs()
             update_account_path(acsmprefs["path_to_account_data"])
             # This is needed to correctly update to an emulated ByteBooks Digital Edition 5.0 for older activations.
-            changeDeviceVersion(0, onlyIfUnknown=True)
+            try: 
+                changeDeviceVersion(0, onlyIfUnknown=True)
+            except TypeError:
+                #print("Type error, this can happen during an update from an older version.")
+                pass
 
         except Exception as e:
             traceback.print_exc()

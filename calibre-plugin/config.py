@@ -427,6 +427,7 @@ class ConfigWidget(QWidget):
                 # Default to BDE 5.0
                 v_idx = 0
 
+                hobbes_version = None
                 for f in ver:
                     if f.get("name") == "hobbes":
                         hobbes_version = f.get("value")
@@ -560,6 +561,7 @@ class ConfigWidget(QWidget):
             # Determine the ADE version we're emulating:
             ver = containerdev.findall("./%s" % (adeptNS("version")))
             ADE_version = None
+            hobbes_version = None
 
             for f in ver:
                 if f.get("name") == "hobbes":
@@ -591,9 +593,23 @@ class ConfigWidget(QWidget):
                 ade_type_str = " (" + ade_type + ")"
                 if ade_type == "AdobeID":
                     ade_type_str = ""
-                return "Authorized with "+ acc_type +" ID"+ade_type_str + " " + ade_mail + "\non device " + ade_device_name + ", emulating " + ADE_version + ".", True, ade_mail
+
+                display_str = "Authorized with "+ acc_type +" ID"+ade_type_str + " " + ade_mail + "\non device " + ade_device_name + ", emulating " + ADE_version + "."
+
+                if acc_type != "ByteBooks":
+                    display_str += "\n\nNote: Your authorization still uses the old Adobe format, not the new Bytebooks format."
+                    display_str += "\nYou will run into issues downloading books from any server running CS7 or newer."
+                    display_str += "\nPlease remove your authorization by pressing Ctrl+Shift+D, then re-authorize with a ByteBooks ID."
+
+                return display_str, True, ade_mail
             else: 
-                return "Authorized with an anonymous "+acc_type+" ID\non device " + ade_device_name + ", emulating " + ADE_version + ".", True, None
+                display_str = "Authorized with an anonymous "+acc_type+" ID\non device " + ade_device_name + ", emulating " + ADE_version + "."
+                if acc_type != "ByteBooks":
+                    display_str += "\n\nNote: Your authorization still uses the old Adobe format, not the new Bytebooks format."
+                    display_str += "\nYou will run into issues downloading books from any server running CS7 or newer."
+                    display_str += "\nPlease remove your authorization by pressing Ctrl+Shift+D, then re-authorize."
+                
+                return display_str, True, None
         except: 
             traceback.print_exc()
             return "ADE authorization seems to be corrupted", False, None
@@ -611,19 +627,6 @@ class ConfigWidget(QWidget):
 
 
         update_account_path(self.acsmprefs["path_to_account_data"])
-
-#         use_bytebooks = True
-#         if (is_bytebooks_account()):
-#             msg = "Which format do you want to export your account data in?\n\n"
-#             msg += "Click 'Yes' to use the new ByteBooks format which will work with all ACS servers but won't work with older versions of this plugin (recommended).\n\n"
-#             msg += "Click 'No' to use the old Adobe format which may not work with all ACS servers but will work with older versions of the plugin (not recommended). The backup may stop working after December 2026."
-# 
-#             use_bytebooks = question_dialog(None, "Choose backup format", msg)
-# 
-#         if not use_bytebooks:
-#             # TODO: Implement removing all Bytebooks-specific add-ons from the activation.xml here.
-#             error_dialog(None, "Export failed", "Not implemented yet.", show=True, show_copy_button=False)
-#             return False
 
         try: 
             account_uuid = getAccountUUID()
@@ -676,9 +679,9 @@ class ConfigWidget(QWidget):
         return False
 
     def import_activation_from_LinuxWine(self):
-        # This will try to import the activation from Adobe Digital Editions on Linux / Wine ...
+        # This will try to import the activation from Digital Editions on Linux / Wine ...
 
-        msg = "Trying to import existing activation from Adobe Digital Editions in WINE ...\n"
+        msg = "Trying to import existing activation from Digital Editions in WINE ...\n"
         msg += "Note: Importing the activation can take up to 30 seconds, and Calibre will appear to be \"stuck\" during that time.\n\n"
         msg += "Please enter the full, absolute path to your WINEPREFIX."
         msg += "If there's already a path in the input box, it is usually (but not always) the correct one."
@@ -712,11 +715,14 @@ class ConfigWidget(QWidget):
             return error_dialog(None, "Import failed", "The WINEPREFIX you entered doesn't seem to contain an authorized ADE.", show=True, show_copy_button=False)
 
 
+        from libadobe import update_account_path
         from libadobeImportAccount import importADEactivationLinuxWine
 
         ret, msg = importADEactivationLinuxWine(text)
 
         if (ret):
+            update_account_path(self.acsmprefs["path_to_account_data"])           
+
             # update display
             info_string, activated, ade_mail = self.get_account_info()
             self.lblAccInfo.setText(info_string)
@@ -731,7 +737,6 @@ class ConfigWidget(QWidget):
             self.button_import_LinuxWineADE.setEnabled(not activated)
             self.button_export_key.setEnabled(activated)
             self.button_export_activation.setEnabled(activated)
-            
 
             self.resize(self.sizeHint())
 
@@ -747,13 +752,16 @@ class ConfigWidget(QWidget):
 
 
     def import_activation_from_Win(self):
-        # This will try to import the activation from Adobe Digital Editions on Windows ...
+        # This will try to import the activation from Digital Editions on Windows ...
 
+        from libadobe import update_account_path
         from libadobeImportAccount import importADEactivationWindows
 
         ret, msg = importADEactivationWindows()
 
         if (ret):
+            update_account_path(self.acsmprefs["path_to_account_data"])
+
             # update display
             info_string, activated, ade_mail = self.get_account_info()
             self.lblAccInfo.setText(info_string)
@@ -768,7 +776,6 @@ class ConfigWidget(QWidget):
             self.button_import_WinADE.setEnabled(not activated)
             self.button_export_key.setEnabled(activated)
             self.button_export_activation.setEnabled(activated)
-            
 
             self.resize(self.sizeHint())
 
@@ -783,19 +790,22 @@ class ConfigWidget(QWidget):
             error_dialog(None, "Import failed", "That didn't work:\n" + msg, show=True, show_copy_button=False)
 
     def import_activation_from_MAC(self):
-        # This will try to import the activation from Adobe Digital Editions on MacOS ...
+        # This will try to import the activation from Digital Editions on MacOS ...
 
-        msg = "Trying to import existing activation from Adobe Digital Editions ...\n"
+        msg = "Trying to import existing activation from Digital Editions ...\n"
         msg += "You might get a prompt asking you to unlock your keychain / enter your keychain password.\n"
         msg += "This is necessary to extract the ADE encryption keys. "
 
         info_dialog(None, "Importing from ADE", msg, show=True, show_copy_button=False)
 
+        from libadobe import update_account_path
         from libadobeImportAccount import importADEactivationMac
 
         ret, msg = importADEactivationMac()
 
         if (ret):
+            update_account_path(self.acsmprefs["path_to_account_data"])
+
             # update display
             info_string, activated, ade_mail = self.get_account_info()
             self.lblAccInfo.setText(info_string)
@@ -828,8 +838,11 @@ class ConfigWidget(QWidget):
     def import_activation_from_ZIP(self):
 
         filters = [("ZIP", ["zip"])]
-        filenames = choose_files(self, "Import ADE activation file (ZIP)", _("Import ADE activation file (ZIP)"), 
+        filenames = choose_files(self, "Import DE activation file (ZIP)", _("Import DE activation file (ZIP)"), 
                 filters, all_files=False, select_only_single_file=True)
+
+        from libadobe import update_account_path
+        from libadobeAccount import changeDeviceVersion
         
         try: 
             filename = filenames[0]
@@ -865,6 +878,9 @@ class ConfigWidget(QWidget):
                 err = traceback.format_exc()
                 return error_dialog(None, "Import failed", "Can't write file", show=True, det_msg=err, show_copy_button=False)
 
+        update_account_path(self.acsmprefs["path_to_account_data"])
+        changeDeviceVersion(0, onlyIfUnknown=True)
+        
         # update display
         info_string, activated, ade_mail = self.get_account_info()
         self.lblAccInfo.setText(info_string)
@@ -884,7 +900,6 @@ class ConfigWidget(QWidget):
             self.button_import_WinADE.setEnabled(not activated)
         if islinux:
             self.button_import_LinuxWineADE.setEnabled(not activated)
-        
         
         self.resize(self.sizeHint())
 
@@ -987,10 +1002,10 @@ class ConfigWidget(QWidget):
         if (mail is not None):
             return 
 
-        msg = "You are about to link your anonymous authorization to an AdobeID. "
-        msg += "This only works ONCE for each AdobeID. The anonymous authorization will then "
-        msg += "permanently be connected to your AdobeID. This is intended for cases where the user "
-        msg += "has started with an anonymous authorization, and then creates a fresh AdobeID later "
+        msg = "You are about to link your anonymous authorization to a ByteBooks ID. "
+        msg += "This only works ONCE for each ByteBooks ID. The anonymous authorization will then "
+        msg += "permanently be connected to your ByteBooks ID. This is intended for cases where the user "
+        msg += "has started with an anonymous authorization, and then creates a fresh ID later "
         msg += "and doesn't want to lose his books.\n\n"
         msg += "Only continue if you fully understand this."
 
@@ -998,12 +1013,12 @@ class ConfigWidget(QWidget):
         warning_dialog(None, "Warning", msg, show=True, show_copy_button=False)
 
        
-        mail, ok = QInputDialog.getText(self, "Authorizing ADE account", "Please enter mail address")
+        mail, ok = QInputDialog.getText(self, "Authorizing DE account", "Please enter mail address")
 
         if (not ok or mail is None or len(mail) == 0):
             return
 
-        passwd, ok = QInputDialog.getText(self, "Authorizing ADE account", "Please enter password", QLineEdit.Password)
+        passwd, ok = QInputDialog.getText(self, "Authorizing DE account", "Please enter password", QLineEdit.Password)
 
         if (not ok or passwd is None or len(passwd) == 0):
             return
@@ -1022,13 +1037,13 @@ class ConfigWidget(QWidget):
 
             self.resize(self.sizeHint())
 
-            return info_dialog(None, "Done", "Successfully converted anonynmous authentication to AdobeID", show=True, show_copy_button=False)
+            return info_dialog(None, "Done", "Successfully converted anonynmous authentication to ByteBooks ID", show=True, show_copy_button=False)
 
         else: 
-            err_msg = "Could not link anonymous authentication to AdobeID.\n"
-            err_msg += "This only works with a fresh AdobeID that has never been linked to any ADE install."
+            err_msg = "Could not link anonymous authentication to ByteBooks ID.\n"
+            err_msg += "This only works with a fresh ID that has never been linked to any Digital Editions install."
 
-            return error_dialog(None, "ADE activation failed", err_msg, det_msg=str(message), show=True, show_copy_button=True)
+            return error_dialog(None, "DE activation failed", err_msg, det_msg=str(message), show=True, show_copy_button=True)
 
 
     
@@ -1053,6 +1068,10 @@ class ConfigWidget(QWidget):
         msg = "Please select your ID provider (usually ByteBooks ID)"
 
         acc_item, ok = QInputDialog.getItem(self, "Authorizing Digital Editions account", msg, types[1], 0, False)
+
+        if (not ok):
+            return
+
         acc_type = "AdobeID"
         try: 
             acc_idx = types[1].index(acc_item)

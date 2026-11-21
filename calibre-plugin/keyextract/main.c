@@ -54,6 +54,9 @@ int main() {
 	BYTE key[BUFSIZE];
 	memset(&key, 0, sizeof(key)); 
 	DWORD key_size = BUFSIZE;
+
+	// BDE/ADE only write the "key" attribute to the Device key when the software is activated, so this should be fine.
+
 	LSTATUS key_retval = RegGetValue(HKEY_CURRENT_USER, "Software\\ByteBooks\\Adept\\Device", "key", RRF_RT_REG_BINARY, NULL, &key, &key_size);
 	if (key_retval != ERROR_SUCCESS) {
 		key_size = BUFSIZE;

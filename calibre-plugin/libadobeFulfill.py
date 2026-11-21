@@ -170,11 +170,8 @@ def getDecryptedCert(pkcs12_b64_string = None, force_bytebooks = False):
 
     pkcs12_data = base64.b64decode(pkcs12_b64_string)
 
-    try: 
-        from libadobe import devkey_bytes as devkey_adobe
-    except: 
-        pass
-
+    from libadobe import devkey_bytes as devkey_adobe
+    
     if devkey_adobe is not None: 
         devkey_bytes = devkey_adobe
     else: 
@@ -304,10 +301,14 @@ def doOperatorAuth(operatorURL, force_adobe = False):
     
     # The operator is the distributor's own ACS server, not ByteBooks. Don't validate TLS here,
     # same as for /Fulfill: lots of distributors have invalid or expired certs.
-    if not use_adobe:
-        replyData = sendRequestDocu(auth_req, authURL + "/Auth?ofByteBooks=1", False).decode("utf-8")
-    else:
-        replyData = sendRequestDocu(auth_req, authURL + "/Auth", False).decode("utf-8")
+    
+    try: 
+        if not use_adobe:
+            replyData = sendRequestDocu(auth_req, authURL + "/Auth?ofByteBooks=1", False).decode("utf-8")
+        else:
+            replyData = sendRequestDocu(auth_req, authURL + "/Auth", False).decode("utf-8")
+    except: 
+        return "ERROR: /Auth returned invalid data or no data at all.", None
 
     if not "<success" in replyData:
         if "<error" in replyData and 'E_ADEPT_INVALID_CERTIFICATE' in replyData and not use_adobe and has_adobe:
@@ -329,10 +330,13 @@ def doOperatorAuth(operatorURL, force_adobe = False):
         return "Creating license request failed!", None
 
 
-    if use_adobe:
-        resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService", True).decode("utf-8")
-    else:
-        resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService?ofByteBooks=1", True).decode("utf-8")
+    try:
+        if use_adobe:
+            resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService", True).decode("utf-8")
+        else:
+            resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService?ofByteBooks=1", True).decode("utf-8")
+    except: 
+        return "ERROR: /InitLicenseService returned invalid data or no data at all.", None
 
     if "<error" in resp:
         return "Looks like that failed: %s" % resp, None
@@ -460,7 +464,12 @@ def signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL):
     # For debugging only
     # fulfillURL = fulfillURL.replace("https:", "http:")
 
-    return sendRequestDocu(fulfill_req_signed, fulfillURL).decode("utf-8")
+    try: 
+        ret = sendRequestDocu(fulfill_req_signed, fulfillURL).decode("utf-8")
+        return ret
+    except: 
+        print("Fulfillment request failed ...")
+        return None
 
 
 def fulfill(acsm_file, do_notify = False):
@@ -603,9 +612,12 @@ def fulfill(acsm_file, do_notify = False):
     if (is_returnable and do_notify):
         # Only support loan returning if we also notified ACS. 
         # Otherwise the server gets confused and we don't want that.
-        updateLoanReturnData(adobe_fulfill_response, False, use_adobe)
+        try: 
+            updateLoanReturnData(adobe_fulfill_response, False, use_adobe)
+        except: 
+            print("Warning: Could not add loan return data to loan record. You may not be able to return this book.")
 
-    success, response = fetchLicenseServiceCertificate(licenseURL, operatorURL)
+    success, response = fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe)
 
     if success is False: 
         print("Why did the license download fail?")
@@ -779,7 +791,11 @@ def tryReturnBook(bookData):
         print(doc_send)
 
 
-    retval = sendRequestDocu(doc_send, return_server, False).decode("utf-8")
+    try:
+        retval = sendRequestDocu(doc_send, return_server, False).decode("utf-8")
+    except: 
+        print("Error while returning!")
+        return False, "sendRequest failed."
 
     if "<error" in retval: 
         print("Loan return failed: %s" % (retval))
@@ -788,7 +804,7 @@ def tryReturnBook(bookData):
         print("Loan return successful")
         if verbose_logging:
             print(retval)
-        bl, txt = performFulfillmentNotification(etree.fromstring(retval), use_bytebooks, True, user=user, device=device)
+        bl, txt = performFulfillmentNotification(etree.fromstring(retval), use_bytebooks, user=user, device=device)
         if not bl: 
             print("Error while notifying of book return. Book's probably still been returned properly.")
         return True, retval
@@ -798,7 +814,7 @@ def tryReturnBook(bookData):
 
 
 
-def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, forceOptional = False, user = None, device = None):
+def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user = None, device = None):
 
     verbose_logging = False
     try: 
@@ -968,7 +984,7 @@ def quote_query_value(value):
         value = value.encode("utf-8")
     return quote(value)
 
-def fetchLicenseServiceCertificate(licenseURL, operatorURL):
+def fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe = False):
 
     # Check if we already have a cert for this URL: 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
@@ -997,7 +1013,9 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL):
     
     info_entry = etree.SubElement(list, etree.QName(NSMAP["adept"], "licenseServiceInfo"))
 
-    licenseServiceInfoReq = operatorURL + "/LicenseServiceInfo?licenseURL=" + quote_query_value(licenseURL) + "&ofByteBooks=1"
+    licenseServiceInfoReq = operatorURL + "/LicenseServiceInfo?licenseURL=" + quote_query_value(licenseURL) 
+    if not use_adobe:
+        licenseServiceInfoReq = licenseServiceInfoReq + "&ofByteBooks=1"
 
     try: 
         response = sendHTTPRequest(licenseServiceInfoReq).decode("utf-8")

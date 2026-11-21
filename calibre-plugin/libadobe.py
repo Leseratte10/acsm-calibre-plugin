@@ -227,21 +227,45 @@ def makeFingerprint(serial):
 
 ############################################## HTTP stuff:
 
+calibre_ca_locations = None
+
+def get_calibre_ca_locations():
+    # type: () -> tuple
+    # Returns (cafile, capath) for the Mozilla CA bundle that ships with Calibre.
+    # Newer Calibre versions ship it as a hashed directory ("mozilla-ca-certs"),
+    # older ones as a single PEM file ("mozilla-ca-certs.pem").
+    # Returns (None, None) outside of Calibre (standalone scripts, tests) or if
+    # this Calibre install doesn't contain the bundle (some distro packages strip it).
+
+    global calibre_ca_locations
+    if calibre_ca_locations is not None:
+        return calibre_ca_locations
+
+    cafile = None
+    capath = None
+    try:
+        from calibre.utils.resources import get_path    # type: ignore
+
+        # allow_user_override=False, same as Calibre itself uses for its CA files,
+        # so a file in the user's Calibre config folder can't replace the trusted CAs.
+        path = get_path("mozilla-ca-certs", allow_user_override=False)
+        if os.path.isdir(path):
+            capath = path
+        else:
+            path = get_path("mozilla-ca-certs.pem", allow_user_override=False)
+            if os.path.isfile(path):
+                cafile = path
+    except Exception:
+        pass
+
+    calibre_ca_locations = (cafile, capath)
+    return calibre_ca_locations
+
+
 def create_ssl_context(validate_tls):
     # type: (bool) -> ssl.SSLContext
 
-    # Works on Python 2.7.9+ and all Python 3 versions the plugin supports.
-
-    try: 
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-        # This is needed due to an Adobe change. 
-        # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
-        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
-        # just enforce TLSv1.2 here.
-        # Note that a context created like this does NOT verify anything by default
-        # (CERT_NONE, no hostname check, no CA certificates loaded).
-    except Exception:
-        ctx = ssl.create_default_context()
+    ctx = ssl.create_default_context()
 
     if validate_tls:
         # Order matters: Python 2 and Python < 3.7 raise ValueError if
@@ -251,6 +275,17 @@ def create_ssl_context(validate_tls):
         # Windows: system certificate store. Linux / MacOS: OpenSSL default paths,
         # which Calibre points at the system / bundled CA certificates (SSL_CERT_FILE / SSL_CERT_DIR).
         ctx.load_default_certs()
+
+        # Also trust the CA bundle that ships with Calibre. Windows only downloads root
+        # certificates into its store when Windows itself needs one, so verification can
+        # fail for a perfectly valid server certificate whose root Windows hasn't fetched yet.
+        cafile, capath = get_calibre_ca_locations()
+        if cafile is not None or capath is not None:
+            try:
+                ctx.load_verify_locations(cafile=cafile, capath=capath)
+            except Exception:
+                # A broken bundle must not stop us from using the system certificates.
+                print("Couldn't load Calibre's CA certificates, using the system ones only.")
     else:
         # It appears as if lots of book distributors have either invalid or expired certs ...
         # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
@@ -273,17 +308,16 @@ def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
     ctx = create_ssl_context(validate_tls)
 
 
-    req = ulib.Request(url=URL, headers=headers)
-    handler = ulib.urlopen(req, context=ctx)
+    try: 
+        req = ulib.Request(url=URL, headers=headers)
+        handler = ulib.urlopen(req, context=ctx)
+    except uliberror.HTTPError as err: 
+        # This happens with HTTP 500 and related errors.
+        return err.code
 
-    chunksize = 16 * 1024
-
-    ret_code = handler.getcode()
-
-    if ret_code != 200:
-        return ret_code
-
+    
     with open(outputfile, "wb") as f:
+        chunksize = 16 * 1024
         while True: 
             chunk = handler.read(chunksize)
             if not chunk: 
@@ -636,21 +670,25 @@ def hash_node_ctx(node, hash_ctx):
         # So there's a loop going over the text, hashing 32k chunks.
 
         text = node.text.strip()
-        textlen = len(text)
-        if textlen > 0:
+        
+        if sys.version_info[0] >= 3: 
+            text_bytes = bytes(text, encoding="utf-8")
+        else:
+            text_bytes = bytes(text)
+
+        text_bytes_len = len(text_bytes)
+
+        if text_bytes_len > 0:
             done = 0
-            remaining = 0
             while True: 
-                remaining = textlen - done
-                if remaining > 0x7fff:
-                    #print("Warning: Why are we hashing a node larger than 32k?")
-                    remaining = 0x7fff
-
                 hash_do_append_tag(hash_ctx, ASN_TEXT)
-                hash_do_append_string(hash_ctx, text[done:done+remaining]) 
+                hashed_len = hash_do_append_string(hash_ctx, text_bytes[done:]) 
+                if hashed_len is None or hashed_len == 0:
+                    print("Error during hashing!")
+                    raise Exception
 
-                done += remaining
-                if done >= textlen:
+                done += hashed_len
+                if done >= text_bytes_len:
                     break
 
     for child in node: 
@@ -663,20 +701,34 @@ def hash_node_ctx(node, hash_ctx):
 
 
 
-def hash_do_append_string(hash_ctx, string):
-    # type: (SHA.SHA1Hash, str) -> None
+def hash_do_append_string(hash_ctx, data):
+    # type: (SHA.SHA1Hash, str|bytes) -> None|int
 
-    if sys.version_info[0] >= 3: 
-        str_bytes = bytes(string, encoding="utf-8")
-    else:
-        str_bytes = bytes(string)
+    if (isinstance(data, str)):
+        if sys.version_info[0] >= 3: 
+            str_bytes = bytes(data, encoding="utf-8")
+        else:
+            str_bytes = bytes(data)
+
+        if len(str_bytes) > 0x7fff:
+            # Trying to hash string longer than 0x7FFF, can't safely split.
+            # This should never occur as long strings get handed into this function as bytes.
+            return None
+    else: 
+        str_bytes = data
 
     length = len(str_bytes)
+
+    if length >= 0x7fff:
+        length = 0x7fff
+
     len_upper = int(length / 256)
     len_lower = int(length & 0xFF)
 
     hash_do_append_raw_bytes(hash_ctx, [len_upper, len_lower])
-    hash_do_append_raw_bytes(hash_ctx, str_bytes)
+    hash_do_append_raw_bytes(hash_ctx, str_bytes[:length])
+
+    return length
 
 def hash_do_append_tag(hash_ctx, tag):
     # type: (SHA.SHA1Hash, int) -> None

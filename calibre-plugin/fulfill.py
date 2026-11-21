@@ -93,6 +93,8 @@ def download(replyData):
         shutil.move(filename_tmp, filename)
     except: 
         shutil.move(filename_tmp, "Book" + filetype)
+        filename = "Book" + filetype
+
 
     if filetype == ".epub":
         # Store EPUB rights / encryption stuff
