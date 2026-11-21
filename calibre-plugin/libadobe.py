@@ -399,16 +399,16 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False, validate_tls = Tr
     return content
 
 
-def sendHTTPRequest(URL, validate_tls = False):
+def sendHTTPRequest(URL, validate_tls = True):
     # type: (str, bool) -> str
     return sendHTTPRequest_getSimple(URL, validate_tls)
 
 
-def sendRequestDocu(document, URL, validate_tls = False):
+def sendRequestDocu(document, URL, validate_tls = True):
     # type: (str, str, bool) -> str
     return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", False, validate_tls)
 
-def sendRequestDocuRC(document, URL, validate_tls = False):
+def sendRequestDocuRC(document, URL, validate_tls = True):
     # type: (str, str, bool) -> str
     return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", True, validate_tls)
 

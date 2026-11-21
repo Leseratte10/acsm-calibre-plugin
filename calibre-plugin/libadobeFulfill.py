@@ -462,7 +462,7 @@ def signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL):
     # fulfillURL = fulfillURL.replace("https:", "http:")
 
     try: 
-        ret = sendRequestDocu(fulfill_req_signed, fulfillURL).decode("utf-8")
+        ret = sendRequestDocu(fulfill_req_signed, fulfillURL, False).decode("utf-8")
         return ret
     except: 
         print("Fulfillment request failed ...")
@@ -1008,7 +1008,7 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe = False):
         licenseServiceInfoReq = licenseServiceInfoReq + "&ofByteBooks=1"
 
     try: 
-        response = sendHTTPRequest(licenseServiceInfoReq).decode("utf-8")
+        response = sendHTTPRequest(licenseServiceInfoReq, False).decode("utf-8")
     except: 
         return False, "HTTP download for the licenseServiceInfo failed ... why?"
 
