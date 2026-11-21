@@ -268,14 +268,6 @@ def create_ssl_context(validate_tls):
     ctx = ssl.create_default_context()
 
     if validate_tls:
-        # Order matters: Python 2 and Python < 3.7 raise ValueError if
-        # check_hostname is enabled while verify_mode is still CERT_NONE.
-        ctx.verify_mode = ssl.CERT_REQUIRED
-        ctx.check_hostname = True
-        # Windows: system certificate store. Linux / MacOS: OpenSSL default paths,
-        # which Calibre points at the system / bundled CA certificates (SSL_CERT_FILE / SSL_CERT_DIR).
-        ctx.load_default_certs()
-
         # Also trust the CA bundle that ships with Calibre. Windows only downloads root
         # certificates into its store when Windows itself needs one, so verification can
         # fail for a perfectly valid server certificate whose root Windows hasn't fetched yet.
@@ -572,8 +564,6 @@ def sign_node(node, prefer_bytebooks):
         else: 
             pkcs12 = pkcs12bb
 
-    if pkcs12 is None: 
-        return None
 
     my_pkcs12 = base64.b64decode(pkcs12)
     my_priv_key, _, _ = keys.parse_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))

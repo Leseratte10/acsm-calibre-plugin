@@ -9,7 +9,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 
 from lxml import etree
-import base64
+import base64, traceback
 import os, locale, platform
 from xml.sax.saxutils import escape as xml_escape
 
@@ -148,8 +148,8 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
 
     except: 
         # There was an error hunting through the registry. 
-        raise
-        pass
+        traceback.print_exc()
+        return False, "There has been an error while reading through the Registry."
 
 def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
     # Tries to import the system activation from Adobe Digital Editions on Windows into the plugin
@@ -173,10 +173,12 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
 
     root_is_bytebooks = None
     try: 
+        winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\ByteBooks\Adept\Activation\0000')
         activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\ByteBooks\Adept\Activation')
         root_is_bytebooks = True
     except: 
         try: 
+            winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Adobe\Adept\Activation\0000')
             activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Adobe\Adept\Activation')
             root_is_bytebooks = False
         except: 
@@ -401,11 +403,23 @@ def handle_subkey(parent, subkey, value, encryption_key, method, ofByteBooks, bu
         if not parent in persistent_data:
             persistent_data[parent] = dict()
 
-        if ofByteBooks is None:
+        stored_variants = subkey in persistent_data[parent] and isinstance(persistent_data[parent][subkey], dict)
+
+        if ofByteBooks is None and not stored_variants:
+            # Plain value, and no ByteBooks / Adobe variants of this key so far.
             persistent_data[parent][subkey] = value
         else:
+            # This key exists in a ByteBooks and an Adobe variant. An entry without the
+            # ofByteBooks flag counts as Adobe (same as everywhere else in the plugin),
+            # so store it as False. A plain value stored earlier for the same key is
+            # converted the same way, so the two styles can be mixed in any order.
+            if ofByteBooks is None:
+                ofByteBooks = False
+
             if subkey not in persistent_data[parent]:
                 persistent_data[parent][subkey] = dict()
+            elif not stored_variants:
+                persistent_data[parent][subkey] = { False: persistent_data[parent][subkey] }
 
             persistent_data[parent][subkey][ofByteBooks] = value
     

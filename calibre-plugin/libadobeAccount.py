@@ -386,8 +386,8 @@ def convertAnonAuthToAccount(username, passwd):
     # Get authenticationCertificate
     try: 
         activationxml = etree.parse(get_activation_xml_path())
-        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-        authenticationCertificate = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag) 
+        authenticationCertificate = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
     except: 
         return False, "Missing authenticationCertificate"
 
@@ -464,20 +464,6 @@ def convertAnonAuthToAccount(username, passwd):
     
     return True, "Account linking successful"
 
-
-def is_bytebooks_account():
-    activationxml = etree.parse(get_activation_xml_path())
-    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-
-    try: 
-        authcertificate_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
-    except: 
-        return False
-
-    if authcertificate_bb is not None:
-        return True
-
-    return False
 
 def html_to_str(string):
     try: 

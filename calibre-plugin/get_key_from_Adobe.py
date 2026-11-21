@@ -29,7 +29,7 @@ if sys.version_info[0] < 3:
     print("This script requires Python 3.")
     exit(1)
 
-from libadobe import createDeviceKeyFile, update_account_path, VAR_VER_SUPP_CONFIG_NAMES
+from libadobe import createDeviceKeyFile, update_account_path
 from libadobeAccount import createDeviceFile, createUser, signIn, exportAccountEncryptionKeyDER, getAccountUUID
 
 # These are the only two variables you'll need to change

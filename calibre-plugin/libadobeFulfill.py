@@ -268,7 +268,8 @@ def getAvailableCertTypes():
 
     return has_complete_set(True), has_complete_set(False)
 
-
+def is_bytebooks_account():
+    return getAvailableCertTypes()[0] is not None
 
 def doOperatorAuth(operatorURL, force_adobe = False):
     # type: (str, bool) -> tuple
@@ -292,7 +293,8 @@ def doOperatorAuth(operatorURL, force_adobe = False):
 
 
     authURL = operatorURL
-    authURL = authURL.replace('?ofByteBooks=1', '')
+    # I don't think this is needed since callers shouldn't have this flag in their URLs.
+    # authURL = authURL.replace('?ofByteBooks=1', '')
     if authURL.endswith("/Fulfill"):
         authURL = authURL[:-8]
     
@@ -368,7 +370,7 @@ def operatorAuth(operatorURL):
     if (ret is not None):
         return ("doOperatorAuth error: %s" % ret), None
 
-    #reqtype is now a boolean. If true, Adobe, if false, Bytebooks.
+    #reqtype is now a boolean. If true, Adobe, if false, ByteBooks.
 
     # Check if list exists:
     list = activationxml.find("./%s" % (adNS("operatorURLList")))
@@ -426,8 +428,8 @@ def buildRights(license_token_node):
     if not found:
         print("Did not find the licenseService certificate in the activation data.")
         print("This usually means it failed to download from the distributor's servers.")
-        print("Please try to download an ACSM book from the Adobe Sample Library, then if that was successful, ")
-        print("try your ACSM book file again.")
+        print("Please try to download an ACSM book from the ByteBooks Sample Library,")
+        print("then if that was successful, try your ACSM book file again.")
         return None
 
     ret += "</adept:licenseServiceInfo>\n"
@@ -587,6 +589,7 @@ def fulfill(acsm_file, do_notify = False):
     licenseURL = adobe_fulfill_response.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("licenseURL"))).text
 
 
+    notify_success = False
     if do_notify:
         print("Notifying server ...")
         success, response = performFulfillmentNotification(adobe_fulfill_response, not use_adobe)
@@ -594,6 +597,8 @@ def fulfill(acsm_file, do_notify = False):
             print("Some errors occurred during notify: ")
             print(response)
             print("The book was probably still downloaded correctly.")
+        else: 
+            notify_success = True
     else:
         print("Not notifying any server since that was disabled.")
 
@@ -607,7 +612,7 @@ def fulfill(acsm_file, do_notify = False):
     except: 
         pass
 
-    if (is_returnable and do_notify):
+    if (is_returnable and notify_success):
         # Only support loan returning if we also notified ACS. 
         # Otherwise the server gets confused and we don't want that.
         try: 
@@ -686,7 +691,7 @@ def updateLoanReturnData(fulfillmentResultToken, forceTestBehaviour=False, use_a
             "loanID": fulfillment_id,
             "operatorURL": operatorURL,
             "validUntil": dsp_until, 
-            "useBytebooks": not use_adobe
+            "useByteBooks": not use_adobe
         }
 
     if forceTestBehaviour:
@@ -753,7 +758,7 @@ def tryReturnBook(bookData):
         return False, "Invalid book data"
 
     try: 
-        use_bytebooks = bookData["useBytebooks"]
+        use_bytebooks = bookData["useByteBooks"]
     except: 
         use_bytebooks = False
 
@@ -920,6 +925,12 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
             print("Notify payload XML:")
             print(doc_send)
 
+        if use_bytebooks:
+            if "?" in url: 
+                url = url + "&ofByteBooks=1"
+            else: 
+                url = url + "?ofByteBooks=1"
+
         try: 
             code, msg = sendRequestDocuRC(doc_send, url)
         except:
@@ -1004,7 +1015,6 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe = False):
     list = activationxml.find("./%s" % (adNS("licenseServices")))
 
     if list is None: 
-        x = etree.SubElement(activationxml.getroot(), etree.QName(NSMAP["adept"], "licenseServices"), nsmap=NSMAP)
         list = activationxml.find("./%s" % (adNS("licenseServices")))
         if list is None: 
             return False, "Err, this list should not be none right now ..."

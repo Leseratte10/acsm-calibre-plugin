@@ -92,6 +92,7 @@ int main() {
 		fprintf(stderr, "Error with RegGetValue: %ld\n", user_retval);
 		fprintf(stderr, "wideuser_size: %ld\n", wideuser_size);
 		fprintf(stderr, "Falling back to GetUserNameW\n");
+		wideuser_size = BUFSIZE;
 		if (GetUserNameW(wideuser, &wideuser_size) == 0) {
 			DWORD err = GetLastError();
 			fprintf(stderr, "Error with GetUserName: %ld\n", err);

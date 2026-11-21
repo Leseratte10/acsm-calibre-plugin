@@ -33,6 +33,8 @@ class ACSMInput_Prefs():
         self.acsmprefs.defaults['list_of_rented_books'] = []
 
         if self.acsmprefs['list_of_rented_books'] == []:
+            # Note that this assignment is NOT reundant, this is to ensure
+            # we get a new list, not the default list that gets deleted at close.
             self.acsmprefs['list_of_rented_books'] = []
 
 

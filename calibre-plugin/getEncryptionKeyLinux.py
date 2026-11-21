@@ -12,7 +12,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 #@@CALIBRE_COMPAT_CODE@@
 
-import sys, binascii, traceback
+import binascii, traceback
 
 def GetMasterKey(wineprefix): 
     import subprocess, os, re

@@ -293,7 +293,7 @@ class ACSMInput(FileTypePlugin):
                     )
 
 
-            from libadobe import createDeviceKeyFile, update_account_path, sendHTTPRequest
+            from libadobe import update_account_path
             from libadobeAccount import changeDeviceVersion
 
 
@@ -362,7 +362,7 @@ class ACSMInput(FileTypePlugin):
 
 
         from libadobe import sendHTTPRequest_DL2FILE
-        from libadobeFulfill import buildRights, fulfill
+        from libadobeFulfill import buildRights
         from libpdf import patch_drm_into_pdf
 
 

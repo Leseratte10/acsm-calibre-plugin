@@ -22,13 +22,13 @@ import sys, datetime
 
 from PyQt5.Qt import (QWidget, QHBoxLayout, QVBoxLayout, QLineEdit, QGroupBox, 
                       QListWidget, QListWidgetItem, QInputDialog, QFileDialog, 
-                      QLineEdit, QAbstractItemView, QIcon, QDialog, QDialogButtonBox)
+                      QAbstractItemView, QIcon, QDialog, QDialogButtonBox)
 from PyQt5.QtWidgets import QShortcut
 
 from PyQt5 import QtCore
 
 from PyQt5 import Qt as QtGui
-from zipfile import ZipFile
+from zipfile import ZipFile, BadZipFile
 
 # calibre modules and constants.
 from calibre.gui2 import (question_dialog, error_dialog, info_dialog,        # type: ignore
@@ -56,15 +56,12 @@ class ConfigWidget(QWidget):
         # get the prefs
         self.acsmprefs = prefs.ACSMInput_Prefs()
 
-        # make a local copy
+        # make a local copy for the toggle settings
+        # TODO: Why the heck do we do this again?
         self.tempacsmprefs = {}
-        self.tempacsmprefs['path_to_account_data'] = self.acsmprefs['path_to_account_data']
-
         self.tempacsmprefs['notify_fulfillment'] = self.acsmprefs['notify_fulfillment']
         self.tempacsmprefs['detailed_logging'] = self.acsmprefs['detailed_logging']
         self.tempacsmprefs['delete_acsm_after_fulfill'] = self.acsmprefs['delete_acsm_after_fulfill']
-
-        self.tempacsmprefs['list_of_rented_books'] = self.acsmprefs['list_of_rented_books']
 
         # Start Qt Gui dialog layout
         layout = QVBoxLayout(self)
@@ -191,19 +188,12 @@ class ConfigWidget(QWidget):
         self.deauthShortcut = QShortcut(QKeySequence("Ctrl+Shift+D"), self)
         self.deauthShortcut.activated.connect(self.delete_ade_auth)
 
-
-
         try: 
             from libadobe import update_account_path, are_ade_version_lists_valid
-        except: 
-            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-            traceback.print_exc()
 
-
-        update_account_path(self.acsmprefs["path_to_account_data"])
-        self.resize(self.sizeHint())
-
-        try: 
+            update_account_path(self.acsmprefs["path_to_account_data"])
+            self.resize(self.sizeHint())
+    
             # Someone reported getting this error after upgrading the plugin.
             # No idea why that happens - put a try/catch around just to be safe.
             if not are_ade_version_lists_valid():
@@ -231,6 +221,9 @@ class ConfigWidget(QWidget):
                 error_dialog(None, "Internal error", "Version list mismatch. Please open a bug report.", show=True, show_copy_button=False)
         except UnboundLocalError:
             print("Verify function are_ade_version_lists_valid() not found - why?")
+        except: 
+            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+            traceback.print_exc()
 
 
     def toggle_logging(self): 
@@ -343,6 +336,8 @@ class ConfigWidget(QWidget):
 
             print("Found Reader with Class " + devClass + " and Name " + devName)
 
+            already_activated = False
+
             if os.path.isfile(act_xml_path) and os.path.getsize(act_xml_path) > 0:
 
                 active_device_act = etree.parse(act_xml_path)
@@ -388,24 +383,20 @@ class ConfigWidget(QWidget):
                 if (not ok): 
                     return
 
-                try: 
-                    os.remove(act_xml_path)
-                except: 
-                    error_dialog(None, "Authorize eReader", "Failed to remove existing authorization.", show=True, show_copy_button=False)
+                already_activated = True
+
+            else:   
+                msg = "Found an unactivated eReader:\n\n"
+                msg += "Path: " + os.path.dirname(adobe_path) + "\n"
+                msg += "Type: " + devClass + "\n"
+                msg += "Name: " + devName + "\n"
+                if devSerial is not None: 
+                    msg += "Serial: " + devSerial + "\n"
+                msg += "\nDo you want to authorize this device with your AdobeID?"
+
+                ok = question_dialog(None, "Authorize eReader", msg)
+                if not ok: 
                     return
-
-  
-            msg = "Found an unactivated eReader:\n\n"
-            msg += "Path: " + os.path.dirname(adobe_path) + "\n"
-            msg += "Type: " + devClass + "\n"
-            msg += "Name: " + devName + "\n"
-            if devSerial is not None: 
-                msg += "Serial: " + devSerial + "\n"
-            msg += "\nDo you want to authorize this device with your AdobeID?"
-
-            ok = question_dialog(None, "Authorize eReader", msg)
-            if not ok: 
-                return
 
 
             # Okay, if we end up here, the user wants to authorize his eReader to his current AdobeID. 
@@ -447,6 +438,15 @@ class ConfigWidget(QWidget):
 
             if not ret: 
                 return error_dialog(None, "Authorize eReader", "Couldn't activate device, server returned error.", show=True, det_msg=data, show_copy_button=False)
+
+            if already_activated:
+                # The reader was already activated with another ID,
+                # so we need to remove that before storing the new one.
+                try: 
+                    os.remove(act_xml_path)
+                except: 
+                    error_dialog(None, "Authorize eReader", "Failed to remove existing authorization.", show=True, show_copy_button=False)
+                    return
 
             ret, data = exportProxyAuth(act_xml_path, data)
 
@@ -525,8 +525,7 @@ class ConfigWidget(QWidget):
        
         try: 
             from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
-            from libadobeAccount import is_bytebooks_account
-            from libadobeFulfill import getDecryptedCert
+            from libadobeFulfill import getDecryptedCert, is_bytebooks_account
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -578,16 +577,14 @@ class ConfigWidget(QWidget):
             if container.find(adeptNS("activationToken")) == None:
                 return "ADE authorization seems to be corrupted (activationToken missing)", False, None
 
-            if container.find(adeptNS("credentials")).find(adeptNS("pkcs12")) == None:
-                return "ADE authorization seems to be corrupted (pkcs12 missing)", False, None
-
-            if getDecryptedCert() is None: 
-                return "ADE authorization seems to be corrupted (failed to decrypt pkcs12)", False, None            
-
             if is_bytebooks_account():
                 acc_type = "ByteBooks"
             else: 
                 acc_type = "Adobe"
+
+            if getDecryptedCert(None, acc_type == "ByteBooks") is None:
+                return "ADE authorization seems to be corrupted (failed to decrypt pkcs12)", False, None
+
 
             if not anon: 
                 ade_type_str = " (" + ade_type + ")"
@@ -597,7 +594,7 @@ class ConfigWidget(QWidget):
                 display_str = "Authorized with "+ acc_type +" ID"+ade_type_str + " " + ade_mail + "\non device " + ade_device_name + ", emulating " + ADE_version + "."
 
                 if acc_type != "ByteBooks":
-                    display_str += "\n\nNote: Your authorization still uses the old Adobe format, not the new Bytebooks format."
+                    display_str += "\n\nNote: Your authorization still uses the old Adobe format, not the new ByteBooks format."
                     display_str += "\nYou will run into issues downloading books from any server running CS7 or newer."
                     display_str += "\nPlease remove your authorization by pressing Ctrl+Shift+D, then re-authorize with a ByteBooks ID."
 
@@ -605,7 +602,7 @@ class ConfigWidget(QWidget):
             else: 
                 display_str = "Authorized with an anonymous "+acc_type+" ID\non device " + ade_device_name + ", emulating " + ADE_version + "."
                 if acc_type != "ByteBooks":
-                    display_str += "\n\nNote: Your authorization still uses the old Adobe format, not the new Bytebooks format."
+                    display_str += "\n\nNote: Your authorization still uses the old Adobe format, not the new ByteBooks format."
                     display_str += "\nYou will run into issues downloading books from any server running CS7 or newer."
                     display_str += "\nPlease remove your authorization by pressing Ctrl+Shift+D, then re-authorize."
                 
@@ -619,7 +616,7 @@ class ConfigWidget(QWidget):
 
         try: 
             from libadobe import update_account_path
-            from libadobeAccount import getAccountUUID, is_bytebooks_account
+            from libadobeAccount import getAccountUUID
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -853,31 +850,36 @@ class ConfigWidget(QWidget):
 
         print("{0} v{1}: Importing activation data from {2}".format(PLUGIN_NAME, PLUGIN_VERSION, filename))
 
-        with ZipFile(filename, 'r') as zipfile:
-            try: 
-                device = zipfile.read("device.xml")
-                activation = zipfile.read("activation.xml")
-                salt = zipfile.read("devicesalt")
-            except: 
-                return error_dialog(None, "Import failed", "Can't find required files in this ZIP")
+        try: 
+            with ZipFile(filename, 'r') as zipfile:
+                try: 
+                    device = zipfile.read("device.xml")
+                    activation = zipfile.read("activation.xml")
+                    salt = zipfile.read("devicesalt")
+                except: 
+                    return error_dialog(None, "Import failed", "Can't find required files in this ZIP", show=True, show_copy_button=False)
 
-            try: 
-                # Copy the files byte for byte, so they're not re-encoded with the system's default encoding.
-                output_device = open(os.path.join(self.acsmprefs["path_to_account_data"], "device.xml"), "wb")
-                output_device.write(device)
-                output_device.close()
+                try: 
+                    # Copy the files byte for byte, so they're not re-encoded with the system's default encoding.
+                    output_device = open(os.path.join(self.acsmprefs["path_to_account_data"], "device.xml"), "wb")
+                    output_device.write(device)
+                    output_device.close()
 
-                output_activation = open(os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml"), "wb")
-                output_activation.write(activation)
-                output_activation.close()
+                    output_activation = open(os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml"), "wb")
+                    output_activation.write(activation)
+                    output_activation.close()
 
-                output_salt = open(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"), "wb")
-                output_salt.write(salt)
-                output_salt.close()
+                    output_salt = open(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"), "wb")
+                    output_salt.write(salt)
+                    output_salt.close()
 
-            except: 
-                err = traceback.format_exc()
-                return error_dialog(None, "Import failed", "Can't write file", show=True, det_msg=err, show_copy_button=False)
+                except: 
+                    err = traceback.format_exc()
+                    return error_dialog(None, "Import failed", "Can't write file", show=True, det_msg=err, show_copy_button=False)
+        except BadZipFile:
+            return error_dialog(None, "Import failed", "The file you selected doesn't seem to be a ZIP file.", 
+                                show=True, det_msg=err, show_copy_button=False)
+
 
         update_account_path(self.acsmprefs["path_to_account_data"])
         changeDeviceVersion(0, onlyIfUnknown=True)
@@ -986,7 +988,7 @@ class ConfigWidget(QWidget):
     
     def convert_anon_to_account(self): 
         try: 
-            from libadobe import createDeviceKeyFile, update_account_path
+            from libadobe import update_account_path
             from libadobeAccount import convertAnonAuthToAccount
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -1038,7 +1040,7 @@ class ConfigWidget(QWidget):
 
             self.resize(self.sizeHint())
 
-            return info_dialog(None, "Done", "Successfully converted anonynmous authentication to ByteBooks ID", show=True, show_copy_button=False)
+            return info_dialog(None, "Done", "Successfully converted anonymous authentication to ByteBooks ID", show=True, show_copy_button=False)
 
         else: 
             err_msg = "Could not link anonymous authentication to ByteBooks ID.\n"
@@ -1188,6 +1190,8 @@ class ConfigWidget(QWidget):
         self.acsmprefs.writeprefs()
 
     def load_resource(self, name):
+        # TODO: Figure out what the heck this function is used for, doesn't seem to be called anywhere.
+        # Maybe for Calibre 4 / Python 2 compatibility?
         with ZipFile(self.plugin_path, 'r') as zf:
             if name in zf.namelist():
                 return zf.read(name).decode('utf-8')
