@@ -12,11 +12,11 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 '''
 Run this tool to download the eBook DER encryption key
-for a given ADE account from the Adobe server. 
+for a given account from the ByteBooks server. 
 
-I am not responsible if Adobe does ban your Account for using
-nonstandard software, though in all my previous tests that has
-never happened. 
+I am not responsible if ByteBooks or Adobe does ban your Account 
+for using nonstandard software, though in all my previous tests 
+that has never happened. 
 
 Though I would suggest not running this script multiple times - 
 just run it once and then make enough backups of the key file.

@@ -16,9 +16,9 @@ from libadobe import createDeviceKeyFile
 from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
 
 # These are the only two variables you'll need to change
-# The mail address and password of your Adobe account to assign. 
+# The mail address and password of your ByteBooks account to assign. 
 # This tool doesn't support anonymous registrations, 
-# so it's recommended to make a throwaway Adobe account.
+# so it's recommended to make a throwaway ByteBooks account.
 
 VAR_MAIL = ""
 VAR_PASS = ""

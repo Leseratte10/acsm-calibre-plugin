@@ -256,11 +256,6 @@ account_method = None
 def finalize_write_config_Windows(data, key, buildID):
     # Okay, finally got all the data that's needed - recreate all the files.
 
-     # Create devicekey file:
-    f = open(get_devkey_path(), "wb")
-    f.write(key)
-    f.close()
-
     # Create activation.xml
     content = '<?xml version="1.0"?>\n'
     content += "<activationInfo xmlns=\"http://ns.adobe.com/adept\">\n"
@@ -339,25 +334,21 @@ def finalize_write_config_Windows(data, key, buildID):
     content += '</activationToken>\n'
     content += '</activationInfo>\n'
 
-    f = open(get_activation_xml_path(), "wb")
-    f.write(content.encode("utf-8"))
-    f.close()
-
     # Re-create device.xml from scratch:
 
-    content = '<?xml version="1.0"?>\n'
-    content += '<adept:deviceInfo xmlns:adept="http://ns.adobe.com/adept">\n'
-    content += "<adept:deviceType>%s</adept:deviceType>\n" % (data["activationToken"]["deviceType"])
-    content += "<adept:deviceClass>%s</adept:deviceClass>\n" % ("Desktop")
-    content += "<adept:deviceSerial>%s</adept:deviceSerial>\n" % (makeSerial(False))
-    content += "<adept:deviceName>%s</adept:deviceName>\n" % (platform.uname()[1])
+    dev_content = '<?xml version="1.0"?>\n'
+    dev_content += '<adept:deviceInfo xmlns:adept="http://ns.adobe.com/adept">\n'
+    dev_content += "<adept:deviceType>%s</adept:deviceType>\n" % (data["activationToken"]["deviceType"])
+    dev_content += "<adept:deviceClass>%s</adept:deviceClass>\n" % ("Desktop")
+    dev_content += "<adept:deviceSerial>%s</adept:deviceSerial>\n" % (makeSerial(False))
+    dev_content += "<adept:deviceName>%s</adept:deviceName>\n" % (platform.uname()[1])
 
     version_idx = VAR_VER_BUILD_IDS.index(buildID)
     hobbes_ver = VAR_VER_HOBBES_VERSIONS[version_idx]
     clientOS = VAR_VER_OS_IDENTIFIERS[version_idx]
 
-    content += "<adept:version name=\"hobbes\" value=\"%s\"/>\n" % (hobbes_ver)
-    content += "<adept:version name=\"clientOS\" value=\"%s\"/>\n" % (clientOS)
+    dev_content += "<adept:version name=\"hobbes\" value=\"%s\"/>\n" % (hobbes_ver)
+    dev_content += "<adept:version name=\"clientOS\" value=\"%s\"/>\n" % (clientOS)
 
     language = None
     try: 
@@ -368,15 +359,26 @@ def finalize_write_config_Windows(data, key, buildID):
         # Can sometimes happen on MacOS with default English language
         language = "en"
 
-    content += "<adept:version name=\"clientLocale\" value=\"%s\"/>\n" % (language)
-    content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (data["activationToken"]["fingerprint"])
-    content += "</adept:deviceInfo>"
+    dev_content += "<adept:version name=\"clientLocale\" value=\"%s\"/>\n" % (language)
+    dev_content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (data["activationToken"]["fingerprint"])
+    dev_content += "</adept:deviceInfo>"
 
-    # Write device.xml
-    f = open(get_device_path(), "wb")
+    # Content prepared, now write all three files.
+
+    # Create devicekey file:
+    f = open(get_devkey_path(), "wb")
+    f.write(key)
+    f.close()
+
+    # Create activation file
+    f = open(get_activation_xml_path(), "wb")
     f.write(content.encode("utf-8"))
     f.close()
 
+    # Create device file
+    f = open(get_device_path(), "wb")
+    f.write(dev_content.encode("utf-8"))
+    f.close()
 
     return True, "Done"
 

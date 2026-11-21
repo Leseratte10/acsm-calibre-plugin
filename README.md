@@ -1,6 +1,6 @@
 # Calibre ACSM Input plugin
 
-This is a Calibre plugin that allows you to turn ACSM files into EPUB or PDF files without the need for Adobe Digital Editions. 
+This is a Calibre plugin that allows you to turn ACSM files into EPUB or PDF files without the need for Adobe Digital Editions or ByteBooks Digital Editions. 
 
 <details>
   <summary>ACSM Input Plugin for Calibre - Copyright (c) 2021-2026 Leseratte10</summary>
@@ -89,9 +89,9 @@ Note that this process will use up one of your authorizations on your ByteBooks 
 
 In the folder "calibre-plugin" in this repo (or inside the Calibre plugin ZIP file) there's some scripts that can also be used standalone without Calibre. If you want to use these, you need to extract the whole ZIP file. 
 
-- `register_ADE_account.py` can be used to authorize a computer with a ByteBooks account. This creates the three files `activation.xml`, `device.xml` and `devicesalt`. These files are in the same format as the ones for the Calibre computer authorization (inside the `plugins/ACSMInput/account` folder). A ZIP activation export from Calibre will also contain these three files.
+- `register_ByteBooks_account.py` can be used to authorize a computer with a ByteBooks account. This creates the three files `activation.xml`, `device.xml` and `devicesalt`. These files are in the same format as the ones for the Calibre computer authorization (inside the `plugins/ACSMInput/account` folder). A ZIP activation export from Calibre will also contain these three files.
 - `fulfill.py` can be used - with valid ByteBooks account files in the same folder - to turn an URLLink.acsm file into an eBook. 
-- `get_key_from_Adobe.py` can be used to contact the ByteBooks server and download the DER key file for a given AdobeID / ByteBooks ID to import into a DeDRM plugin. Just input your credentials and this script will output the DER file that can be used with DeDRM to decrypt books for this ID. This works independantly from the account activation files or from this plugin, so it's a good way to get your decryption key, especially if you're on Linux and it's too difficult to export the keys from ADE or BDE running inside Wine. This process does not use up one of your available device activations.
+- `get_key_from_ByteBooks.py` can be used to contact the ByteBooks server and download the DER key file for a given AdobeID / ByteBooks ID to import into a DeDRM plugin. Just input your credentials and this script will output the DER file that can be used with DeDRM to decrypt books for this ID. This works independantly from the account activation files or from this plugin, so it's a good way to get your decryption key, especially if you're on Linux and it's too difficult to export the keys from ADE or BDE running inside Wine. This process does not use up one of your available device activations.
 
 Though, generally it's recommended to use the Calibre plugin instead of these standalone scripts. Except for maybe the `get_key_from_Adobe.py` script if you want to remove DRM from existing eBooks without having to extract the key from Digital Editions.
 
