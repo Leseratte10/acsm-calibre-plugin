@@ -473,9 +473,23 @@ def getMacCredential(type):
     return None
 
 
+def findMacActivationDat(home):
+    # Returns the path of the BDE or ADE activation.dat in the given home folder, or None.
+    # Use the ByteBooks activation if there is one, otherwise the Adobe one (same rule as
+    # the Windows and Wine imports). Both keep their keys in the same keychain entries.
+
+    for vendor in ["ByteBooks", "Adobe"]:
+        de_folder = os.path.join(home, "Library", "Application Support", vendor, "Digital Editions")
+        for dirpath, dirnames, filenames in os.walk(de_folder):
+            if "activation.dat" in filenames:
+                return os.path.join(dirpath, "activation.dat")
+
+    return None
+
+
 def importADEactivationMac(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
-    # Tries to import the system activation from Adobe Digital Editions on a Mac into the plugin
-    # This can be used to "clone" the ADE activation so you don't need to waste an additional activation.
+    # Tries to import the system activation from ByteBooks or Adobe Digital Editions on a Mac into the plugin
+    # This can be used to "clone" the BDE/ADE activation so you don't need to waste an additional activation.
 
     import sys
 
@@ -488,30 +502,13 @@ def importADEactivationMac(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
         print("This function is for MacOS only!")
         return False, "MacOS only!"
 
-    import subprocess
-    import warnings
-    warnings.filterwarnings('ignore', category=FutureWarning)
+    ActDatPath = findMacActivationDat(os.path.expanduser("~"))
 
-    # TODO: Add support for the ByteBooks path
-    home = os.getenv('HOME')
-    cmdline = 'find "' + home + '/Library/Application Support/Adobe/Digital Editions" -name "activation.dat"'
-    cmdline = cmdline.encode(sys.getfilesystemencoding())
-    p2 = subprocess.Popen(cmdline, shell=True, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=False)
-    out1, out2 = p2.communicate()
-    reslst = out1.split(b'\n')
-    cnt = len(reslst)
-    ActDatPath = b"activation.dat"
-    for j in range(cnt):
-        resline = reslst[j]
-        pp = resline.find(b'activation.dat')
-        if pp >= 0:
-            ActDatPath = resline
-            break
-
-    
-    if not os.path.exists(ActDatPath):
+    if ActDatPath is None:
         print("Activation file does not exist ...")
         return False, "Activation file not found"
+
+    print("Importing activation from %s" % (ActDatPath))
 
 
     # activation.xml is at ActDatPath.

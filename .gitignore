@@ -10,3 +10,5 @@
 /adobe_account_backup*.zip
 /bytebooks_account_backup*.zip
 /tests/__pycache__
+/tests/*.pyc
+
