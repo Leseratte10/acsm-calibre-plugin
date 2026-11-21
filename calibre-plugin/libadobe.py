@@ -20,9 +20,11 @@ import ssl
 try: 
     import urllib.request as ulib
     import urllib.error as uliberror
+    import http.client as ulibhttp
 except: 
     import urllib2 as ulib
     import urllib2 as uliberror
+    import httplib as ulibhttp
 
 import datetime
 
@@ -50,6 +52,15 @@ from oscrypto.asymmetric import dump_certificate, dump_private_key
 
 
 VAR_ACS_SERVER_HTTPS = "https://activate.dtsbytebooks.com/adept"
+
+# Network timeout in seconds. It applies to connecting and to every single read while
+# waiting for or receiving a reply, so a slow but working download is not cut off.
+VAR_HTTP_TIMEOUT = 30
+
+# Errors that urllib does not wrap in a URLError, like a timeout or a dropped connection
+# while waiting for or reading the reply. These all count as "server not reachable".
+# (URLError is a subclass of these, so catch it first if it needs separate handling.)
+HTTP_CONNECTION_ERRORS = (IOError, OSError, ulibhttp.HTTPException)
 
 FILE_DEVICEKEY = "devicesalt"
 FILE_DEVICEXML = "device.xml"
@@ -302,19 +313,24 @@ def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
 
     try: 
         req = ulib.Request(url=URL, headers=headers)
-        handler = ulib.urlopen(req, context=ctx)
+        handler = ulib.urlopen(req, context=ctx, timeout=VAR_HTTP_TIMEOUT)
+
+        with open(outputfile, "wb") as f:
+            chunksize = 16 * 1024
+            while True:
+                chunk = handler.read(chunksize)
+                if not chunk:
+                    break
+                f.write(chunk)
+
     except uliberror.HTTPError as err: 
         # This happens with HTTP 500 and related errors.
         return err.code
 
-    
-    with open(outputfile, "wb") as f:
-        chunksize = 16 * 1024
-        while True: 
-            chunk = handler.read(chunksize)
-            if not chunk: 
-                break
-            f.write(chunk)
+    except HTTP_CONNECTION_ERRORS as err:
+        # Server not reachable, timeout, or the connection broke during the download.
+        print("Download failed: %s" % (err))
+        return 900
 
     return 200
 
@@ -329,21 +345,22 @@ def sendHTTPRequest_getSimple(URL, validate_tls = True):
 
     ctx = create_ssl_context(validate_tls)
 
+    # Callers handle the exceptions, including the ones for a timeout.
     req = ulib.Request(url=URL, headers=headers)
-    handler = ulib.urlopen(req, context=ctx)
+    handler = ulib.urlopen(req, context=ctx, timeout=VAR_HTTP_TIMEOUT)
 
     content = handler.read()
 
     return content
 
-def sendPOSTHTTPRequest(URL, document, type, returnRC = False, validate_tls = True):
+def sendPOSTHTTPRequest(URL, document, contenttype, returnRC = False, validate_tls = True):
     # type: (str, bytes, str, bool, bool) -> str
 
     headers = {
         "Accept": "*/*",
         "User-Agent": "book2png",
         # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
-        "Content-Type": type
+        "Content-Type": contenttype
     }
 
     ctx = create_ssl_context(validate_tls)
@@ -358,7 +375,16 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False, validate_tls = Tr
 
     req = ulib.Request(url=URL, headers=headers, data=document)
     try: 
-        handler = ulib.urlopen(req, context=ctx)
+        handler = ulib.urlopen(req, context=ctx, timeout=VAR_HTTP_TIMEOUT)
+
+        ret_code = handler.getcode()
+        if (ret_code == 204 and returnRC):
+            return 204, ""
+        if (ret_code != 200):
+            print("Post request returned something other than 200 - returned %d" % (ret_code))
+
+        content = handler.read()
+
     except uliberror.HTTPError as err: 
         # This happens with HTTP 500 and related errors.
         print("Post request caused HTTPError %d" % (err.code))
@@ -385,13 +411,13 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False, validate_tls = Tr
         else:
             return None
 
-    ret_code = handler.getcode()
-    if (ret_code == 204 and returnRC):
-        return 204, ""
-    if (ret_code != 200):
-        print("Post request returned something other than 200 - returned %d" % (ret_code))
-
-    content = handler.read()
+    except HTTP_CONNECTION_ERRORS as err:
+        # Timeout, or the connection broke while waiting for or reading the reply.
+        print("Post request failed with %s: %s" % (type(err).__name__, err))
+        if returnRC:
+            return 900, "Post request failed with " + type(err).__name__
+        else:
+            return None
 
     if returnRC:
         return ret_code, content
