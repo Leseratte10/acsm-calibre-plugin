@@ -274,9 +274,20 @@ class ConfigWidget(QWidget):
         info_dialog(None, "Authorize eReader", msg, show=True, show_copy_button=False)
 
         dialog = QFileDialog()
-        dialog.setFileMode(QFileDialog.FileMode.Directory)
+        try: 
+            dialog.setFileMode(QFileDialog.FileMode.Directory)
+        except AttributeError:
+            # Older Calibre
+            dialog.setFileMode(QFileDialog.Directory)
+
         opts = dialog.options()
-        opts |= QFileDialog.Option.ShowDirsOnly
+
+        try: 
+            opts |= QFileDialog.Option.ShowDirsOnly
+        except AttributeError:
+            # Older Calibre
+            opts |= QFileDialog.ShowDirsOnly
+
         dialog.setOptions(opts)
 
         if dialog.exec_():
@@ -291,7 +302,7 @@ class ConfigWidget(QWidget):
                 idx = idx + 1
                 if idx > 15: 
                     # Failsafe, max. 15 folder levels.
-                    error_dialog(None, "Authorize eReader", "Didn't find an ADE-compatible eReader in that location. (Too many levels)", show=True, show_copy_button=False)
+                    error_dialog(None, "Authorize eReader", "Didn't find a compatible eReader in that location. (Too many levels)", show=True, show_copy_button=False)
                     return
 
                 adobe_path = os.path.join(x, ".adobe-digital-editions")
@@ -305,11 +316,11 @@ class ConfigWidget(QWidget):
 
                 if x_old == x:
                     # We're at the drive root and still didn't find an activation
-                    error_dialog(None, "Authorize eReader", "Didn't find an ADE-compatible eReader in that location. (No Folder)", show=True, show_copy_button=False)
+                    error_dialog(None, "Authorize eReader", "Didn't find a compatible eReader in that location. (No Folder)", show=True, show_copy_button=False)
                     return
 
             if not os.path.isfile(os.path.join(adobe_path, "device.xml")):
-                error_dialog(None, "Authorize eReader", "Didn't find an ADE-compatible eReader in that location. (No File)", show=True, show_copy_button=False)
+                error_dialog(None, "Authorize eReader", "Didn't find a compatible eReader in that location. (No File)", show=True, show_copy_button=False)
                 return
 
             dev_xml_path = os.path.join(adobe_path, "device.xml")
@@ -427,7 +438,7 @@ class ConfigWidget(QWidget):
                         pass
                     
             except:
-                return error_dialog(None, "Authorize eReader", "Error while determining ADE version", show=True, show_copy_button=False)
+                return error_dialog(None, "Authorize eReader", "Error while determining DE version", show=True, show_copy_button=False)
 
 
             # Activate the target device with that version.
