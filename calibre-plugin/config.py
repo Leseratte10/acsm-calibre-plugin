@@ -367,7 +367,7 @@ class ConfigWidget(QWidget):
                     msg += "UUID: " + act_dev_uuid + "\n"
 
                 
-                msg += "\nis already connected to the following AdobeID:\n\n"
+                msg += "\nis already connected to the following ID:\n\n"
                 msg += "UUID: " + act_uuid + "\n"
                 if (act_username_name is not None):
                     msg += "Username: " + act_username_name + "\n"
@@ -375,8 +375,8 @@ class ConfigWidget(QWidget):
                 else: 
                     msg += "Type: anonymous authorization\n"
 
-                msg += "\nDo you want to remove this authorization and link this device to your AdobeID?\n\n"
-                msg += "Click \"No\" to cancel, or \"Yes\" to remove the existing authorization from the device and authorize it with your AdobeID."
+                msg += "\nDo you want to remove this authorization and link this device to your ByteBooks ID?\n\n"
+                msg += "Click \"No\" to cancel, or \"Yes\" to remove the existing authorization from the device and authorize it with your ByteBooks ID."
 
                 ok = question_dialog(None, "Authorize eReader", msg)
 
@@ -392,14 +392,14 @@ class ConfigWidget(QWidget):
                 msg += "Name: " + devName + "\n"
                 if devSerial is not None: 
                     msg += "Serial: " + devSerial + "\n"
-                msg += "\nDo you want to authorize this device with your AdobeID?"
+                msg += "\nDo you want to authorize this device with your ByteBooks ID?"
 
                 ok = question_dialog(None, "Authorize eReader", msg)
                 if not ok: 
                     return
 
 
-            # Okay, if we end up here, the user wants to authorize his eReader to his current AdobeID. 
+            # Okay, if we end up here, the user wants to authorize his eReader to his current ByteBooks ID. 
             # Figure out what ADE version we're currently emulating: 
 
             device_xml_path = os.path.join(self.acsmprefs["path_to_account_data"], "device.xml")
@@ -559,7 +559,7 @@ class ConfigWidget(QWidget):
 
             # Determine the ADE version we're emulating:
             ver = containerdev.findall("./%s" % (adeptNS("version")))
-            ADE_version = None
+            ADE_version = "(unknown)"
             hobbes_version = None
 
             for f in ver:
@@ -571,8 +571,7 @@ class ConfigWidget(QWidget):
                     v_idx = VAR_VER_HOBBES_VERSIONS.index(hobbes_version)
                     ADE_version = VAR_VER_SUPP_CONFIG_NAMES[v_idx]
                 except:
-                    ADE_version = "(unknown)"
-          
+                    pass
 
             if container.find(adeptNS("activationToken")) == None:
                 return "ADE authorization seems to be corrupted (activationToken missing)", False, None
@@ -878,7 +877,7 @@ class ConfigWidget(QWidget):
                     return error_dialog(None, "Import failed", "Can't write file", show=True, det_msg=err, show_copy_button=False)
         except BadZipFile:
             return error_dialog(None, "Import failed", "The file you selected doesn't seem to be a ZIP file.", 
-                                show=True, det_msg=err, show_copy_button=False)
+                                show=True, show_copy_button=False)
 
 
         update_account_path(self.acsmprefs["path_to_account_data"])

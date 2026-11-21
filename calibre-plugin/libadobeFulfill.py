@@ -121,9 +121,6 @@ def buildInitLicenseServiceRequest(authURL, force_adobe):
     ret += "<adept:user>%s</adept:user>" % (user_uuid)
     ret += "</adept:licenseServiceRequest>"
 
-    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
-    etree.register_namespace("adept", NSMAP["adept"])
-
     req_xml = etree.fromstring(ret)
 
     signature = sign_node(req_xml, not force_adobe)
@@ -269,7 +266,7 @@ def getAvailableCertTypes():
     return has_complete_set(True), has_complete_set(False)
 
 def is_bytebooks_account():
-    return getAvailableCertTypes()[0] is not None
+    return getAvailableCertTypes()[0]
 
 def doOperatorAuth(operatorURL, force_adobe = False):
     # type: (str, bool) -> tuple
@@ -1015,9 +1012,7 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe = False):
     list = activationxml.find("./%s" % (adNS("licenseServices")))
 
     if list is None: 
-        list = activationxml.find("./%s" % (adNS("licenseServices")))
-        if list is None: 
-            return False, "Err, this list should not be none right now ..."
+        list = etree.SubElement(activationxml.getroot(), etree.QName(NSMAP["adept"], "licenseServices"), nsmap=NSMAP)
     
     info_entry = etree.SubElement(list, etree.QName(NSMAP["adept"], "licenseServiceInfo"))
 

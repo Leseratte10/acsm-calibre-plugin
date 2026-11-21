@@ -220,9 +220,7 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
         certadobe.text = certificate_adobe
 
 
-    if authCertBB is None or authCertAdobe is None: 
-        # TODO: I am unsure whether authCertAdobe will still be sent by the ByteBooks servers in 2027. 
-        # After the cutoff, verify and remove the authCertAdobe condition from this branch if necessary. 
+    if authCertBB is None: 
         # This is not supposed to happen, but if it does, then just query it again from Adobe.
         authenticationURL = authURL + "/AuthenticationServiceInfo?ofByteBooks=1"
         response2 = sendHTTPRequest(authenticationURL, True)
@@ -829,7 +827,8 @@ def buildActivateReqProxy(useVersionIndex = 0, proxyData = None):
     
     ret += "<adept:clientVersion>%s</adept:clientVersion>" % (proxyData.find("./%s" % (adNS("deviceClass"))).text)
     ret += "<adept:deviceType>%s</adept:deviceType>" % (proxyData.find("./%s" % (adNS("deviceType"))).text)
-    ret += "<adept:productName>%s</adept:productName>" % ("ADOBE Digitial Editions")
+    ret += "<adept:productName>%s</adept:productName>" % ("ByteBooks Digitial Editions")
+    # Yes, the typo in "Digitial" is intended.
     ret += "<adept:fingerprint>%s</adept:fingerprint>" % (proxyData.find("./%s" % (adNS("fingerprint"))).text)
 
 

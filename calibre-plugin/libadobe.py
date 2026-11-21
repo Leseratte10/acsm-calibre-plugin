@@ -542,7 +542,7 @@ def sign_node(node, prefer_bytebooks):
         pkcs12bb = None
 
     try: 
-        pkcs12adobe = pkcs12 = next(
+        pkcs12adobe = next(
                         c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
                         if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
                         )
