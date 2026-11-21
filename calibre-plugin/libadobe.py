@@ -681,8 +681,7 @@ def hash_node_ctx(node, hash_ctx):
                 hash_do_append_tag(hash_ctx, ASN_TEXT)
                 hashed_len = hash_do_append_string(hash_ctx, text_bytes[done:]) 
                 if hashed_len is None or hashed_len == 0:
-                    print("Error during hashing!")
-                    raise Exception
+                    raise Exception("Error during hashing")
 
                 done += hashed_len
                 if done >= text_bytes_len:
@@ -733,7 +732,7 @@ def hash_do_append_tag(hash_ctx, tag):
     # type: (SHA.SHA1Hash, int) -> None
 
     if (tag > 5):
-        return
+        raise Exception("Tried to hash a tag outside of the valid range")
     
     hash_do_append_raw_bytes(hash_ctx, [tag])
 

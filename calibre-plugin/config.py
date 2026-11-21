@@ -862,12 +862,13 @@ class ConfigWidget(QWidget):
                 return error_dialog(None, "Import failed", "Can't find required files in this ZIP")
 
             try: 
-                output_device = open(os.path.join(self.acsmprefs["path_to_account_data"], "device.xml"), "w")
-                output_device.write(device.decode("utf-8"))
+                # Copy the files byte for byte, so they're not re-encoded with the system's default encoding.
+                output_device = open(os.path.join(self.acsmprefs["path_to_account_data"], "device.xml"), "wb")
+                output_device.write(device)
                 output_device.close()
 
-                output_activation = open(os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml"), "w")
-                output_activation.write(activation.decode("utf-8"))
+                output_activation = open(os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml"), "wb")
+                output_activation.write(activation)
                 output_activation.close()
 
                 output_salt = open(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"), "wb")

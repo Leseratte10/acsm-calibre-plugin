@@ -93,9 +93,9 @@ def createDeviceFile(randomSerial, useVersionIndex = 0):
 
     etree.SubElement(root, etree.QName(NSMAP["adept"], "fingerprint")).text = fingerprint
 
-    f = open(get_device_path(), "w")
-    f.write("<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
+    f = open(get_device_path(), "wb")
+    f.write(b"<?xml version=\"1.0\"?>\n")
+    f.write(etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False))
     f.close()
 
     return True
@@ -255,9 +255,9 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
         print("Warning: authCertBB and authCertAdobe are both None ...")
 
     
-    f = open(get_activation_xml_path(), "w")
-    f.write("<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
+    f = open(get_activation_xml_path(), "wb")
+    f.write(b"<?xml version=\"1.0\"?>\n")
+    f.write(etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False))
     f.close()
 
     return True, "Done"
@@ -456,9 +456,9 @@ def convertAnonAuthToAccount(username, passwd):
     tmp_node.text = username
 
     # Write to file
-    f = open(get_activation_xml_path(), "w")
-    f.write("<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
+    f = open(get_activation_xml_path(), "wb")
+    f.write(b"<?xml version=\"1.0\"?>\n")
+    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
     f.close()
 
     
@@ -590,27 +590,27 @@ def signIn(account_type, username, passwd):
 
     # Okay, now we got the credential response correct. Now "just" apply all these to the main activation.xml
 
-    f = open(get_activation_xml_path(), "w")
-
-    f.write("<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1").replace("</activationInfo>", ""))
+    # The file is assembled as text and written as UTF-8 bytes at the end, so non-ASCII
+    # usernames don't depend on the system's default encoding.
+    content = "<?xml version=\"1.0\"?>\n"
+    content += etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8").replace("</activationInfo>", "")
 
     # Yeah, that's ugly, but I didn't get etree to work with the different Namespaces ...
 
-    f.write("<adept:credentials xmlns:adept=\"http://ns.adobe.com/adept\">\n")
-    f.write("<adept:user>%s</adept:user>\n" % (credentialsXML.find("./%s" % (adNS("user"))).text))
+    content += "<adept:credentials xmlns:adept=\"http://ns.adobe.com/adept\">\n"
+    content += "<adept:user>%s</adept:user>\n" % (credentialsXML.find("./%s" % (adNS("user"))).text)
 
     username = ""
     if account_type != "anonymous": 
         username = credentialsXML.find("./%s" % (adNS("username"))).text
         # TODO: Should we always write this? Windows does, MacOS doesn't.
-        f.write("<adept:username method=\"%s\">%s</adept:username>\n" % (credentialsXML.find("./%s" % (adNS("username"))).get("method", account_type), xml_escape(username)))
+        content += "<adept:username method=\"%s\">%s</adept:username>\n" % (credentialsXML.find("./%s" % (adNS("username"))).get("method", account_type), xml_escape(username))
 
     if pkcs12_bb is not None:
-        f.write("<adept:pkcs12 ofByteBooks=\"true\">%s</adept:pkcs12>\n" % (pkcs12_bb))
+        content += "<adept:pkcs12 ofByteBooks=\"true\">%s</adept:pkcs12>\n" % (pkcs12_bb)
 
     if pkcs12_adobe is not None: 
-        f.write("<adept:pkcs12 ofByteBooks=\"false\">%s</adept:pkcs12>\n" % (pkcs12_adobe))
+        content += "<adept:pkcs12 ofByteBooks=\"false\">%s</adept:pkcs12>\n" % (pkcs12_adobe)
 
     try: 
         license_cert_bb = credentialsXML.find("./%s[@ofByteBooks='true']" % (adNS("licenseCertificate"))).text
@@ -626,19 +626,21 @@ def signIn(account_type, username, passwd):
         license_cert_adobe = None
 
     if license_cert_bb is not None:
-        f.write("<adept:licenseCertificate ofByteBooks=\"true\">%s</adept:licenseCertificate>\n" % (license_cert_bb))
+        content += "<adept:licenseCertificate ofByteBooks=\"true\">%s</adept:licenseCertificate>\n" % (license_cert_bb)
 
     if license_cert_adobe is not None: 
-        f.write("<adept:licenseCertificate ofByteBooks=\"false\">%s</adept:licenseCertificate>\n" % (license_cert_adobe))
+        content += "<adept:licenseCertificate ofByteBooks=\"false\">%s</adept:licenseCertificate>\n" % (license_cert_adobe)
 
-    f.write("<adept:privateLicenseKey>%s</adept:privateLicenseKey>\n" % (base64.b64encode(private_key_data).decode("latin-1")))
+    content += "<adept:privateLicenseKey>%s</adept:privateLicenseKey>\n" % (base64.b64encode(private_key_data).decode("latin-1"))
     if authcertificate_bb is not None:
-        f.write("<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>\n" % (authcertificate_bb))
+        content += "<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>\n" % (authcertificate_bb)
     if authcertificate_adobe is not None: 
-        f.write("<adept:authenticationCertificate ofByteBooks=\"false\">%s</adept:authenticationCertificate>\n" % (authcertificate_adobe))
-    f.write("</adept:credentials>\n")
-    f.write("</activationInfo>\n")
+        content += "<adept:authenticationCertificate ofByteBooks=\"false\">%s</adept:authenticationCertificate>\n" % (authcertificate_adobe)
+    content += "</adept:credentials>\n"
+    content += "</activationInfo>\n"
 
+    f = open(get_activation_xml_path(), "wb")
+    f.write(content.encode("utf-8"))
     f.close()
 
     return True, "Done"
@@ -741,7 +743,7 @@ def exportProxyAuth(act_xml_path, activationToken):
 
     ret += "</adept:credentials>"
 
-    activationToken = activationToken.decode("latin-1")
+    activationToken = activationToken.decode("utf-8")
     # Yeah, terrible hack, but Adobe sends the token with namespace but exports it without.
     activationToken = activationToken.replace(' xmlns="http://ns.adobe.com/adept"', '')
 
@@ -752,8 +754,8 @@ def exportProxyAuth(act_xml_path, activationToken):
     # Okay, now we can finally write this to the device. 
 
     try: 
-        f = open(act_xml_path, "w")
-        f.write(ret)
+        f = open(act_xml_path, "wb")
+        f.write(ret.encode("utf-8"))
         f.close()
     except: 
         return False, "Can't write file"
@@ -1053,15 +1055,15 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
 
     # Soooo, lets go and append that to the XML: 
     
-    f = open(get_activation_xml_path(), "r")
-    old_xml = f.read().replace("</activationInfo>", "")
+    f = open(get_activation_xml_path(), "rb")
+    old_xml = f.read().replace(b"</activationInfo>", b"")
     f.close()
     
-    f = open(get_activation_xml_path(), "w")
+    f = open(get_activation_xml_path(), "wb")
 
     f.write(old_xml)
-    f.write(ret.decode("latin-1"))
-    f.write("</activationInfo>\n")
+    f.write(ret)
+    f.write(b"</activationInfo>\n")
     f.close()
 
     return True, ret  

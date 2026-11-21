@@ -256,8 +256,6 @@ def finalize_write_config_Windows(data, key, buildID):
     f.close()
 
     # Create activation.xml
-    f = open(get_activation_xml_path(), "w")
-
     content = '<?xml version="1.0"?>\n'
     content += "<activationInfo xmlns=\"http://ns.adobe.com/adept\">\n"
     content += '<adept:activationServiceInfo xmlns:adept="http://ns.adobe.com/adept">\n'
@@ -335,7 +333,8 @@ def finalize_write_config_Windows(data, key, buildID):
     content += '</activationToken>\n'
     content += '</activationInfo>\n'
 
-    f.write(content)
+    f = open(get_activation_xml_path(), "wb")
+    f.write(content.encode("utf-8"))
     f.close()
 
     # Re-create device.xml from scratch:
@@ -368,8 +367,8 @@ def finalize_write_config_Windows(data, key, buildID):
     content += "</adept:deviceInfo>"
 
     # Write device.xml
-    f = open(get_device_path(), "w")
-    f.write(content)
+    f = open(get_device_path(), "wb")
+    f.write(content.encode("utf-8"))
     f.close()
 
 
@@ -553,8 +552,8 @@ def recreateMacActivationFiles(path_to_activation, deviceKey, deviceFingerprint,
     content += "</adept:deviceInfo>"
 
     # Write device.xml
-    f = open(get_device_path(), "w")
-    f.write(content)
+    f = open(get_device_path(), "wb")
+    f.write(content.encode("utf-8"))
     f.close()
 
     return True, "Success"

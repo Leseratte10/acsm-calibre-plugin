@@ -385,9 +385,9 @@ def operatorAuth(operatorURL):
     
     etree.SubElement(list, etree.QName(NSMAP["adept"], "operatorURL")).text = operatorURL
 
-    f = open(get_activation_xml_path(), "w")
-    f.write("<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8"))
+    f = open(get_activation_xml_path(), "wb")
+    f.write(b"<?xml version=\"1.0\"?>\n")
+    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
     f.close()
 
     return None, reqtype
@@ -1040,9 +1040,9 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe = False):
     etree.SubElement(info_entry, etree.QName(NSMAP["adept"], "licenseURL")).text = server_lic_url
     etree.SubElement(info_entry, etree.QName(NSMAP["adept"], "certificate")).text = server_cert
 
-    f = open(get_activation_xml_path(), "w")
-    f.write("<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8"))
+    f = open(get_activation_xml_path(), "wb")
+    f.write(b"<?xml version=\"1.0\"?>\n")
+    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
     f.close()
 
     return True, "Done"
