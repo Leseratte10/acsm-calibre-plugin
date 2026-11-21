@@ -48,7 +48,6 @@ def createDeviceFile(randomSerial, useVersionIndex = 0):
     build_id = VAR_VER_BUILD_IDS[useVersionIndex]
 
     if build_id not in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
-        # ADE 1.7.2 or another version that authorization is disabled for
         return False
 
     serial = makeSerial(randomSerial)
@@ -776,7 +775,6 @@ def buildActivateReqProxy(useVersionIndex = 0, proxyData = None):
         return False, "Invalid Build ID"
 
     if build_id not in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
-        # ADE 1.7.2 or another version that authorization is disabled for
         return False, "This version can't authorize"
 
     local_device_xml = etree.parse(get_device_path())
@@ -869,7 +867,6 @@ def buildActivateReq(useVersionIndex = 0):
         return False, "Invalid version index"
 
     if build_id not in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
-        # ADE 1.7.2 or another version that authorization is disabled for
         return False, "Version not allowed"
 
     devicexml = etree.parse(get_device_path())
@@ -990,7 +987,6 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
         return False, "error checking build ID"
 
     if build_id not in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
-        # ADE 1.7.2 or another version that authorization is disabled for
         return False, "Authorization not supported for this build ID"
 
     verbose_logging = False

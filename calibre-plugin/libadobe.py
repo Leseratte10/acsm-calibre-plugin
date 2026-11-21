@@ -528,7 +528,6 @@ def sign_node(node, prefer_bytebooks):
     # print("Hash is " + sha_hash.hex())
 
     global devkey_bytes
-    global pkcs12
 
     if devkey_bytes is None: 
         f = open(FILE_DEVICEKEY, "rb")
@@ -540,8 +539,6 @@ def sign_node(node, prefer_bytebooks):
 
     activationxml = etree.parse(FILE_ACTIVATIONXML)
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-
-    pkcs12 = None
 
     # If prefer_bytebooks is set, this function will first try to use the ByteBooks cert. 
     # If it isn't, it tries the Adobe cert. 
@@ -704,7 +701,10 @@ def hash_node_ctx(node, hash_ctx):
 def hash_do_append_string(hash_ctx, data):
     # type: (SHA.SHA1Hash, str|bytes) -> None|int
 
-    if (isinstance(data, str)):
+    if (isinstance(data, bytes)):
+        str_bytes = data
+
+    else:
         if sys.version_info[0] >= 3: 
             str_bytes = bytes(data, encoding="utf-8")
         else:
@@ -714,8 +714,7 @@ def hash_do_append_string(hash_ctx, data):
             # Trying to hash string longer than 0x7FFF, can't safely split.
             # This should never occur as long strings get handed into this function as bytes.
             return None
-    else: 
-        str_bytes = data
+    
 
     length = len(str_bytes)
 
