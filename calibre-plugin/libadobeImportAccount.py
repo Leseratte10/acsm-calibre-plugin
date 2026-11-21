@@ -1,5 +1,5 @@
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -7,8 +7,6 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-
-# TODO: This still needs to be adapted for ByteBooks
 
 from lxml import etree
 import base64

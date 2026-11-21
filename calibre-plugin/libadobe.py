@@ -683,11 +683,11 @@ def hash_node_ctx(node, hash_ctx):
         # So there's a loop going over the text, hashing 32k chunks.
 
         text = node.text.strip()
-        
-        if sys.version_info[0] >= 3: 
-            text_bytes = bytes(text, encoding="utf-8")
+
+        if isinstance(text, bytes):
+            text_bytes = text
         else:
-            text_bytes = bytes(text)
+            text_bytes = text.encode("utf-8")
 
         text_bytes_len = len(text_bytes)
 
@@ -718,12 +718,8 @@ def hash_do_append_string(hash_ctx, data):
 
     if (isinstance(data, bytes)):
         str_bytes = data
-
     else:
-        if sys.version_info[0] >= 3: 
-            str_bytes = bytes(data, encoding="utf-8")
-        else:
-            str_bytes = bytes(data)
+        str_bytes = data.encode("utf-8")
 
         if len(str_bytes) > 0x7fff:
             # Trying to hash string longer than 0x7FFF, can't safely split.

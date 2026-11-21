@@ -314,6 +314,18 @@ class TestAdobe(unittest.TestCase):
         self.assertEqual(sha_hash_reordered, expected_hash, "Attribute order in the document changes the hash")
 
 
+    def test_hash_node_nonASCII(self): 
+        '''Check if XML hashing works with non-ASCII text'''
+
+        mock_xml_str = u"""<fulfillmentToken fulfillmentType="free" auth="user" xmlns="http://ns.adobe.com/adept">
+          <resourceItemInfo><metadata>
+            <dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">Caf\u00e9 au lait</dc:title>
+          </metadata></resourceItemInfo></fulfillmentToken>"""
+
+        sha_hash = libadobe.hash_node(etree.fromstring(mock_xml_str)).hexdigest().lower()
+        self.assertEqual(sha_hash, "1b3cdf43f9f7d296d91476b2c05d0b5dd58f9c00", "Invalid SHA hash for node signing (non-ASCII text)")
+
+
 
     def test_sign_node_old(self):
 

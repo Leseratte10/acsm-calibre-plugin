@@ -9,8 +9,6 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 from lxml import etree
 import base64
-import random
-import time
 
 #@@CALIBRE_COMPAT_CODE@@
 
