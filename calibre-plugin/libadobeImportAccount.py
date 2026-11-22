@@ -1,5 +1,5 @@
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -10,6 +10,8 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 from lxml import etree
 import base64
 import os, locale, platform
+from xml.sax.saxutils import escape as xml_escape
+
 
 try: 
     from Cryptodome.Cipher import AES as _AES
@@ -191,7 +193,7 @@ def finalize_write_config_Windows(data, key, buildID):
     f.close()
 
     # Create activation.xml
-    f = open(get_activation_xml_path(), "w")
+    f = open(get_activation_xml_path(), "wb")
 
     content = '<?xml version="1.0"?>\n'
     content += "<activationInfo xmlns=\"http://ns.adobe.com/adept\">\n"
@@ -211,7 +213,7 @@ def finalize_write_config_Windows(data, key, buildID):
         if account_method is None:
             account_method = "AdobeID"
     
-        content += "<adept:username method=\"%s\">%s</adept:username>" % (account_method, data["credentials"]["username"])
+        content += "<adept:username method=\"%s\">%s</adept:username>" % (account_method, xml_escape(data["credentials"]["username"]))
     
     content += "<adept:pkcs12>%s</adept:pkcs12>" % (data["credentials"]["pkcs12"])
     content += "<adept:licenseCertificate>%s</adept:licenseCertificate>" % (data["credentials"]["licenseCertificate"])
@@ -227,7 +229,7 @@ def finalize_write_config_Windows(data, key, buildID):
     content += '</activationToken>\n'
     content += '</activationInfo>\n'
 
-    f.write(content)
+    f.write(content.encode("utf-8"))
     f.close()
 
     # Re-create device.xml from scratch:
@@ -260,8 +262,8 @@ def finalize_write_config_Windows(data, key, buildID):
     content += "</adept:deviceInfo>"
 
     # Write device.xml
-    f = open(get_device_path(), "w")
-    f.write(content)
+    f = open(get_device_path(), "wb")
+    f.write(content.encode("utf-8"))
     f.close()
 
 
@@ -438,8 +440,8 @@ def recreateMacActivationFiles(path_to_activation, deviceKey, deviceFingerprint,
     content += "</adept:deviceInfo>"
 
     # Write device.xml
-    f = open(get_device_path(), "w")
-    f.write(content)
+    f = open(get_device_path(), "wb")
+    f.write(content.encode("utf-8"))
     f.close()
 
     return True, "Success"
