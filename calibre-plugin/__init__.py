@@ -199,99 +199,13 @@ class ACSMInput(FileTypePlugin):
             if not os.path.exists(self.maindir):
                 os.mkdir(self.maindir)
 
-            # Extract new modules
-
+            
+            # The module folder is no longer needed, so delete it if it is present. 
             self.moddir = os.path.join(self.maindir,"modules")
-            if not os.path.exists(self.moddir):
-                os.mkdir(self.moddir)
-
-            # Check if we have a module id:
-            # Modules will only be extracted if this has changed. 
-            # This A) saves time because we don't extract every time, 
-            # and B) prevents a race condition.
-            # The compiling scripts need to be adapted to modify 
-            # the module_id.txt in the plugin ZIP every time the 
-            # modules change
-
-            try: 
-                ts_file = os.path.join(self.moddir, "module_id.txt")
-                f = open(ts_file, "r")
-                id = f.readline().strip()
-                f.close()
-            except: 
-                # No timestamp found, probably upgrading from an older version.
-                id = None
-
-            # Check ID file in the plugin ZIP
-            try: 
-                ts_dict = self.load_resources( ["module_id.txt"] )
-                id_plugin = ts_dict["module_id.txt"].decode("latin-1").split('\n')[0].strip()
-            except: 
-                # No timestamp found in the plugin ZIP?
-                # Assume that I made a mistake bundling the plugin, extract anyways.
-                id_plugin = None
-
-            if id is None or id_plugin is None or id != id_plugin:
-                print("Module update from \"{0}\" to \"{1}\", extracting ...".format(id, id_plugin))
-                # Something changed, extract modules.
-
-                if not singleinstance("__acsm_extracting modules"):
-                    print("Skipping because another instance is already doing that.")
-                else:
-                    if os.path.exists(self.moddir):
-                        shutil.rmtree(self.moddir, ignore_errors=True)
-
-                    os.mkdir(self.moddir)
-
-                    names = ["oscrypto.zip", "asn1crypto.zip"]
-
-                    # oscrypto is needed to parse the pkcs12 data from Adobe.
-                    # asn1crypto is a dependency of oscrypto.
-                        
-                    lib_dict = self.load_resources(names)
-
-                    for entry, data in lib_dict.items():
-                        try:
-                            with zipfile.ZipFile(io.BytesIO(data), 'r') as ref:
-                                ref.extractall(self.moddir)
-
-                        except:
-                            print("{0} v{1}: Exception when copying needed library files".format(PLUGIN_NAME, PLUGIN_VERSION))
-                            traceback.print_exc()
-                            pass           
-
-
-                    # Write module ID
-                    if id_plugin is not None: 
-                        mod_file = os.path.join(self.moddir, "module_id.txt")
-                        f = open(mod_file, "w")
-                        f.write(id_plugin)
-                        f.close()
-
-
-            sys.path.insert(0, os.path.join(self.moddir, "oscrypto"))
-            sys.path.insert(0, os.path.join(self.moddir, "asn1crypto"))
-            
-            # Okay, now all the modules are available, import the Adobe modules.
+            if os.path.exists(self.moddir):
+                shutil.rmtree(self.moddir, ignore_errors=True)
 
             
-            # On some systems, like NixOS, the path to libcrypto and libssl 
-            # isn't autodetected correctly. To fix this, allow overriding
-            # these paths using environment variables.
-            # Crucial to import first, as libadobe imports oscrypto as well
-
-            libcrypto_path = os.getenv("ACSM_LIBCRYPTO", None)
-            libssl_path = os.getenv("ACSM_LIBSSL", None)
-
-            if libcrypto_path is not None and libssl_path is not None:
-                if os.path.exists(libcrypto_path) and os.path.exists(libssl_path):
-                    import oscrypto     # type: ignore
-
-                    oscrypto.use_openssl(
-                        libcrypto_path = libcrypto_path,
-                        libssl_path = libssl_path,
-                    )
-
 
             from libadobe import update_account_path
             from libadobeAccount import changeDeviceVersion

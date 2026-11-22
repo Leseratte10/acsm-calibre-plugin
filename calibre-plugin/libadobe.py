@@ -47,8 +47,11 @@ except ImportError:
 
 from customRSA import CustomRSA
 
-from oscrypto import keys
-from oscrypto.asymmetric import dump_certificate, dump_private_key
+try: 
+    from customcrypto.customcrypto import keys
+    from customcrypto.customcrypto.asymmetric import dump_certificate, dump_private_key
+except: 
+    pass
 
 
 VAR_ACS_SERVER_HTTPS = "https://activate.dtsbytebooks.com/adept"

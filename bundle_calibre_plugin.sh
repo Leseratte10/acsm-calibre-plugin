@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2021-2024 Leseratte10
+# Copyright (c) 2021-2026 Leseratte10
 # This file is part of the ACSM Input Plugin by Leseratte10
 # ACSM Input Plugin for Calibre / acsm-calibre-plugin
 #
@@ -19,9 +19,6 @@ sed_i() {
     mv "$tmpfile" "$path"
 }
 
-
-[ ! -f calibre-plugin/asn1crypto.zip ] && ./package_modules.sh
-[ ! -f calibre-plugin/oscrypto.zip ] && ./package_modules.sh
 
 rm -rf calibre-plugin-tmp || /bin/true
 
@@ -52,12 +49,9 @@ rm decrypt_win32.exe decrypt_win64.exe
 
 popd
 
-# Delete cache
-rm -rf __pycache__
-rm -f *.pyc
-
-# Set module ID. This needs to be changed if any of the module ZIPs change.
-echo -n "2023-12-19-01" > module_id.txt
+# Delete unnecessary files
+rm -rf __pycache__ customcrypto/__pycache__ customcrypto/customcrypto/__pycache__ customcrypto/tests customcrypto/readme_internal.md
+rm -f *.pyc 
 
 # Copy LICENSE and README.md so it'll be included in the ZIP.
 cp ../LICENSE LICENSE
@@ -74,7 +68,6 @@ do
     }' "$file"
 
 done
-
 
 
 # Create ZIP file from calibre-plugin folder.
