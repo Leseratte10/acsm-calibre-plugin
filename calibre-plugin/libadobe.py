@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -587,6 +587,28 @@ ASN_ATTRIBUTE = 5   # aka "ATTRIBUTE"
 
 debug = False
 
+def attribute_sort_key(attribute):
+    # type: (str) -> tuple
+
+    # "Attributes are sorted first by their namespaces and
+    # then by their names; sorting is done bytewise on UTF-8
+    # representations."
+
+    # lxml returns attribute keys in Clark notation ("{namespace}name", or just "name"),
+    # so sorting the raw keys isn't quite right: a namespace that is a prefix of another one
+    # can sort after it ("{http://a/x}..." < "{http://a}..." because "/" < "}"), and attributes 
+    # without a namespace whose name starts with a non-ASCII character would sort after all 
+    # namespaced ones (because "{" < "\u00e9"). So split the key into namespace and local name, 
+    # with "" for "no namespace" (which then always comes first), and compare their UTF-8 bytes. 
+    # Comparing bytes instead of strings also keeps the order correct on Python 2 builds that 
+    # store unicode strings as UTF-16, where characters outside the BMP would sort wrongly.
+
+    q_attribute = etree.QName(attribute)
+    namespace = "" if q_attribute.namespace is None else q_attribute.namespace
+
+    return (namespace.encode("utf-8"), q_attribute.localname.encode("utf-8"))
+
+
 def hash_node_ctx(node, hash_ctx):
 
     qtag = etree.QName(node.tag)
@@ -596,7 +618,7 @@ def hash_node_ctx(node, hash_ctx):
             # Adobe HMAC and signature are not hashed
             return
         else: 
-            print("Warning: Found hmac or signature node in unexpected namespace " + qtag.namespace)
+            print("Warning: Found hmac or signature node in unexpected namespace " + str(qtag.namespace))
 
     hash_do_append_tag(hash_ctx, ASN_NS_TAG)
 
@@ -607,14 +629,8 @@ def hash_node_ctx(node, hash_ctx):
     hash_do_append_string(hash_ctx, qtag.localname)
 
 
-    attrKeys = node.keys()
-
-    # Attributes need to be sorted
-    attrKeys.sort()
-    # TODO Implement UTF-8 bytewise sorting:
-    # "Attributes are sorted first by their namespaces and
-    # then by their names; sorting is done bytewise on UTF-8
-    # representations."
+    # Attributes need to be sorted, see attribute_sort_key() for the exact order.
+    attrKeys = sorted(node.keys(), key=attribute_sort_key)
 
     for attribute in attrKeys: 
         # Hash all the attributes
@@ -645,21 +661,24 @@ def hash_node_ctx(node, hash_ctx):
         # So there's a loop going over the text, hashing 32k chunks.
 
         text = node.text.strip()
-        textlen = len(text)
-        if textlen > 0:
+
+        if isinstance(text, bytes):
+            text_bytes = text
+        else:
+            text_bytes = text.encode("utf-8")
+
+        text_bytes_len = len(text_bytes)
+
+        if text_bytes_len > 0:
             done = 0
-            remaining = 0
             while True: 
-                remaining = textlen - done
-                if remaining > 0x7fff:
-                    #print("Warning: Why are we hashing a node larger than 32k?")
-                    remaining = 0x7fff
-
                 hash_do_append_tag(hash_ctx, ASN_TEXT)
-                hash_do_append_string(hash_ctx, text[done:done+remaining]) 
+                hashed_len = hash_do_append_string(hash_ctx, text_bytes[done:]) 
+                if hashed_len is None or hashed_len == 0:
+                    raise Exception("Error during hashing")
 
-                done += remaining
-                if done >= textlen:
+                done += hashed_len
+                if done >= text_bytes_len:
                     break
 
     for child in node: 
@@ -672,26 +691,38 @@ def hash_node_ctx(node, hash_ctx):
 
 
 
-def hash_do_append_string(hash_ctx, string):
-    # type: (SHA.SHA1Hash, str) -> None
+def hash_do_append_string(hash_ctx, data):
+    # type: (SHA.SHA1Hash, str|bytes) -> None|int
 
-    if sys.version_info[0] >= 3: 
-        str_bytes = bytes(string, encoding="utf-8")
+    if (isinstance(data, bytes)):
+        str_bytes = data
     else:
-        str_bytes = bytes(string)
+        str_bytes = data.encode("utf-8")
+
+        if len(str_bytes) > 0x7fff:
+            # Trying to hash string longer than 0x7FFF, can't safely split.
+            # This should never occur as long strings get handed into this function as bytes.
+            return None
+    
 
     length = len(str_bytes)
+
+    if length >= 0x7fff:
+        length = 0x7fff
+
     len_upper = int(length / 256)
     len_lower = int(length & 0xFF)
 
     hash_do_append_raw_bytes(hash_ctx, [len_upper, len_lower])
-    hash_do_append_raw_bytes(hash_ctx, str_bytes)
+    hash_do_append_raw_bytes(hash_ctx, str_bytes[:length])
+
+    return length
 
 def hash_do_append_tag(hash_ctx, tag):
     # type: (SHA.SHA1Hash, int) -> None
 
     if (tag > 5):
-        return
+        raise Exception("Tried to hash a tag outside of the valid range")
     
     hash_do_append_raw_bytes(hash_ctx, [tag])
 
