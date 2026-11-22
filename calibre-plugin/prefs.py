@@ -22,18 +22,18 @@ class ACSMInput_Prefs():
 
         JSON_PATH = os.path.join("plugins", "ACSMInput", "ACSMInput.json")
 
-        self.deacsmprefs = JSONConfig(JSON_PATH)
+        self.acsmprefs = JSONConfig(JSON_PATH)
 
-        self.deacsmprefs.defaults['configured'] = False
+        self.acsmprefs.defaults['configured'] = False
 
-        self.deacsmprefs.defaults['notify_fulfillment'] = True
-        self.deacsmprefs.defaults['detailed_logging'] = False
-        self.deacsmprefs.defaults['delete_acsm_after_fulfill'] = False
+        self.acsmprefs.defaults['notify_fulfillment'] = True
+        self.acsmprefs.defaults['detailed_logging'] = False
+        self.acsmprefs.defaults['delete_acsm_after_fulfill'] = False
 
-        self.deacsmprefs.defaults['list_of_rented_books'] = []
+        self.acsmprefs.defaults['list_of_rented_books'] = []
 
-        if self.deacsmprefs['list_of_rented_books'] == []:
-            self.deacsmprefs['list_of_rented_books'] = []
+        if self.acsmprefs['list_of_rented_books'] == []:
+            self.acsmprefs['list_of_rented_books'] = []
 
 
 
@@ -45,14 +45,14 @@ class ACSMInput_Prefs():
         self.__accountdir = os.path.join(self.__maindir,"account")
 
         if os.path.exists(self.__accountdir):
-            self.deacsmprefs.defaults['path_to_account_data'] = self.__accountdir
+            self.acsmprefs.defaults['path_to_account_data'] = self.__accountdir
             success = True
 
         if not success:
             # We did not find an account folder. Creating it.
             if os.path.exists(self.__maindir):
                 os.mkdir(self.__accountdir)
-                self.deacsmprefs.defaults['path_to_account_data'] = self.__accountdir
+                self.acsmprefs.defaults['path_to_account_data'] = self.__accountdir
                 success = True
 
         if not success:        
@@ -67,27 +67,27 @@ class ACSMInput_Prefs():
     
     def __getitem__(self,kind = None):
         if kind is not None:
-            return self.deacsmprefs[kind]
-        return self.deacsmprefs
+            return self.acsmprefs[kind]
+        return self.acsmprefs
 
     def set(self, kind, value):
-        self.deacsmprefs[kind] = value
+        self.acsmprefs[kind] = value
 
     def writeprefs(self,value = True):
         self.deacsmprefs['configured'] = value
 
     def addnamedvaluetoprefs(self, prefkind, keyname, keyvalue):
         try:
-            if keyvalue not in self.deacsmprefs[prefkind].values():
+            if keyvalue not in self.acsmprefs[prefkind].values():
                 # ensure that the keyname is unique
                 # by adding a number (starting with 2) to the name if it is not
                 namecount = 1
                 newname = keyname
-                while newname in self.deacsmprefs[prefkind]:
+                while newname in self.acsmprefs[prefkind]:
                     namecount += 1
                     newname = "{0:s}_{1:d}".format(keyname,namecount)
                 # add to the preferences
-                self.deacsmprefs[prefkind][newname] = keyvalue
+                self.acsmprefs[prefkind][newname] = keyvalue
                 return (True, newname)
         except:
             traceback.print_exc()
@@ -97,8 +97,8 @@ class ACSMInput_Prefs():
     def addvaluetoprefs(self, prefkind, prefsvalue):
         # ensure the keyvalue isn't already in the preferences
         try:
-            if prefsvalue not in self.deacsmprefs[prefkind]:
-                self.deacsmprefs[prefkind].append(prefsvalue)
+            if prefsvalue not in self.acsmprefs[prefkind]:
+                self.acsmprefs[prefkind].append(prefsvalue)
                 return True
         except:
             traceback.print_exc()

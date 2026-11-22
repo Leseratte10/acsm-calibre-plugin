@@ -1,6 +1,6 @@
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -802,8 +802,8 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
     verbose_logging = False
     try: 
         import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.ACSMInput_Prefs()
-        verbose_logging = deacsmprefs["detailed_logging"]
+        acsmprefs = prefs.ACSMInput_Prefs()
+        verbose_logging = acsmprefs["detailed_logging"]
     except:
         pass
 

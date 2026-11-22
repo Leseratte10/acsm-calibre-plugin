@@ -299,8 +299,8 @@ class ACSMInput(FileTypePlugin):
 
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-            deacsmprefs = prefs.ACSMInput_Prefs()
-            update_account_path(deacsmprefs["path_to_account_data"])
+            acsmprefs = prefs.ACSMInput_Prefs()
+            update_account_path(acsmprefs["path_to_account_data"])
 
         except Exception as e:
             traceback.print_exc()
@@ -485,7 +485,7 @@ class ACSMInput(FileTypePlugin):
             # We need to check if it's an ACSM file
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
-            deacsmprefs = prefs.ACSMInput_Prefs()
+            acsmprefs = prefs.ACSMInput_Prefs()
 
             print("{0} v{1}: Trying to parse file {2}".format(PLUGIN_NAME, PLUGIN_VERSION, os.path.basename(path_to_ebook)))
 
@@ -511,7 +511,7 @@ class ACSMInput(FileTypePlugin):
 
             print("{0} v{1}: Try to fulfill ...".format(PLUGIN_NAME, PLUGIN_VERSION))
 
-            success, replyData = fulfill(path_to_ebook, deacsmprefs["notify_fulfillment"])
+            success, replyData = fulfill(path_to_ebook, acsmprefs["notify_fulfillment"])
 
             if (success is False):
                 print("{0} v{1}: Hey, that didn't work: \n".format(PLUGIN_NAME, PLUGIN_VERSION) + replyData)
@@ -530,7 +530,7 @@ class ACSMInput(FileTypePlugin):
                     # this is set to True
                     # If there's any errors whatsoever during export / plugin execution,
                     # this will be set back to False to prevent deletion.
-                    delete_src_file = deacsmprefs["delete_acsm_after_fulfill"]
+                    delete_src_file = acsmprefs["delete_acsm_after_fulfill"]
 
                     try: 
                         from calibre.customize.ui import _initialized_plugins, is_disabled

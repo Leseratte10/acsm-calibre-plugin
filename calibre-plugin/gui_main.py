@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -108,12 +108,12 @@ class ActualACSMInputGUIExtension(InterfaceAction):
     def trigger_loan_dialog(self):
         import calibre_plugins.deacsm.prefs as prefs
         from calibre.gui2 import info_dialog
-        deacsmprefs = prefs.ACSMInput_Prefs()
+        acsmprefs = prefs.ACSMInput_Prefs()
 
         from calibre_plugins.deacsm.config import RentedBooksDialog # type: ignore
         RentedBooksDialog.remove_overdue_books_from_list()
 
-        if (len(deacsmprefs["list_of_rented_books"]) == 0):
+        if (len(acsmprefs["list_of_rented_books"]) == 0):
             return info_dialog(None, "No loaned books", "You currently have no loaned books.", show=True, show_copy_button=False)
 
         d = RentedBooksDialog(self.gui)
