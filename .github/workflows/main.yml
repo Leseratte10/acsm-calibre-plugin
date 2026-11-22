@@ -61,7 +61,6 @@ jobs:
           curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
           python2 get-pip.py
           pip2 --no-python-version-warning install -r ./.github/workflows/ci_test_requirements.txt
-          pip2 --no-python-version-warning install -e ./calibre-plugin/customcrypto
 
       - name: Run tests (Python 3)
         run: |
@@ -123,7 +122,6 @@ jobs:
           apt install -y python2
           python2 get-pip.py
           pip2 --no-python-version-warning install "oscrypto>1.3.0"
-          pip2 --no-python-version-warning install -e ./calibre-plugin/customcrypto
           pip2 --no-python-version-warning install -r ./.github/workflows/ci_test_requirements.txt
 
       - name: Run tests (Python 3)
@@ -155,7 +153,6 @@ jobs:
           apt install -y python2
           python2 get-pip.py
           pip2 --no-python-version-warning install https://github.com/Leseratte10/acsm-calibre-plugin/releases/download/config/oscrypto_1.3.0_fork_2023-12-19.zip
-          pip2 --no-python-version-warning install -e ./calibre-plugin/customcrypto
           pip2 --no-python-version-warning install -r ./.github/workflows/ci_test_requirements.txt
 
       - name: Run tests (Python 3)
