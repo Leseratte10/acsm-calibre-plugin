@@ -39,13 +39,13 @@ def createDeviceFile(randomSerial, useVersionIndex = 0):
 
     # Original implementation: Device::createDeviceFile(const std::string& hobbes, bool randomSerial)
 
+    if useVersionIndex is None: 
+        return False
+    
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
         return False
 
-    try: 
-        build_id = VAR_VER_BUILD_IDS[useVersionIndex]
-    except:
-        return False
+    build_id = VAR_VER_BUILD_IDS[useVersionIndex]
 
     if build_id not in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
         return False
@@ -164,7 +164,7 @@ def getAuthMethodsAndCert():
 def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None): 
 
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
-        return False, "Invalid Version index", [[], []]
+        return False, "Invalid Version index"
 
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
 
@@ -204,7 +204,7 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
         certificate_adobe = None
 
     if (authURL is None or userInfoURL is None or certificate_bb is None):
-        return False, "Error: Unexpected reply from Adobe.", [[], []]
+        return False, "Error: Unexpected reply from activation service."
 
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authURL")).text = authURL
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "userInfoURL")).text = userInfoURL
@@ -328,6 +328,8 @@ def buildSignInRequestForAnonAuthConvert(username, password, authenticationCerti
 
     etree.SubElement(root, etree.QName(NSMAP["adept"], "user")).text = user_uuid
     signature = sign_node(root, True)
+    if signature is None: 
+        return None
     etree.SubElement(root, etree.QName(NSMAP["adept"], "signature")).text = signature
 
     return "<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
@@ -391,8 +393,14 @@ def convertAnonAuthToAccount(username, passwd):
         return False, "Empty authenticationCertificate"
 
     linkRequest = buildSignInRequestForAnonAuthConvert(username, passwd, authenticationCertificate)
+
+    if linkRequest is None: 
+        return False, "Signing failed"
+
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/AddSignInDirect?ofByteBooks=1"
     linkResponse = sendRequestDocu(linkRequest, signInURL, True)
+    if linkResponse is None: 
+        return False, "Error while calling AddSignInDirect"
 
     try: 
         credentialsXML = etree.fromstring(linkResponse)
@@ -747,18 +755,18 @@ def exportProxyAuth(act_xml_path, activationToken):
 def buildActivateReqProxy(useVersionIndex = 0, proxyData = None):
 
     if proxyData is None: 
-        return False
+        return False, "Missing ProxyData"
 
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
-        return False
+        return False, "Invalid Build ID"
 
     try: 
         build_id = VAR_VER_BUILD_IDS[useVersionIndex]
     except:
-        return False
+        return False, "Invalid Build ID"
 
     if build_id not in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
-        return False
+        return False, "This version can't authorize"
 
     local_device_xml = etree.parse(get_device_path())
     local_activation_xml = etree.parse(get_activation_xml_path())
@@ -843,15 +851,15 @@ def buildActivateReqProxy(useVersionIndex = 0, proxyData = None):
 def buildActivateReq(useVersionIndex = 0): 
 
     if useVersionIndex >= len(VAR_VER_SUPP_CONFIG_NAMES):
-        return False
+        return False, "Invalid version index"
 
     try: 
         build_id = VAR_VER_BUILD_IDS[useVersionIndex]
     except:
-        return False
+        return False, "Invalid version index"
 
     if build_id not in VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE:
-        return False
+        return False, "Version not allowed"
 
     devicexml = etree.parse(get_device_path())
     activationxml = etree.parse(get_activation_xml_path())
@@ -995,6 +1003,9 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
     req_xml = etree.fromstring(activate_req)
 
     signature = sign_node(req_xml, True) 
+    if signature is None: 
+        print("Signing failed, missing pkcs12?")
+        return False, "Signing failed"
 
     etree.SubElement(req_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
 

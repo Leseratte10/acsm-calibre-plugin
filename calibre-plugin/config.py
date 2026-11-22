@@ -29,7 +29,11 @@ from PyQt5.QtWidgets import QShortcut
 from PyQt5 import QtCore
 
 from PyQt5 import Qt as QtGui
-from zipfile import ZipFile
+try: 
+    from zipfile import ZipFile, BadZipFile
+except: 
+    # Python 2
+    from zipfile import ZipFile, BadZipfile as BadZipFile
 
 # calibre modules and constants.
 from calibre.gui2 import (question_dialog, error_dialog, info_dialog,        # type: ignore
@@ -181,20 +185,12 @@ class ConfigWidget(QWidget):
         self.deauthShortcut = QShortcut(QKeySequence("Ctrl+Shift+D"), self)
         self.deauthShortcut.activated.connect(self.delete_ade_auth)
 
-
-
         try: 
-            from libadobe import createDeviceKeyFile, update_account_path, are_ade_version_lists_valid
-            from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
-        except: 
-            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-            traceback.print_exc()
+            from libadobe import update_account_path, are_ade_version_lists_valid
 
-
-        update_account_path(self.acsmprefs["path_to_account_data"])
-        self.resize(self.sizeHint())
-
-        try: 
+            update_account_path(self.acsmprefs["path_to_account_data"])
+            self.resize(self.sizeHint())
+    
             # Someone reported getting this error after upgrading the plugin.
             # No idea why that happens - put a try/catch around just to be safe.
             if not are_ade_version_lists_valid():
@@ -222,6 +218,9 @@ class ConfigWidget(QWidget):
                 error_dialog(None, "Internal error", "Version list mismatch. Please open a bug report.", show=True, show_copy_button=False)
         except UnboundLocalError:
             print("Verify function are_ade_version_lists_valid() not found - why?")
+        except: 
+            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
+            traceback.print_exc()
 
 
     def toggle_logging(self): 
@@ -495,6 +494,7 @@ class ConfigWidget(QWidget):
             os.remove(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"))
         except:
             error_dialog(None, "Remove Digital Editions account", "There was an error while removing the authorization.", show=True, show_copy_button=False)
+            return
 
         
         # Show success, then close:
@@ -529,6 +529,9 @@ class ConfigWidget(QWidget):
             containerdev = etree.parse(device_xml_path)
         except (IOError, FileNotFoundError, OSError) as e:
             return "Not authorized for any ID", False, None
+        except (etree.XMLSyntaxError):
+            return "Authorization XML files corrupted", False, None
+
 
         try: 
             adeptNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)        
@@ -836,31 +839,35 @@ class ConfigWidget(QWidget):
 
         print("{0} v{1}: Importing activation data from {2}".format(PLUGIN_NAME, PLUGIN_VERSION, filename))
 
-        with ZipFile(filename, 'r') as zipfile:
-            try: 
-                device = zipfile.read("device.xml")
-                activation = zipfile.read("activation.xml")
-                salt = zipfile.read("devicesalt")
-            except: 
-                return error_dialog(None, "Import failed", "Can't find required files in this ZIP")
+        try: 
+            with ZipFile(filename, 'r') as zipfile:
+                try: 
+                    device = zipfile.read("device.xml")
+                    activation = zipfile.read("activation.xml")
+                    salt = zipfile.read("devicesalt")
+                except: 
+                    return error_dialog(None, "Import failed", "Can't find required files in this ZIP", show=True, show_copy_button=False)
 
-            try: 
-                # Copy the files byte for byte, so they're not re-encoded with the system's default encoding.
-                output_device = open(os.path.join(self.acsmprefs["path_to_account_data"], "device.xml"), "wb")
-                output_device.write(device)
-                output_device.close()
+                try: 
+                    # Copy the files byte for byte, so they're not re-encoded with the system's default encoding.
+                    output_device = open(os.path.join(self.acsmprefs["path_to_account_data"], "device.xml"), "wb")
+                    output_device.write(device)
+                    output_device.close()
 
-                output_activation = open(os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml"), "wb")
-                output_activation.write(activation)
-                output_activation.close()
+                    output_activation = open(os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml"), "wb")
+                    output_activation.write(activation)
+                    output_activation.close()
 
-                output_salt = open(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"), "wb")
-                output_salt.write(salt)
-                output_salt.close()
+                    output_salt = open(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"), "wb")
+                    output_salt.write(salt)
+                    output_salt.close()
 
-            except: 
-                err = traceback.format_exc()
-                return error_dialog(None, "Import failed", "Can't write file", show=True, det_msg=err, show_copy_button=False)
+                except: 
+                    err = traceback.format_exc()
+                    return error_dialog(None, "Import failed", "Can't write file", show=True, det_msg=err, show_copy_button=False)
+        except BadZipFile:
+            return error_dialog(None, "Import failed", "The file you selected doesn't seem to be a ZIP file.", 
+                                show=True, show_copy_button=False)
 
 
         update_account_path(self.acsmprefs["path_to_account_data"])
@@ -886,15 +893,24 @@ class ConfigWidget(QWidget):
         if islinux:
             self.button_import_LinuxWineADE.setEnabled(not activated)
         
-        
         self.resize(self.sizeHint())
 
-        if ade_mail is None: 
-            info_dialog(None, "Done", "Successfully imported an anonymous authorization.", show=True, show_copy_button=False)
+        if activated:
+            if ade_mail is None: 
+                info_dialog(None, "Done", "Successfully imported an anonymous authorization.", show=True, show_copy_button=False)
+            else: 
+                info_dialog(None, "Done", "Successfully imported authorization for " + ade_mail, show=True, show_copy_button=False)
         else: 
-            info_dialog(None, "Done", "Successfully imported authorization for " + ade_mail, show=True, show_copy_button=False)
+            error_dialog(None, "Import failed", "That didn't work:\n" + info_string, show=True, show_copy_button=False)
 
+           
 
+    def show_activation_server_error(self, step):
+        # Call this from inside an except block so the traceback ends up in the details.
+        msg = "Couldn't connect to the ByteBooks activation server (" + step + ").\n\n"
+        msg += "Please check your internet connection. If the details below mention a certificate error, "
+        msg += "your system's CA certificates might be missing or outdated."
+        return error_dialog(None, "Digital Editions activation failed", msg, det_msg=traceback.format_exc(), show=True, show_copy_button=True)
 
 
     def create_anon_auth(self): 
@@ -916,7 +932,10 @@ class ConfigWidget(QWidget):
                         
         createDeviceKeyFile()
         createDeviceFile(False, 0)
-        success, resp = createUser(0, None, None)
+        try:
+            success, resp = createUser(0, None, None)
+        except Exception:
+            return self.show_activation_server_error("while creating the user")
         if (success is False):
             return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 
@@ -1033,11 +1052,18 @@ class ConfigWidget(QWidget):
 
 
         # Get account types
-        types, authCert_bb, authCert_adobe = getAuthMethodsAndCert()
-        
+        try:
+            types, authCert_bb, authCert_adobe = getAuthMethodsAndCert()
+        except Exception:
+            return self.show_activation_server_error("while loading the list of ID providers")
+                
         msg = "Please select your ID provider (usually ByteBooks ID)"
 
         acc_item, ok = QInputDialog.getItem(self, "Authorizing Digital Editions account", msg, types[1], 0, False)
+
+        if (not ok):
+            return
+
         acc_type = "AdobeID"
         try: 
             acc_idx = types[1].index(acc_item)
@@ -1062,7 +1088,10 @@ class ConfigWidget(QWidget):
                 
         createDeviceKeyFile()
         createDeviceFile(False, vers_idx)
-        success, resp = createUser(vers_idx, authCert_bb, authCert_adobe)
+        try:
+            success, resp = createUser(vers_idx, authCert_bb, authCert_adobe)
+        except Exception:
+            return self.show_activation_server_error("while creating the user")
         if (success is False):
             return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 

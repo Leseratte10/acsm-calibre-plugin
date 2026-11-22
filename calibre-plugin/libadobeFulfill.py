@@ -297,17 +297,20 @@ def doOperatorAuth(operatorURL, force_adobe = False):
     authURL = operatorURL
     # I don't think this is needed since callers shouldn't have this flag in their URLs.
     # authURL = authURL.replace('?ofByteBooks=1', '')
-    if authURL.endswith("Fulfill"):
-        authURL = authURL.replace("/Fulfill", "")
+    if authURL.endswith("/Fulfill"):
+        authURL = authURL[:-8]
     
     
     # The operator is the distributor's own ACS server, not ByteBooks. Don't validate TLS here,
     # same as for /Fulfill: lots of distributors have invalid or expired certs.
     
-    if not use_adobe:
-        replyData = sendRequestDocu(auth_req, authURL + "/Auth?ofByteBooks=1", False).decode("utf-8")
-    else:
-        replyData = sendRequestDocu(auth_req, authURL + "/Auth", False).decode("utf-8")
+    try: 
+        if not use_adobe:
+            replyData = sendRequestDocu(auth_req, authURL + "/Auth?ofByteBooks=1", False).decode("utf-8")
+        else:
+            replyData = sendRequestDocu(auth_req, authURL + "/Auth", False).decode("utf-8")
+    except: 
+        return "ERROR: /Auth returned invalid data or no data at all.", None
 
     if not "<success" in replyData:
         if "<error" in replyData and 'E_ADEPT_INVALID_CERTIFICATE' in replyData and not use_adobe and has_adobe:
@@ -329,10 +332,13 @@ def doOperatorAuth(operatorURL, force_adobe = False):
         return "Creating license request failed!", None
 
 
-    if use_adobe:
-        resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService", True).decode("utf-8")
-    else:
-        resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService?ofByteBooks=1", True).decode("utf-8")
+    try:
+        if use_adobe:
+            resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService", True).decode("utf-8")
+        else:
+            resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService?ofByteBooks=1", True).decode("utf-8")
+    except: 
+        return "ERROR: /InitLicenseService returned invalid data or no data at all.", None
 
     if "<error" in resp:
         return "Looks like that failed: %s" % resp, None
@@ -611,7 +617,10 @@ def fulfill(acsm_file, do_notify = False):
     if (is_returnable and notify_success):
         # Only support loan returning if we also notified ACS. 
         # Otherwise the server gets confused and we don't want that.
-        updateLoanReturnData(adobe_fulfill_response, False, use_adobe)
+        try: 
+            updateLoanReturnData(adobe_fulfill_response, False, use_adobe)
+        except: 
+            print("Warning: Could not add loan return data to loan record. You may not be able to return this book.")
 
     success, response = fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe)
 
@@ -771,7 +780,11 @@ def tryReturnBook(bookData):
         print(doc_send)
 
 
-    retval = sendRequestDocu(doc_send, return_server, False).decode("utf-8")
+    try:
+        retval = sendRequestDocu(doc_send, return_server, False).decode("utf-8")
+    except: 
+        print("Error while returning!")
+        return False, "sendRequest failed."
 
     if "<error" in retval: 
         print("Loan return failed: %s" % (retval))
@@ -915,7 +928,9 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
                 continue
             else:
                 print("Error during critical notification:")
-                raise
+                import traceback
+                traceback.print_exc()
+                continue
 
         try: 
             msg = msg.decode("utf-8")
@@ -941,11 +956,6 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
             errmsg += "ERROR\n" + url + "\n" + msg + "\n\n"
             if critical:
                 errmsg_crit += "ERROR\n" + url + "\n" + msg + "\n\n"
-
-
-    if device is None and errmsg_crit != "":
-        errmsg_crit = ""
-        print("Skipping critical notification failure due to weird book.")
         
 
     if errmsg_crit == "": 
