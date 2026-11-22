@@ -10,7 +10,7 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-import getpass, sys
+import getpass
 
 from libadobe import createDeviceKeyFile
 from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice

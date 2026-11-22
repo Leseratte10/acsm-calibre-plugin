@@ -7,6 +7,7 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
+
 from lxml import etree
 import base64, traceback
 import os, locale, platform

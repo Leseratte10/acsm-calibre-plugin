@@ -12,18 +12,17 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-import os, base64, traceback
+import os, traceback
 from PyQt5.QtGui import QKeySequence
 
 from lxml import etree
 
-import sys, time, datetime
+import sys, datetime
 
 
-from PyQt5.Qt import (Qt, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit,
-                      QGroupBox, QPushButton, QListWidget, QListWidgetItem, QInputDialog, 
-                      QFileDialog, 
-                      QLineEdit, QAbstractItemView, QIcon, QDialog, QDialogButtonBox, QUrl)
+from PyQt5.Qt import (QWidget, QHBoxLayout, QVBoxLayout, QLineEdit, QGroupBox, 
+                      QListWidget, QListWidgetItem, QInputDialog, QFileDialog, 
+                      QAbstractItemView, QIcon, QDialog, QDialogButtonBox)
 from PyQt5.QtWidgets import QShortcut
 
 from PyQt5 import QtCore
@@ -38,10 +37,11 @@ except:
 # calibre modules and constants.
 from calibre.gui2 import (question_dialog, error_dialog, info_dialog,        # type: ignore
                         warning_dialog, choose_save_file, choose_files)
+from calibre.constants import isosx, iswindows, islinux                 # type: ignore
+
 # modules from this plugin's zipfile.
 from calibre_plugins.deacsm.__init__ import PLUGIN_NAME, PLUGIN_VERSION      # type: ignore
 import calibre_plugins.deacsm.prefs as prefs                                 # type: ignore
-from calibre.constants import isosx, iswindows, islinux                 # type: ignore
 
 
 #@@CALIBRE_COMPAT_CODE@@
@@ -995,7 +995,7 @@ class ConfigWidget(QWidget):
     
     def convert_anon_to_account(self): 
         try: 
-            from libadobe import createDeviceKeyFile, update_account_path
+            from libadobe import update_account_path
             from libadobeAccount import convertAnonAuthToAccount
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -1146,7 +1146,7 @@ class ConfigWidget(QWidget):
 
         self.resize(self.sizeHint())
 
-        info_dialog(None, "Done", "Authorized to '" + acc_item + "' account " + mail, show=True, show_copy_button=False)
+        info_dialog(None, "Done", "Authorized to '" + acc_item + "' account " + str(mail), show=True, show_copy_button=False)
 
 
 
@@ -1197,6 +1197,8 @@ class ConfigWidget(QWidget):
         self.acsmprefs.writeprefs()
 
     def load_resource(self, name):
+        # TODO: Figure out what the heck this function is used for, doesn't seem to be called anywhere.
+        # Maybe for Calibre 4 / Python 2 compatibility?
         with ZipFile(self.plugin_path, 'r') as zf:
             if name in zf.namelist():
                 return zf.read(name).decode('utf-8')
@@ -1330,16 +1332,16 @@ class RentedBooksDialog(QDialog):
             print("{0} v{1}: Error while importing book return stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
 
-        Ret_book = None
+        ret_book = None
         for book in self.acsmprefs["list_of_rented_books"]:
             if book["loanID"] == userdata:
-                Ret_book = book
+                ret_book = book
                 break
 
-        if Ret_book is None: 
+        if ret_book is None: 
             return
 
-        ret, msg = tryReturnBook(Ret_book)
+        ret, msg = tryReturnBook(ret_book)
 
         if (ret):
             print("Book successfully returned.")

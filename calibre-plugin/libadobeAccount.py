@@ -747,11 +747,6 @@ def exportProxyAuth(act_xml_path, activationToken):
     return True, "Done"
     
 
-
-
-
-
-
 def buildActivateReqProxy(useVersionIndex = 0, proxyData = None):
 
     if proxyData is None: 
@@ -1035,7 +1030,7 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
         return False, "Error parsing Adobe /Activate response"
    
     if verbose_logging:
-        print("Response from server: ")
+        print("Response from server (for Activate): ")
         print(ret)
 
     if proxyData is not None: 
@@ -1089,6 +1084,8 @@ def exportAccountEncryptionKeyDER(output_file):
         return False
 
 def exportAccountEncryptionKeyBytes():
+    # NOTE: This function seems unused, but should remain. It might be used by other plugins
+    # exporting the private key.
     try: 
         activationxml = etree.parse(get_activation_xml_path())
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)

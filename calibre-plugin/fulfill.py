@@ -10,7 +10,6 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-# pyright: reportUndefinedVariable=false
 
 import sys, os, time, shutil
 
@@ -21,9 +20,6 @@ from libadobe import sendHTTPRequest_DL2FILE
 from libadobeFulfill import buildRights, fulfill
 from libpdf import patch_drm_into_pdf
 
-FILE_DEVICEKEY = "devicesalt"
-FILE_DEVICEXML = "device.xml"
-FILE_ACTIVATIONXML = "activation.xml"
 
 #######################################################################
 
@@ -39,7 +35,7 @@ def download(replyData):
 
 
     download_url = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("src"))).text
-    resource_id = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("resource"))).text
+    #resource_id = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("resource"))).text
     license_token_node = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken")))
 
     rights_xml_str = buildRights(license_token_node)

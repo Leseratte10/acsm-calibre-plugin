@@ -9,8 +9,6 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 from lxml import etree
 import base64
-import random
-import time
 
 #@@CALIBRE_COMPAT_CODE@@
 
@@ -167,11 +165,8 @@ def getDecryptedCert(pkcs12_b64_string = None, force_bytebooks = False):
 
     pkcs12_data = base64.b64decode(pkcs12_b64_string)
 
-    try: 
-        from libadobe import devkey_bytes as devkey_adobe
-    except: 
-        pass
-
+    from libadobe import devkey_bytes as devkey_adobe
+    
     if devkey_adobe is not None: 
         devkey_bytes = devkey_adobe
     else: 
@@ -478,7 +473,7 @@ def fulfill(acsm_file, do_notify = False):
 
     verbose_logging = False
     try: 
-        import calibre_plugins.deacsm.prefs as prefs
+        import calibre_plugins.deacsm.prefs as prefs  # type: ignore
         acsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = acsmprefs["detailed_logging"]
     except:
@@ -727,7 +722,7 @@ def tryReturnBook(bookData):
 
     verbose_logging = False
     try: 
-        import calibre_plugins.deacsm.prefs as prefs
+        import calibre_plugins.deacsm.prefs as prefs    # type: ignore
         acsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = acsmprefs["detailed_logging"]
     except:
@@ -807,7 +802,7 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
 
     verbose_logging = False
     try: 
-        import calibre_plugins.deacsm.prefs as prefs
+        import calibre_plugins.deacsm.prefs as prefs    # type: ignore
         acsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = acsmprefs["detailed_logging"]
     except:
@@ -998,10 +993,7 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe = False):
     list = activationxml.find("./%s" % (adNS("licenseServices")))
 
     if list is None: 
-        x = etree.SubElement(activationxml.getroot(), etree.QName(NSMAP["adept"], "licenseServices"), nsmap=NSMAP)
-        list = activationxml.find("./%s" % (adNS("licenseServices")))
-        if list is None: 
-            return False, "Err, this list should not be none right now ..."
+        list = etree.SubElement(activationxml.getroot(), etree.QName(NSMAP["adept"], "licenseServices"), nsmap=NSMAP)
     
     info_entry = etree.SubElement(list, etree.QName(NSMAP["adept"], "licenseServiceInfo"))
 

@@ -68,7 +68,7 @@ def create_menu_action_unique(ia, parent_menu, menu_text, image=None, tooltip=No
     return ac
 
 class ActualACSMInputGUIExtension(InterfaceAction):
-    name                        = "ACSM Input Plugin GUI Extension"
+    name = "ACSM Input Plugin GUI Extension"
     
     try: 
         popup_type = QToolButton.ToolButtonPopupMode.InstantPopup
@@ -81,7 +81,7 @@ class ActualACSMInputGUIExtension(InterfaceAction):
     # Text, icon, tooltip, keyboard shortcut
 
     def genesis(self): 
-        print("ACSM Input: GUI Plugin Genesis!")
+        print("ACSM Input: GUI Plugin loading...")
         self.menu = QMenu(self.gui)
 
         self.rebuild_menus()

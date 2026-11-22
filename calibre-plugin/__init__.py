@@ -106,9 +106,9 @@ from calibre.utils.lock import singleinstance       # type: ignore
 try:
     from calibre.utils.lock import SingleInstance       # type: ignore
 except:
-    from calibre_plugins.deacsm.singleinstance_helper import SingleInstance
+    from calibre_plugins.deacsm.singleinstance_helper import SingleInstance     # type: ignore
 
-import os, shutil, traceback, sys, time, io, random
+import os, shutil, traceback, sys, time, io
 import zipfile
 from lxml import etree
 
@@ -133,8 +133,8 @@ class ACSMInput(FileTypePlugin):
         However, we want to load the GUI plugin, too, so we have to trick
         Calibre into believing that there's actually a 2nd plugin.
         """
-        from calibre.customize.ui import _initialized_plugins
-        from calibre_plugins.deacsm.gui_main_wrapper import ACSMInputGUIExtension
+        from calibre.customize.ui import _initialized_plugins       # type: ignore
+        from calibre_plugins.deacsm.gui_main_wrapper import ACSMInputGUIExtension       # type: ignore
 
         def init_plg(plg_type):
             for plugin in _initialized_plugins:
@@ -166,7 +166,7 @@ class ACSMInput(FileTypePlugin):
             # Patch Calibre to consider "ACSM" a book. This makes ACSM files show up
             # in the "Add Book" file selection, and it also makes the auto-add feature useable.
             try: 
-                from calibre.ebooks import BOOK_EXTENSIONS
+                from calibre.ebooks import BOOK_EXTENSIONS  # type: ignore
                 if ("acsm" not in BOOK_EXTENSIONS):
                     BOOK_EXTENSIONS.append("acsm")
             except:
@@ -362,7 +362,7 @@ class ACSMInput(FileTypePlugin):
 
 
         from libadobe import sendHTTPRequest_DL2FILE
-        from libadobeFulfill import buildRights, fulfill
+        from libadobeFulfill import buildRights
         from libpdf import patch_drm_into_pdf
 
 

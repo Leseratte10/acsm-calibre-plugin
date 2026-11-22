@@ -138,7 +138,6 @@ def update_account_path(folder_path):
 
 
 def createDeviceKeyFile():
-    # Original implementation: Device::createDeviceKeyFile()
 
     DEVICE_KEY_SIZE = 16
     global devkey_bytes

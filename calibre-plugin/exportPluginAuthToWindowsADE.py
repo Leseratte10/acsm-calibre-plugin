@@ -13,7 +13,8 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-# In progress ...
+# This implementation is currently in progress. It's outdated
+# and will not work in its current form. Please ignore it.
 
 try:
     from ctypes import windll
