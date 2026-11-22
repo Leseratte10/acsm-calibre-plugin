@@ -116,7 +116,7 @@ from lxml import etree
 
 class ACSMInput(FileTypePlugin):
     name                        = PLUGIN_NAME
-    description                 = "Takes an Adobe ACSM file and converts that into a useable EPUB or PDF file. Formerly known as DeACSM. Based on the libgourou library by Grégory Soutadé"
+    description                 = "Takes an Adobe / ByteBooks ACSM file and converts that into a useable EPUB or PDF file. Formerly known as DeACSM."
     supported_platforms         = ['linux', 'osx', 'windows']
     author                      = "Leseratte10"
     version                     = PLUGIN_VERSION_TUPLE
@@ -293,14 +293,19 @@ class ACSMInput(FileTypePlugin):
                     )
 
 
-            from libadobe import createDeviceKeyFile, update_account_path, sendHTTPRequest
-            from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
-            from libadobeFulfill import buildRights, fulfill
+            from libadobe import update_account_path
+            from libadobeAccount import changeDeviceVersion
 
 
             import calibre_plugins.deacsm.prefs as prefs     # type: ignore
             acsmprefs = prefs.ACSMInput_Prefs()
             update_account_path(acsmprefs["path_to_account_data"])
+            # This is needed to correctly update to an emulated ByteBooks Digital Edition 5.0 for older activations.
+            try: 
+                changeDeviceVersion(0, onlyIfUnknown=True)
+            except TypeError:
+                #print("Type error, this can happen during an update from an older version.")
+                pass
 
         except Exception as e:
             traceback.print_exc()

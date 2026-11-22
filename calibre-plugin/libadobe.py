@@ -51,8 +51,7 @@ from oscrypto import keys
 from oscrypto.asymmetric import dump_certificate, dump_private_key
 
 
-VAR_ACS_SERVER_HTTP = "http://adeactivate.adobe.com/adept"
-VAR_ACS_SERVER_HTTPS = "https://adeactivate.adobe.com/adept"
+VAR_ACS_SERVER_HTTPS = "https://activate.dtsbytebooks.com/adept"
 
 # Network timeout in seconds. It applies to connecting and to every single read while
 # waiting for or receiving a reply, so a slow but working download is not cut off.
@@ -69,40 +68,22 @@ FILE_ACTIVATIONXML = "activation.xml"
 
 
 # Lists of different ADE "versions" we know about
-VAR_VER_SUPP_CONFIG_NAMES = [ "ADE 1.7.2", "ADE 2.0.1", "ADE 3.0.1", "ADE 4.0.3", "ADE 4.5.10", "ADE 4.5.11" ]
-VAR_VER_SUPP_VERSIONS = [ "ADE WIN 9,0,1131,27", "2.0.1.78765", "3.0.1.91394", "4.0.3.123281", 
-                            "com.adobe.adobedigitaleditions.exe v4.5.10.186048", 
-                            "com.adobe.adobedigitaleditions.exe v4.5.11.187303" ]
-VAR_VER_HOBBES_VERSIONS = [ "9.0.1131.27", "9.3.58046", "10.0.85385", "12.0.123217", "12.5.4.186049", "12.5.4.187298" ]
-VAR_VER_OS_IDENTIFIERS = [ "Windows Vista", "Windows Vista", "Windows 8", "Windows 8", "Windows 8", "Windows 8" ]
+VAR_VER_SUPP_CONFIG_NAMES = [ "BDE 5.0.76" ]
+VAR_VER_SUPP_VERSIONS = [ "com.dtsbytebooks.digitaleditions.exe v5.0.76" ]
+VAR_VER_HOBBES_VERSIONS = [ "12.5.4.HOBBES_VERSION_BUILD_NUMBER_X" ] 
+# Yes, that last version is correct, looks like ByteBooks messed up their placeholder.
+VAR_VER_OS_IDENTIFIERS = [ "Windows 8" ]
 
 
-# "Missing" versions:
-# 1.7.1, 2.0, 3.0, 4.0, 4.0.1, 4.0.2, 4.5 to 4.5.9
-# 4.5.7.179634
 
 # This is a list of ALL versions we know (and can potentially use if present in a config file).
-# Must have the same length / size as the four lists above.
-VAR_VER_BUILD_IDS = [ 1131, 78765, 91394, 123281, 186048, 187303 ]
-# Build ID 185749 also exists, that's a different (older) variant of 4.5.10. 
+VAR_VER_BUILD_IDS = [ 76 ]
 
 # This is a list of versions that can be used for new authorizations:
-VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE = [ 78765, 91394, 123281, 187303 ]
+VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE = [ 76 ]
 
-# This is a list of versions to be displayed in the version changer.
-VAR_VER_ALLOWED_BUILD_IDS_SWITCH_TO = [ 1131, 78765, 91394, 123281, 187303 ]
-
-# Versions >= this one are using HTTPS
-# According to changelogs, this is implemented as of ADE 4.0.1 - no idea what build ID that is.
-VAR_VER_NEED_HTTPS_BUILD_ID_LIMIT = 123281
-
-# Versions >= this are using a different order for the XML elements in a FulfillmentNotification.
-# This doesn't matter for fulfillment at all, but I want to emulate ADE as accurately as possible.
-# Implemented as of ADE 4.0.0, no idea what exact build number that is.
-VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER = 123281
-
-# Default build ID to use - ADE 2.0.1
-VAR_VER_DEFAULT_BUILD_ID = 78765
+# Default build ID to use - ADE 5.0
+VAR_VER_DEFAULT_BUILD_ID = 76
 
 
 

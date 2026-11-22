@@ -16,8 +16,7 @@ import time
 
 from libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
 from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
-from libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
-from libadobe import VAR_VER_BUILD_IDS, VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER
+from libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_HOBBES_VERSIONS
 
 
  
@@ -71,46 +70,35 @@ def buildFulfillRequest(acsm):
         clientVersion = VAR_VER_SUPP_VERSIONS[v_idx]
 
     except:
-        # Version not present, probably the "old" 10.0.4 entry. 
-        # As 10.X is in the 3.0 range, assume we're on ADE 3.0
-        clientVersion = "3.0.1.91394"
+        clientVersion = VAR_VER_SUPP_VERSIONS[0]
 
-    if clientVersion == "ADE WIN 9,0,1131,27": 
-        # Ancient ADE 1.7.2 does this request differently
-        request = "<fulfill xmlns=\"http://ns.adobe.com/adept\">\n"
-        request += "<user>%s</user>\n" % (user_uuid)
-        request += "<device>%s</device>\n" % (device_uuid)
-        request += "<deviceType>%s</deviceType>\n" % (device_type)
-        request += etree.tostring(acsm, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-        request += "</fulfill>"
-        return request, False
 
-    else: 
-        request = ""
-        request += "<?xml version=\"1.0\"?>"
-        request += "<adept:fulfill xmlns:adept=\"http://ns.adobe.com/adept\">"
-        request += "<adept:user>%s</adept:user>" % (user_uuid)
-        request += "<adept:device>%s</adept:device>" % (device_uuid)
-        request += "<adept:deviceType>%s</adept:deviceType>" % (device_type)
-        request += etree.tostring(acsm, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-        request += "<adept:targetDevice>"
 
-        request += "<adept:softwareVersion>%s</adept:softwareVersion>" % (version)
-        request += "<adept:clientOS>%s</adept:clientOS>" % (clientOS)
-        request += "<adept:clientLocale>%s</adept:clientLocale>" % (clientLocale)
-        request += "<adept:clientVersion>%s</adept:clientVersion>" % (clientVersion)
-        request += "<adept:deviceType>%s</adept:deviceType>" % (device_type)
-        request += "<adept:productName>%s</adept:productName>" % ("ADOBE Digitial Editions")
-        # YES, this typo ("Digitial" instead of "Digital") IS present in ADE!!
-        request += "<adept:fingerprint>%s</adept:fingerprint>" % (fingerprint)
+    request = ""
+    request += "<?xml version=\"1.0\"?>"
+    request += "<adept:fulfill xmlns:adept=\"http://ns.adobe.com/adept\">"
+    request += "<adept:user>%s</adept:user>" % (user_uuid)
+    request += "<adept:device>%s</adept:device>" % (device_uuid)
+    request += "<adept:deviceType>%s</adept:deviceType>" % (device_type)
+    request += etree.tostring(acsm, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+    request += "<adept:targetDevice>"
 
-        request += "<adept:activationToken>"
-        request += "<adept:user>%s</adept:user>" % (user_uuid)
-        request += "<adept:device>%s</adept:device>" % (device_uuid)
-        request += "</adept:activationToken>"
-        request += "</adept:targetDevice>"
-        request += "</adept:fulfill>"
-        return request, True
+    request += "<adept:softwareVersion>%s</adept:softwareVersion>" % (version)
+    request += "<adept:clientOS>%s</adept:clientOS>" % (clientOS)
+    request += "<adept:clientLocale>%s</adept:clientLocale>" % (clientLocale)
+    request += "<adept:clientVersion>%s</adept:clientVersion>" % (clientVersion)
+    request += "<adept:deviceType>%s</adept:deviceType>" % (device_type)
+    request += "<adept:productName>%s</adept:productName>" % ("ByteBooks Digitial Editions")
+    # YES, this typo ("Digitial" instead of "Digital") IS present in BDE, just like it was in ADE.
+    request += "<adept:fingerprint>%s</adept:fingerprint>" % (fingerprint)
+
+    request += "<adept:activationToken>"
+    request += "<adept:user>%s</adept:user>" % (user_uuid)
+    request += "<adept:device>%s</adept:device>" % (device_uuid)
+    request += "</adept:activationToken>"
+    request += "</adept:targetDevice>"
+    request += "</adept:fulfill>"
+    return request
 
     
 
@@ -324,8 +312,8 @@ def buildRights(license_token_node):
     if not found:
         print("Did not find the licenseService certificate in the activation data.")
         print("This usually means it failed to download from the distributor's servers.")
-        print("Please try to download an ACSM book from the Adobe Sample Library, then if that was successful, ")
-        print("try your ACSM book file again.")
+        print("Please try to download an ACSM book from the ByteBooks Sample Library,")
+        print("then if that was successful, try your ACSM book file again.")
         return None
 
     ret += "</adept:licenseServiceInfo>\n"
@@ -386,7 +374,7 @@ def fulfill(acsm_file, do_notify = False):
         pass
 
 
-    fulfill_request, adept_ns = buildFulfillRequest(acsmxml)
+    fulfill_request = buildFulfillRequest(acsmxml)
 
     if verbose_logging:
         print("Fulfill request:")
@@ -401,12 +389,7 @@ def fulfill(acsm_file, do_notify = False):
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     
-    if adept_ns:
-        # "new" ADE
-        etree.SubElement(fulfill_request_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
-    else: 
-        # ADE 1.7.2
-        etree.SubElement(fulfill_request_xml, etree.QName("signature")).text = signature
+    etree.SubElement(fulfill_request_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
 
     # Get operator URL: 
     operatorURL = None
@@ -424,12 +407,7 @@ def fulfill(acsm_file, do_notify = False):
     if (ret is not None):
         return False, "operatorAuth error: %s" % ret
 
-    if adept_ns:
-        # "new" ADE
-        fulfill_req_signed = "<?xml version=\"1.0\"?>\n" + etree.tostring(fulfill_request_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-    else: 
-        # ADE 1.7.2
-        fulfill_req_signed = etree.tostring(fulfill_request_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+    fulfill_req_signed = "<?xml version=\"1.0\"?>\n" + etree.tostring(fulfill_request_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
 
     #print("will send:\n %s" % fulfill_req_signed)
     #print("Sending fulfill request to %s" % fulfillURL)
@@ -463,18 +441,15 @@ def fulfill(acsm_file, do_notify = False):
 
     licenseURL = adobe_fulfill_response.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("licenseURL"))).text
 
-    if adept_ns:
-        if do_notify:
-            print("Notifying server ...")
-            success, response = performFulfillmentNotification(adobe_fulfill_response)
-            if not success: 
-                print("Some errors occurred during notify: ")
-                print(response)
-                print("The book was probably still downloaded correctly.")
-        else:
-            print("Not notifying any server since that was disabled.")
-    else: 
-        print("Skipping notify, not supported properly with ADE 1.7.2")
+    if do_notify:
+        print("Notifying server ...")
+        success, response = performFulfillmentNotification(adobe_fulfill_response)
+        if not success: 
+            print("Some errors occurred during notify: ")
+            print(response)
+            print("The book was probably still downloaded correctly.")
+    else:
+        print("Not notifying any server since that was disabled.")
 
 
     is_returnable = False
@@ -485,10 +460,9 @@ def fulfill(acsm_file, do_notify = False):
     except: 
         pass
 
-    if (is_returnable and do_notify and adept_ns):
+    if (is_returnable and do_notify):
         # Only support loan returning if we also notified ACS. 
         # Otherwise the server gets confused and we don't want that.
-        # Also, only do that for new-ish ADE and not for ADE 1.7.2
         updateLoanReturnData(adobe_fulfill_response)
 
     success, response = fetchLicenseServiceCertificate(licenseURL, operatorURL)
@@ -757,33 +731,9 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
         
         full_text = "<adept:notification xmlns:adept=\"http://ns.adobe.com/adept\">"
         full_text += "<adept:user>%s</adept:user>" % user
-        full_text += "<adept:device>%s</adept:device>" % device
-
-
-        # ADE 4.0 apparently changed the order of these two elements. 
-        # I still don't know exactly how this order is determined, but in most cases
-        # ADE 4+ has the body first, then the nonce, while ADE 3 and lower usually has nonce first, then body.
-        # It probably doesn't matter, but still, we want to behave exactly like ADE, so check the version number: 
-
-        devicexml = etree.parse(get_device_path())
-        for f in devicexml.findall("./%s" % (adNS("version"))):
-            if f.get("name") == "hobbes":
-                version = f.get("value")
-
-        try: 
-            v_idx = VAR_VER_HOBBES_VERSIONS.index(version)
-            clientVersion = VAR_VER_BUILD_IDS[v_idx]
-        except:
-            clientVersion = 0
-        
-        if (clientVersion >= VAR_VER_USE_DIFFERENT_NOTIFICATION_XML_ORDER):
-            full_text += etree.tostring(body, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-            full_text += addNonce()
-        else:
-            full_text += addNonce()
-            full_text += etree.tostring(body, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-            
-
+        full_text += "<adept:device>%s</adept:device>" % device       
+        full_text += etree.tostring(body, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+        full_text += addNonce()
         full_text += "</adept:notification>"
 
             
