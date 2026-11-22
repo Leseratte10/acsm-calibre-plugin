@@ -274,9 +274,20 @@ class ConfigWidget(QWidget):
         info_dialog(None, "Authorize eReader", msg, show=True, show_copy_button=False)
 
         dialog = QFileDialog()
-        dialog.setFileMode(QFileDialog.FileMode.Directory)
+        try: 
+            dialog.setFileMode(QFileDialog.FileMode.Directory)
+        except AttributeError:
+            # Older Calibre
+            dialog.setFileMode(QFileDialog.Directory)
+
         opts = dialog.options()
-        opts |= QFileDialog.Option.ShowDirsOnly
+
+        try: 
+            opts |= QFileDialog.Option.ShowDirsOnly
+        except AttributeError:
+            # Older Calibre
+            opts |= QFileDialog.ShowDirsOnly
+
         dialog.setOptions(opts)
 
         if dialog.exec_():
@@ -333,6 +344,8 @@ class ConfigWidget(QWidget):
 
             print("Found Reader with Class " + devClass + " and Name " + devName)
 
+            already_activated = False
+
             if os.path.isfile(act_xml_path) and os.path.getsize(act_xml_path) > 0:
 
                 active_device_act = etree.parse(act_xml_path)
@@ -378,24 +391,20 @@ class ConfigWidget(QWidget):
                 if (not ok): 
                     return
 
-                try: 
-                    os.remove(act_xml_path)
-                except: 
-                    error_dialog(None, "Authorize eReader", "Failed to remove existing authorization.", show=True, show_copy_button=False)
+                already_activated = True
+
+            else:   
+                msg = "Found an unactivated eReader:\n\n"
+                msg += "Path: " + os.path.dirname(adobe_path) + "\n"
+                msg += "Type: " + devClass + "\n"
+                msg += "Name: " + devName + "\n"
+                if devSerial is not None: 
+                    msg += "Serial: " + devSerial + "\n"
+                msg += "\nDo you want to authorize this device with your ByteBooks ID?"
+
+                ok = question_dialog(None, "Authorize eReader", msg)
+                if not ok: 
                     return
-
-  
-            msg = "Found an unactivated eReader:\n\n"
-            msg += "Path: " + os.path.dirname(adobe_path) + "\n"
-            msg += "Type: " + devClass + "\n"
-            msg += "Name: " + devName + "\n"
-            if devSerial is not None: 
-                msg += "Serial: " + devSerial + "\n"
-            msg += "\nDo you want to authorize this device with your ByteBooks ID?"
-
-            ok = question_dialog(None, "Authorize eReader", msg)
-            if not ok: 
-                return
 
 
             # Okay, if we end up here, the user wants to authorize his eReader to his current ByteBooks ID. 
@@ -437,6 +446,15 @@ class ConfigWidget(QWidget):
 
             if not ret: 
                 return error_dialog(None, "Authorize eReader", "Couldn't activate device, server returned error.", show=True, det_msg=data, show_copy_button=False)
+
+            if already_activated:
+                # The reader was already activated with another ID,
+                # so we need to remove that before storing the new one.
+                try: 
+                    os.remove(act_xml_path)
+                except: 
+                    error_dialog(None, "Authorize eReader", "Failed to remove existing authorization.", show=True, show_copy_button=False)
+                    return
 
             ret, data = exportProxyAuth(act_xml_path, data)
 
