@@ -4,7 +4,7 @@
 # Calibre plugin for ACSM files.
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 https://github.com/Leseratte10/acsm-calibre-plugin
 
@@ -194,18 +194,7 @@ class ACSMInput(FileTypePlugin):
                 traceback.print_exc()
                 pass
                 
-            self.maindir_old = os.path.join(self.pluginsdir,"DeACSM")
             self.maindir = os.path.join(self.pluginsdir,"ACSMInput")
-
-            # Do NOT try to migrate data, that just screws everything up. 
-            # If this is a fresh install of the plugin and there's no old data, 
-            # use the new path. Otherwise, if there's already data at the old location,
-            # continue to use that.
-
-            if os.path.exists(self.maindir_old):
-                # We have the old folder, continue to use that
-                self.maindir = self.maindir_old
-
 
             if not os.path.exists(self.maindir):
                 os.mkdir(self.maindir)

@@ -20,12 +20,7 @@ from calibre.utils.config import JSONConfig, config_dir  # type: ignore
 class ACSMInput_Prefs():
     def __init__(self):
 
-        JSON_PATH_OLD = os.path.join("plugins", "deacsm.json")
         JSON_PATH = os.path.join("plugins", "ACSMInput", "ACSMInput.json")
-
-        if os.path.exists(os.path.join(config_dir, JSON_PATH_OLD)):
-            # If the file exists in the old location, use that.
-            JSON_PATH = JSON_PATH_OLD
 
         self.deacsmprefs = JSONConfig(JSON_PATH)
 
@@ -45,19 +40,16 @@ class ACSMInput_Prefs():
         self.__pluginsdir = os.path.join(config_dir,"plugins")
 
         success = False
-        # Try to find an existing account folder; first in DeACSM, then in ACSMInput
-        for f in ["DeACSM", "ACSMInput"]:
-            self.__maindir = os.path.join(self.__pluginsdir, f)
-            self.__accountdir = os.path.join(self.__maindir,"account")
-            if os.path.exists(self.__accountdir):
-                self.deacsmprefs.defaults['path_to_account_data'] = self.__accountdir
-                success = True
-                break
+        # Try to find an existing account folder in ACSMInput
+        self.__maindir = os.path.join(self.__pluginsdir, "ACSMInput")
+        self.__accountdir = os.path.join(self.__maindir,"account")
+
+        if os.path.exists(self.__accountdir):
+            self.deacsmprefs.defaults['path_to_account_data'] = self.__accountdir
+            success = True
 
         if not success:
-            # We did not find an account folder. See if we can create one ...
-            self.__maindir = os.path.join(self.__pluginsdir, "ACSMInput")
-            self.__accountdir = os.path.join(self.__maindir,"account")
+            # We did not find an account folder. Creating it.
             if os.path.exists(self.__maindir):
                 os.mkdir(self.__accountdir)
                 self.deacsmprefs.defaults['path_to_account_data'] = self.__accountdir

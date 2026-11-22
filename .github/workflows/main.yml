@@ -20,7 +20,6 @@ jobs:
       - name: Compile
         run: |
           ./bundle_calibre_plugin.sh
-          ./bundle_migration_plugin.sh
 
       - name: Upload
         uses: actions/upload-artifact@v7
@@ -29,7 +28,6 @@ jobs:
           compression-level: 0
           path: |
             calibre-plugin.zip
-            calibre-migration-plugin.zip
 
   test-python:
     runs-on: ubuntu-26.04
