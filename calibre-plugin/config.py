@@ -40,11 +40,9 @@ from calibre.gui2 import (question_dialog, error_dialog, info_dialog,        # t
 from calibre.constants import isosx, iswindows, islinux                 # type: ignore
 
 # modules from this plugin's zipfile.
-from calibre_plugins.deacsm.__init__ import PLUGIN_NAME, PLUGIN_VERSION      # type: ignore
-import calibre_plugins.deacsm.prefs as prefs                                 # type: ignore
+from . import PLUGIN_NAME, PLUGIN_VERSION
+from . import prefs
 
-
-#@@CALIBRE_COMPAT_CODE@@
 
 if sys.version_info[0] == 2:
     class FileNotFoundError(Exception):
@@ -153,7 +151,7 @@ class ConfigWidget(QWidget):
         # First remove all overdue books from the loan list, 
         # to determine if we should enable the button.
 
-        from libadobeLoans import remove_overdue_books_from_list
+        from .libadobeLoans import remove_overdue_books_from_list
         self.acsmprefs.update_loan_list(remove_overdue_books_from_list)
         self.acsmprefs.writeprefs()
 
@@ -186,7 +184,7 @@ class ConfigWidget(QWidget):
         self.deauthShortcut.activated.connect(self.delete_ade_auth)
 
         try: 
-            from libadobe import update_account_path, are_ade_version_lists_valid
+            from .libadobe import update_account_path, are_ade_version_lists_valid
 
             update_account_path(self.acsmprefs["path_to_account_data"])
             self.resize(self.sizeHint())
@@ -249,8 +247,8 @@ class ConfigWidget(QWidget):
         # So just open up a folder picker dialog and have the user select the eReader's root folder. 
 
         try: 
-            from libadobe import update_account_path, VAR_VER_HOBBES_VERSIONS
-            from libadobeAccount import activateDevice, exportProxyAuth
+            from .libadobe import update_account_path, VAR_VER_HOBBES_VERSIONS
+            from .libadobeAccount import activateDevice, exportProxyAuth
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -532,8 +530,8 @@ class ConfigWidget(QWidget):
 
        
         try: 
-            from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
-            from libadobeFulfill import getDecryptedCert, is_bytebooks_account
+            from .libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
+            from .libadobeFulfill import getDecryptedCert, is_bytebooks_account
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -622,8 +620,8 @@ class ConfigWidget(QWidget):
     def export_activation(self):
 
         try: 
-            from libadobe import update_account_path
-            from libadobeAccount import getAccountUUID
+            from .libadobe import update_account_path
+            from .libadobeAccount import getAccountUUID
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -719,8 +717,8 @@ class ConfigWidget(QWidget):
             return error_dialog(None, "Import failed", "The WINEPREFIX you entered doesn't seem to contain an authorized ADE.", show=True, show_copy_button=False)
 
 
-        from libadobe import update_account_path
-        from libadobeImportAccount import importADEactivationLinuxWine
+        from .libadobe import update_account_path
+        from .libadobeImportAccount import importADEactivationLinuxWine
 
         ret, msg = importADEactivationLinuxWine(text)
 
@@ -758,8 +756,8 @@ class ConfigWidget(QWidget):
     def import_activation_from_Win(self):
         # This will try to import the activation from Digital Editions on Windows ...
 
-        from libadobe import update_account_path
-        from libadobeImportAccount import importADEactivationWindows
+        from .libadobe import update_account_path
+        from .libadobeImportAccount import importADEactivationWindows
 
         ret, msg = importADEactivationWindows()
 
@@ -802,8 +800,8 @@ class ConfigWidget(QWidget):
 
         info_dialog(None, "Importing from ADE", msg, show=True, show_copy_button=False)
 
-        from libadobe import update_account_path
-        from libadobeImportAccount import importADEactivationMac
+        from .libadobe import update_account_path
+        from .libadobeImportAccount import importADEactivationMac
 
         ret, msg = importADEactivationMac()
 
@@ -845,8 +843,8 @@ class ConfigWidget(QWidget):
         filenames = choose_files(self, "Import DE activation file (ZIP)", _("Import DE activation file (ZIP)"), 
                 filters, all_files=False, select_only_single_file=True)
 
-        from libadobe import update_account_path
-        from libadobeAccount import changeDeviceVersion
+        from .libadobe import update_account_path
+        from .libadobeAccount import changeDeviceVersion
         
         try: 
             filename = filenames[0]
@@ -934,8 +932,8 @@ class ConfigWidget(QWidget):
     def create_anon_auth(self): 
     
         try: 
-            from libadobe import createDeviceKeyFile, update_account_path
-            from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+            from .libadobe import createDeviceKeyFile, update_account_path
+            from .libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -995,8 +993,8 @@ class ConfigWidget(QWidget):
     
     def convert_anon_to_account(self): 
         try: 
-            from libadobe import update_account_path
-            from libadobeAccount import convertAnonAuthToAccount
+            from .libadobe import update_account_path
+            from .libadobeAccount import convertAnonAuthToAccount
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -1060,8 +1058,8 @@ class ConfigWidget(QWidget):
     def link_account(self):
 
         try: 
-            from libadobe import createDeviceKeyFile, update_account_path
-            from libadobeAccount import createDeviceFile, getAuthMethodsAndCert, createUser, signIn, activateDevice
+            from .libadobe import createDeviceKeyFile, update_account_path
+            from .libadobeAccount import createDeviceFile, getAuthMethodsAndCert, createUser, signIn, activateDevice
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -1154,8 +1152,8 @@ class ConfigWidget(QWidget):
     def export_key(self):
 
         try: 
-            from libadobe import update_account_path
-            from libadobeAccount import exportAccountEncryptionKeyDER, getAccountUUID
+            from .libadobe import update_account_path
+            from .libadobeAccount import exportAccountEncryptionKeyDER, getAccountUUID
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -1220,7 +1218,7 @@ class RentedBooksDialog(QDialog):
         self.setWindowTitle("ACSM Input: Manage loaned Books")
         self.acsmprefs = prefs.ACSMInput_Prefs()
 
-        from libadobeLoans import remove_overdue_books_from_list
+        from .libadobeLoans import remove_overdue_books_from_list
         self.acsmprefs.update_loan_list(remove_overdue_books_from_list)
         self.acsmprefs.writeprefs()
 
@@ -1327,7 +1325,7 @@ class RentedBooksDialog(QDialog):
 
 
         try: 
-            from libadobeFulfill import tryReturnBook
+            from .libadobeFulfill import tryReturnBook
         except: 
             print("{0} v{1}: Error while importing book return stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()

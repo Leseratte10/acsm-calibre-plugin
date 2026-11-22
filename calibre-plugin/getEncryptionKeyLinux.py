@@ -10,19 +10,17 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-#@@CALIBRE_COMPAT_CODE@@
-
 import binascii, traceback
 
 def GetMasterKey(wineprefix, use_bytebooks = None):
     # use_bytebooks: True / False makes the helper decrypt the ByteBooks / Adobe device key,
     # so it matches the activation that's being imported. None keeps the old behaviour
     # (ByteBooks if BDE has a device key, otherwise Adobe).
-    import subprocess, os, re
+    import subprocess, os, re, shutil, tempfile
 
     verbose_logging = False
     try: 
-        import calibre_plugins.deacsm.prefs as prefs
+        from . import prefs
         acsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = acsmprefs["detailed_logging"]
     except:
@@ -61,14 +59,9 @@ def GetMasterKey(wineprefix, use_bytebooks = None):
     #env_dict["WINEDEBUG"] = "-all,+crypt"
     env_dict["WINEDEBUG"] = "+err,+fixme"
 
-    try: 
-        from calibre.utils.config import config_dir
-        moddir = os.path.join(config_dir, "plugins", "ACSMInput", "modules")
-    except ImportError: 
-        import os
-        moddir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "keyextract")
+    # The helper goes into a new temporary folder, which is deleted again once Wine has run it.
+    helper_dir = tempfile.mkdtemp(prefix="acsm_input_")
 
-    
     # extract the EXE file from Python code:
     # EXE files are obfuscated with base64 so that stupid AV programs
     # don't flag this whole plugin as malicious. 
@@ -76,16 +69,16 @@ def GetMasterKey(wineprefix, use_bytebooks = None):
 
     try: 
         print("Extracting WINE key tools ...")
-        from keyextractDecryptor import get_win32_data, get_win64_data
+        from .keyextractDecryptor import get_win32_data, get_win64_data
 
         if winearch == "win32":
-            file32 = os.path.join(moddir, "decrypt_win32.exe")
+            file32 = os.path.join(helper_dir, "decrypt_win32.exe")
             f = open(file32, "wb")
             f.write(get_win32_data())
             f.close()
 
         elif winearch == "win64":
-            file64 = os.path.join(moddir, "decrypt_win64.exe")
+            file64 = os.path.join(helper_dir, "decrypt_win64.exe")
             f = open(file64, "wb")
             f.write(get_win64_data())   
             f.close()
@@ -102,8 +95,11 @@ def GetMasterKey(wineprefix, use_bytebooks = None):
     if use_bytebooks is not None:
         helper_cmd.append("bytebooks" if use_bytebooks else "adobe")
 
-    proc = subprocess.Popen(helper_cmd, shell=False, cwd=moddir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env_dict)
-    prog_stdout, prog_stderr = proc.communicate()
+    try:
+        proc = subprocess.Popen(helper_cmd, shell=False, cwd=helper_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env_dict)
+        prog_stdout, prog_stderr = proc.communicate()
+    finally:
+        shutil.rmtree(helper_dir, ignore_errors=True)
 
     if verbose_logging:
         print("Stderr log:\n{}".format(prog_stderr.decode("utf-8")))

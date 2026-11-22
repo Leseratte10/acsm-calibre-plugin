@@ -106,13 +106,11 @@ from calibre.utils.lock import singleinstance       # type: ignore
 try:
     from calibre.utils.lock import SingleInstance       # type: ignore
 except:
-    from calibre_plugins.deacsm.singleinstance_helper import SingleInstance     # type: ignore
+    from .singleinstance_helper import SingleInstance
 
 import os, shutil, traceback, sys, time, io
 import zipfile
 from lxml import etree
-
-#@@CALIBRE_COMPAT_CODE@@
 
 class ACSMInput(FileTypePlugin):
     name                        = PLUGIN_NAME
@@ -134,7 +132,7 @@ class ACSMInput(FileTypePlugin):
         Calibre into believing that there's actually a 2nd plugin.
         """
         from calibre.customize.ui import _initialized_plugins       # type: ignore
-        from calibre_plugins.deacsm.gui_main_wrapper import ACSMInputGUIExtension       # type: ignore
+        from .gui_main_wrapper import ACSMInputGUIExtension
 
         def init_plg(plg_type):
             for plugin in _initialized_plugins:
@@ -207,11 +205,11 @@ class ACSMInput(FileTypePlugin):
 
             
 
-            from libadobe import update_account_path
-            from libadobeAccount import changeDeviceVersion
+            from .libadobe import update_account_path
+            from .libadobeAccount import changeDeviceVersion
 
 
-            import calibre_plugins.deacsm.prefs as prefs     # type: ignore
+            from . import prefs
             acsmprefs = prefs.ACSMInput_Prefs()
             update_account_path(acsmprefs["path_to_account_data"])
             # This is needed to correctly update to an emulated ByteBooks Digital Edition 5.0 for older activations.
@@ -230,14 +228,14 @@ class ACSMInput(FileTypePlugin):
         return True
 
     def config_widget(self):
-        import calibre_plugins.deacsm.config as config   # type: ignore
+        from . import config
         return config.ConfigWidget(self.plugin_path)
 
     def save_settings(self, config_widget):
         config_widget.save_settings()
 
     def ADE_sanity_check(self):
-        from libadobe import get_activation_xml_path
+        from .libadobe import get_activation_xml_path
 
         container = None
         try: 
@@ -258,7 +256,7 @@ class ACSMInput(FileTypePlugin):
                 return False
 
             try:  
-                from libadobeFulfill import getDecryptedCert
+                from .libadobeFulfill import getDecryptedCert
                 if getDecryptedCert() is None:
                     print("ADE sanity check: Can't decrypt pkcs12")
                     return False
@@ -275,9 +273,9 @@ class ACSMInput(FileTypePlugin):
         # type: (str) -> str
 
 
-        from libadobe import sendHTTPRequest_DL2FILE
-        from libadobeFulfill import buildRights
-        from libpdf import patch_drm_into_pdf
+        from .libadobe import sendHTTPRequest_DL2FILE
+        from .libadobeFulfill import buildRights
+        from .libpdf import patch_drm_into_pdf
 
 
         adobe_fulfill_response = etree.fromstring(replyData)
@@ -406,7 +404,7 @@ class ACSMInput(FileTypePlugin):
 
             # We need to check if it's an ACSM file
 
-            import calibre_plugins.deacsm.prefs as prefs     # type: ignore
+            from . import prefs
             acsmprefs = prefs.ACSMInput_Prefs()
 
             print("{0} v{1}: Trying to parse file {2}".format(PLUGIN_NAME, PLUGIN_VERSION, os.path.basename(path_to_ebook)))
@@ -424,8 +422,8 @@ class ACSMInput(FileTypePlugin):
                 return path_to_ebook
 
 
-            from libadobe import are_ade_version_lists_valid
-            from libadobeFulfill import fulfill
+            from .libadobe import are_ade_version_lists_valid
+            from .libadobeFulfill import fulfill
 
             if not are_ade_version_lists_valid():
                 print("{0} v{1}: ADE version list mismatch, please open a bug report.".format(PLUGIN_NAME, PLUGIN_VERSION))

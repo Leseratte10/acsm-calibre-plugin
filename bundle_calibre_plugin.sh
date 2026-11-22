@@ -57,19 +57,6 @@ rm -f *.pyc
 cp ../LICENSE LICENSE
 cp ../README.md README.md
 
-echo "Injecting Python2 compat code ..."
-find . -name '*.py' | while read -r file;
-do
-    #echo $file
-    # Inject Python2 compat code:
-    sed_i '/#@@CALIBRE_COMPAT_CODE@@/ {
-        r __calibre_compat_code.py
-        d
-    }' "$file"
-
-done
-
-
 # Create ZIP file from calibre-plugin folder.
 rm -f ../calibre-plugin.zip
 zip -r ../calibre-plugin.zip *

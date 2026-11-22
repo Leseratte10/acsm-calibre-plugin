@@ -24,9 +24,9 @@ from lxml import etree
 
 
 
-import libadobe             # type: ignore
-import libadobeFulfill      # type: ignore
-import libadobeImportAccount    # type: ignore
+from acsm_input import libadobe             # type: ignore
+from acsm_input import libadobeFulfill      # type: ignore
+from acsm_input import libadobeImportAccount    # type: ignore
 
 
 class TestAccountImport(unittest.TestCase):
@@ -126,7 +126,7 @@ class TestAccountImport(unittest.TestCase):
 
             libadobe.update_account_path(account_dir)
 
-            with patch("getEncryptionKeyLinux.GetMasterKey", return_value=bytes(bytearray([0x02] * 16))):
+            with patch("acsm_input.getEncryptionKeyLinux.GetMasterKey", return_value=bytes(bytearray([0x02] * 16))):
                 success, msg = libadobeImportAccount.importADEactivationLinuxWine(wine_prefix)
 
             self.assertTrue(success, "Wine import failed: %s" % (msg))
@@ -182,7 +182,7 @@ class TestAccountImport(unittest.TestCase):
                 f.close()
 
                 # Without a key the import stops right after asking for it, which is all this test needs.
-                with patch("getEncryptionKeyLinux.GetMasterKey", return_value=None) as get_master_key:
+                with patch("acsm_input.getEncryptionKeyLinux.GetMasterKey", return_value=None) as get_master_key:
                     success, msg = libadobeImportAccount.importADEactivationLinuxWine(temp_dir)
 
                 self.assertFalse(success, "Import without a device key should fail")

@@ -32,10 +32,10 @@ except ImportError:
     from Crypto.PublicKey import RSA            # type: ignore
     from Crypto.Cipher import PKCS1_v1_5        # type: ignore
 
-import libadobe             # type: ignore
-import libadobeAccount      # type: ignore
-import libadobeFulfill      # type: ignore
-from customRSA import CustomRSA # type: ignore
+from acsm_input import libadobe             # type: ignore
+from acsm_input import libadobeAccount      # type: ignore
+from acsm_input import libadobeFulfill      # type: ignore
+from acsm_input.customRSA import CustomRSA # type: ignore
 
 
 class TestAdobe(unittest.TestCase): 
@@ -103,7 +103,7 @@ class TestAdobe(unittest.TestCase):
         self.assertEqual(libadobe.makeFingerprint("HelloWorld123"),                            b"hpp223C1kfLDOoyxo8WR7KhcXB8=", "Wrong fingerprint")
 
 
-    @patch("libadobe.Random")
+    @patch("acsm_input.libadobe.Random")
     def test_deviceKeyEncryption(self, random):
         '''Check if encryption with the device key works'''
 

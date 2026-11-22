@@ -42,16 +42,10 @@ except ImportError:
     from Crypto.Hash import SHA
 
 
-#@@CALIBRE_COMPAT_CODE@@
+from .customRSA import CustomRSA
 
-
-from customRSA import CustomRSA
-
-try: 
-    from customcrypto.customcrypto import keys
-    from customcrypto.customcrypto.asymmetric import dump_certificate, dump_private_key
-except: 
-    pass
+from .customcrypto.customcrypto import keys
+from .customcrypto.customcrypto.asymmetric import dump_certificate, dump_private_key
 
 
 VAR_ACS_SERVER_HTTPS = "https://activate.dtsbytebooks.com/adept"

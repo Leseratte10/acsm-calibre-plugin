@@ -20,8 +20,8 @@ from lxml import etree
 
 
 
-import libadobeLoans        # type: ignore
-import libadobeFulfill      # type: ignore
+from acsm_input import libadobeLoans        # type: ignore
+from acsm_input import libadobeFulfill      # type: ignore
 
 
 

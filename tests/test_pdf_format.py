@@ -15,7 +15,7 @@ sys.path.append("../calibre-plugin")
 
 
 import unittest
-from libpdf import trim_encrypt_string, cleanup_encrypt_element, deflate_and_base64_encode  # type: ignore
+from acsm_input.libpdf import trim_encrypt_string, cleanup_encrypt_element, deflate_and_base64_encode  # type: ignore
 
 
 class TestPDFFormat(unittest.TestCase):
