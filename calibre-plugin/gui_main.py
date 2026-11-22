@@ -110,12 +110,16 @@ class ActualACSMInputGUIExtension(InterfaceAction):
         from calibre.gui2 import info_dialog
         acsmprefs = prefs.ACSMInput_Prefs()
 
-        from calibre_plugins.deacsm.config import RentedBooksDialog # type: ignore
-        RentedBooksDialog.remove_overdue_books_from_list()
+        # Cleanup the loan list so we can show an info popup if there is none,
+        # instead of opening the full dialog.
+        from libadobeLoans import remove_overdue_books_from_list
+        acsmprefs.update_loan_list(remove_overdue_books_from_list)
+        acsmprefs.writeprefs()
 
         if (len(acsmprefs["list_of_rented_books"]) == 0):
             return info_dialog(None, "No loaned books", "You currently have no loaned books.", show=True, show_copy_button=False)
 
+        from calibre_plugins.deacsm.config import RentedBooksDialog # type: ignore
         d = RentedBooksDialog(self.gui)
         d.exec_()
         

@@ -20,6 +20,7 @@ from lxml import etree
 
 
 
+import libadobeLoans        # type: ignore
 import libadobeFulfill      # type: ignore
 
 
@@ -61,6 +62,37 @@ class TestPluginInterface(unittest.TestCase):
         finally: 
             if source_date_epoch_old is not None: 
                 os.environ['SOURCE_DATE_EPOCH'] = source_date_epoch_old
+
+
+    @freeze_time("2022-07-01 07:34:32.000000")
+    def test_loanListTimeManagementCorrect(self):
+        '''Check if timestamps for book loans are handled correctly'''
+
+        book_not_expired = [
+            {
+                "book_name": "Book title for test",
+                "device": 'urn:uuid:83681cbb-b6df-44a3-a423-c2b37ba66e84',
+                "user": 'urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa',
+                "operatorURL": 'https://acs.example.com/fulfillment',
+                "loanID": '34659b20-92c8-4004-9fd8-c5174e7eed47-00010214',
+                "validUntil": '2022-07-01T07:36:00Z', 
+                "useByteBooks": True
+            }
+        ]
+
+        book_expired = [
+            {
+                "book_name": "Book title for test",
+                "device": 'urn:uuid:83681cbb-b6df-44a3-a423-c2b37ba66e84',
+                "user": 'urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa',
+                "operatorURL": 'https://acs.example.com/fulfillment',
+                "loanID": '34659b20-92c8-4004-9fd8-c5174e7eed47-00010214',
+                "validUntil": '2022-07-01T07:32:00Z', 
+                "useByteBooks": True
+            }
+        ]
+        self.assertEqual(libadobeLoans.remove_overdue_books_from_list(book_not_expired), book_not_expired)
+        self.assertEqual(libadobeLoans.remove_overdue_books_from_list(book_expired), [])
 
 
     def test_loanReturnFulfillmentID(self): 

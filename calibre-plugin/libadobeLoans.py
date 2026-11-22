@@ -1,0 +1,22 @@
+import datetime
+
+def remove_overdue_books_from_list(loan_list):
+    # Delete rented books that are overdue: 
+    templist = []
+
+    for book in loan_list:
+        try: 
+            book_time_stamp = book["validUntil"]
+            timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%SZ")
+            currenttime = datetime.datetime.utcnow()
+
+        except: 
+            # Invalid book timestamp
+            timestamp = 0
+
+
+        if (timestamp == 0 or currenttime < timestamp):
+            # Book still valid, keep it on the list.
+            templist.append(book)
+        
+    return templist

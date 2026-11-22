@@ -56,15 +56,6 @@ class ConfigWidget(QWidget):
         # get the prefs
         self.acsmprefs = prefs.ACSMInput_Prefs()
 
-        # make a local copy
-        self.tempacsmprefs = {}
-        self.tempacsmprefs['path_to_account_data'] = self.acsmprefs['path_to_account_data']
-
-        self.tempacsmprefs['notify_fulfillment'] = self.acsmprefs['notify_fulfillment']
-        self.tempacsmprefs['detailed_logging'] = self.acsmprefs['detailed_logging']
-        self.tempacsmprefs['delete_acsm_after_fulfill'] = self.acsmprefs['delete_acsm_after_fulfill']
-
-        self.tempacsmprefs['list_of_rented_books'] = self.acsmprefs['list_of_rented_books']
 
         # Start Qt Gui dialog layout
         layout = QVBoxLayout(self)
@@ -157,27 +148,31 @@ class ConfigWidget(QWidget):
 
         # First remove all overdue books from the loan list, 
         # to determine if we should enable the button.
-        RentedBooksDialog.remove_overdue_books_from_list()
 
-        if (len(self.tempacsmprefs["list_of_rented_books"]) == 0):
+        from libadobeLoans import remove_overdue_books_from_list
+        self.acsmprefs.update_loan_list(remove_overdue_books_from_list)
+        self.acsmprefs.writeprefs()
+
+
+        if (len(self.acsmprefs["list_of_rented_books"]) == 0):
             self.button_rented_books.setText(_("No loaned books available"))
             self.button_rented_books.setEnabled(False)
 
 
         self.chkNotifyFulfillment = QtGui.QCheckBox("Notify CS server after successful fulfillment")
         self.chkNotifyFulfillment.setToolTip("Default: True\n\nIf this is enabled, the CS server will receive a notification once the ACSM has successfully been converted. \nThis is not strictly necessary, but it is what ADE does, so it's probably safer to just do it as well.\nAlso, it is required to be able to return loaned books.")
-        self.chkNotifyFulfillment.setChecked(self.tempacsmprefs["notify_fulfillment"])
+        self.chkNotifyFulfillment.setChecked(self.acsmprefs["notify_fulfillment"])
         layout.addWidget(self.chkNotifyFulfillment)
 
         self.chkDetailedLogging = QtGui.QCheckBox("Enable verbose debug logging")
         self.chkDetailedLogging.setToolTip("Default: False\n\nIf this is enabled, the plugin debug logs will be more verbose which might be helpful in case of errors.\nHowever, it will also mean that private data like encryption keys or account credentials might end up in the logfiles.")
-        self.chkDetailedLogging.setChecked(self.tempacsmprefs["detailed_logging"])
+        self.chkDetailedLogging.setChecked(self.acsmprefs["detailed_logging"])
         self.chkDetailedLogging.toggled.connect(self.toggle_logging)
         layout.addWidget(self.chkDetailedLogging)
 
         self.chkDeleteAfterFulfill = QtGui.QCheckBox("Delete ACSM file after successful import")
         self.chkDeleteAfterFulfill.setToolTip("Default: False\n\nIf this is enabled, imported ACSM files will be automatically deleted after they've been converted into an EPUB or PDF. \nNote: This is experimental. It is possible that the ACSM will also be deleted if there's errors during import. \nIf you have an important ACSM file that you can't re-download if needed, do not enable this option.")
-        self.chkDeleteAfterFulfill.setChecked(self.tempacsmprefs["delete_acsm_after_fulfill"])
+        self.chkDeleteAfterFulfill.setChecked(self.acsmprefs["delete_acsm_after_fulfill"])
         self.chkDeleteAfterFulfill.toggled.connect(self.toggle_acsm_delete)
         layout.addWidget(self.chkDeleteAfterFulfill)
 
@@ -1169,49 +1164,16 @@ class ConfigWidget(QWidget):
 
 class RentedBooksDialog(QDialog):
 
-    @staticmethod
-    def remove_overdue_books_from_list():
-        # Delete rented books that are overdue: 
-        overdue_books = []
-
-        acsmprefs = prefs.ACSMInput_Prefs()
-
-        for book in acsmprefs["list_of_rented_books"]:
-            try: 
-                book_time_stamp = book["validUntil"]
-                timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%SZ")
-                currenttime = datetime.datetime.utcnow()
-            except: 
-                # Invalid book timestano
-                continue
-
-            if (timestamp <= currenttime):
-                # Book is overdue, no need to return. Delete from list.
-                overdue_books.append(book)
-                continue
-
-        templist = acsmprefs["list_of_rented_books"]
-
-        for book in overdue_books:
-            templist.remove(book)
-
-        acsmprefs.set("list_of_rented_books", templist)
-        acsmprefs.writeprefs()
-
-
-
-
     def __init__(self, parent):
         QDialog.__init__(self,parent)
         self.parent = parent
 
-        
-
         self.setWindowTitle("ACSM Input: Manage loaned Books")
         self.acsmprefs = prefs.ACSMInput_Prefs()
 
-        # Delete rented books that are overdue: 
-        RentedBooksDialog.remove_overdue_books_from_list()
+        from libadobeLoans import remove_overdue_books_from_list
+        self.acsmprefs.update_loan_list(remove_overdue_books_from_list)
+        self.acsmprefs.writeprefs()
 
         # Start Qt Gui dialog layout
         layout = QVBoxLayout(self)
@@ -1286,11 +1248,12 @@ class RentedBooksDialog(QDialog):
                 book_time_stamp = book["validUntil"]
                 timestamp = datetime.datetime.strptime(book_time_stamp, "%Y-%m-%dT%H:%M:%SZ")
                 currenttime = datetime.datetime.utcnow()
+
+                info = "(" + self.td_format(timestamp - currenttime) + " remaining)"
             except: 
                 # Invalid book timestamp
-                continue
+                info = "(unknown time remaining)"
 
-            info = "(" + self.td_format(timestamp - currenttime) + " remaining)"
 
             book_name = book["book_name"]
             if book_name is None: 
@@ -1344,18 +1307,7 @@ class RentedBooksDialog(QDialog):
         userdata = str(self.listy.currentItem().data(QtCore.Qt.UserRole))
         print("Deleting book entry %s (ID %s)" % (self.listy.currentItem().text(), userdata))
 
-        success = False
-        done = False
-        templist = self.acsmprefs["list_of_rented_books"]
-        while not done:
-            done = True 
-            for book in templist:
-                if book["loanID"] == userdata:
-                    done = False
-                    templist.remove(book)
-                    success = True
-                    break
-        self.acsmprefs.set("list_of_rented_books", templist)
+        success = self.acsmprefs.remove_loan(userdata)
 
         self.populate_list()
 
