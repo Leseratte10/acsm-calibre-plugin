@@ -367,8 +367,8 @@ class TestAdobe(unittest.TestCase):
 
         self.assertEqual(signature, expected_signature, "CustomRSA node hash signing method is broken")
 
-    def test_pkcs12_extract(self): 
-        '''Check if oscrypto can extract pkcs12'''
+    def test_pkcs12_extract_with_oscrypto(self): 
+        '''Check if oscrypto (unused) can extract pkcs12'''
 
         from oscrypto import keys
         from oscrypto.asymmetric import dump_certificate, dump_private_key
@@ -380,6 +380,38 @@ class TestAdobe(unittest.TestCase):
         # I don't like having to import two external libraries just to extract pkcs12 data,
         # but I didn't find a proper Python-only solution for this, 
         # and I didn't want to implement OpenSSL interfaces on my own.
+
+        privkey, cert, _ = keys.parse_pkcs12(base64.b64decode(mock_p12_data), mock_p12_password)
+        cert = dump_certificate(cert, encoding="der")
+        privkey = dump_private_key(privkey, None, "der")
+
+        # privkey now is in PKCS#8 format. That's a wrapper around the actual PKCS#1 key. 
+        # See https://tls.mbed.org/kb/cryptography/asn1-key-structures-in-der-and-pem for details.
+        # Throw away the PKCS#8 wrapper: 
+        privkey = privkey[26:]
+
+        # Verify result:
+        dummy_cert_data = base64.b64decode("MIICLjCCAZegAwIBAgIUI48XmtNFINg1znympL1l1SmSYnMwDQYJKoZIhvcNAQELBQAwKTELMAkGA1UEBhMCVVMxGjAYBgNVBAMMEURlQUNTTSB1bml0IHRlc3RzMB4XDTIxMTIxOTE0MzUyMVoXDTIxMTIyOTE0MzUyMVowKTELMAkGA1UEBhMCVVMxGjAYBgNVBAMMEURlQUNTTSB1bml0IHRlc3RzMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDCic4kj2kdZxLjW00l8to9hV4+gWAPJFhgvG2Io6pDR/rA1cPAR3Pu4Q4/cwab/gwmCXnnmeQwy3TyzmyCZj9tnBFeNfDsnq0TxoRoTdr0bWv0pGy1uBQ90jZVc85v2whmC9lSigueY4GlR5rOIlNsiuKBWBl/CN/6X3PaYkv04QIDAQABo1MwUTAdBgNVHQ4EFgQUiG9zxWck82kn+BoVp3So+p6tFc8wHwYDVR0jBBgwFoAUiG9zxWck82kn+BoVp3So+p6tFc8wDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOBgQCpLSNaGDRNMGAzbTtUbyWzbvgT2+hcOaqr8+fyCWtUxZ1FiPIKZEcQRQOuqZZpWft5QJSYBZ2oc3O6NFU5VrBi5UI3rTqr2S97PiJCiR4Jt1vAcpXVy6qcEjTswdpipdsN4RSeiztYk4xoqYztPoiqKJgq9nOzuXFnDKrrrMo+5w==")
+        dummy_key_data = base64.b64decode("MIICXQIBAAKBgQDCic4kj2kdZxLjW00l8to9hV4+gWAPJFhgvG2Io6pDR/rA1cPAR3Pu4Q4/cwab/gwmCXnnmeQwy3TyzmyCZj9tnBFeNfDsnq0TxoRoTdr0bWv0pGy1uBQ90jZVc85v2whmC9lSigueY4GlR5rOIlNsiuKBWBl/CN/6X3PaYkv04QIDAQABAoGAI2CIGmHyDaTG7I2X9AS752AviVJhs586ay0ZBjYtKlsWoKa/GGJmFNTckHFMjGWgs/IZNyLnOnBlbhpX5UbO1cB7r9Vk1Q3fbIeQdBySyqOG9JfZxd0n4bBSHnopL0naGA0CpSv/tVaUr0BzvNYslw5rcwVinEbGVPP6JNNqbqECQQD1Igbf2qxMHcdEA81qMdExFGmlq61W7gpKtl7XwPhtHIiXyhQsT7M996ZF64EJVg/2/6gQneZ/awJ0Aw8xDkJdAkEAyymWou2v6wPtX+X0hnXnK6OfeEfZGnExE4LpEjNTiQriabvwmCQcgHFBLxKN+C4uVK5HBlHug3jtN0jozSjcVQJBAI+ynLkJJUuRgUhbukTwYyMURkI5+2kkLaBSfBKaKoc73M6uRVkcd4Rx8mS2g3QHoWA3yjvDdGVpQ4ziZjtpknkCQQC2FSsGEYM2Xgm0hlO24xrx+K7nTXWeBk7WzuB3SHsY+yFbZG7I3KySzW5/cuC8yx8JFD1hw7LCMHJitzy3C2UVAkAQGY8PQ9u40krQekUI+imFsPSPdMZqfMKJDLwrXx0mmElUYYZBGtY0q781UYP4GArtwyusDelk6BNjVRjiWUhg")
+
+        self.assertEqual(cert, dummy_cert_data, "p12 cert invalid after extraction")
+        self.assertEqual(privkey, dummy_key_data, "p12 key invalid after extraction")
+
+    def test_pkcs12_extract_with_customcrypto(self): 
+        '''Check if customcrypto can extract pkcs12'''
+
+        try: 
+            from customcrypto.customcrypto import keys
+            from customcrypto.customcrypto.asymmetric import dump_certificate, dump_private_key
+        except:
+            try: 
+                from customcrypto import keys
+                from customcrypto.asymmetric import dump_certificate, dump_private_key
+            except:
+                return self.skipTest("customcrypto not found")
+
+        mock_p12_data = "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"
+        mock_p12_password = base64.b64encode(b"1234")
 
         privkey, cert, _ = keys.parse_pkcs12(base64.b64decode(mock_p12_data), mock_p12_password)
         cert = dump_certificate(cert, encoding="der")
