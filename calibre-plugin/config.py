@@ -95,19 +95,19 @@ class ConfigWidget(QWidget):
 
             if isosx:
                 self.button_import_MacADE = QtGui.QPushButton(self)
-                self.button_import_MacADE.setText(_("Import activation from ADE (MacOS)"))
+                self.button_import_MacADE.setText(_("Import activation from Digital Editions (MacOS)"))
                 self.button_import_MacADE.clicked.connect(self.import_activation_from_MAC)
                 ua_group_box_layout.addWidget(self.button_import_MacADE)
 
             if iswindows:
                 self.button_import_WinADE = QtGui.QPushButton(self)
-                self.button_import_WinADE.setText(_("Import activation from ADE (Windows)"))
+                self.button_import_WinADE.setText(_("Import activation from Digital Editions (Windows)"))
                 self.button_import_WinADE.clicked.connect(self.import_activation_from_Win)
                 ua_group_box_layout.addWidget(self.button_import_WinADE)
 
             if islinux:
                 self.button_import_LinuxWineADE = QtGui.QPushButton(self)
-                self.button_import_LinuxWineADE.setText(_("Import activation from ADE (Wine)"))
+                self.button_import_LinuxWineADE.setText(_("Import activation from Digital Editions (Wine)"))
                 self.button_import_LinuxWineADE.clicked.connect(self.import_activation_from_LinuxWine)
                 ua_group_box_layout.addWidget(self.button_import_LinuxWineADE)
 
@@ -656,6 +656,9 @@ class ConfigWidget(QWidget):
 
                 if line.strip().startswith("[Software\\\\Adobe\\\\Adept\\\\Activation\\\\0000"):
                     return True
+
+                if line.strip().startswith("[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\0000"):
+                    return True
         
         except:
             print("Exception while validating WINEPREFIX:")
@@ -664,9 +667,9 @@ class ConfigWidget(QWidget):
         return False
 
     def import_activation_from_LinuxWine(self):
-        # This will try to import the activation from Adobe Digital Editions on Linux / Wine ...
+        # This will try to import the activation from Digital Editions on Linux / Wine ...
 
-        msg = "Trying to import existing activation from Adobe Digital Editions in WINE ...\n"
+        msg = "Trying to import existing activation from Digital Editions in WINE ...\n"
         msg += "Note: Importing the activation can take up to 30 seconds, and Calibre will appear to be \"stuck\" during that time.\n\n"
         msg += "Please enter the full, absolute path to your WINEPREFIX."
         msg += "If there's already a path in the input box, it is usually (but not always) the correct one."
@@ -737,7 +740,7 @@ class ConfigWidget(QWidget):
 
 
     def import_activation_from_Win(self):
-        # This will try to import the activation from Adobe Digital Editions on Windows ...
+        # This will try to import the activation from Digital Editions on Windows ...
 
         from libadobe import update_account_path
         from libadobeImportAccount import importADEactivationWindows
@@ -775,9 +778,9 @@ class ConfigWidget(QWidget):
             error_dialog(None, "Import failed", "That didn't work:\n" + msg, show=True, show_copy_button=False)
 
     def import_activation_from_MAC(self):
-        # This will try to import the activation from Adobe Digital Editions on MacOS ...
+        # This will try to import the activation from Digital Editions on MacOS ...
 
-        msg = "Trying to import existing activation from Adobe Digital Editions ...\n"
+        msg = "Trying to import existing activation from Digital Editions ...\n"
         msg += "You might get a prompt asking you to unlock your keychain / enter your keychain password.\n"
         msg += "This is necessary to extract the ADE encryption keys. "
 

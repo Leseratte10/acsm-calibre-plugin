@@ -14,7 +14,10 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 import sys, binascii, traceback
 
-def GetMasterKey(wineprefix): 
+def GetMasterKey(wineprefix, use_bytebooks = None):
+    # use_bytebooks: True / False makes the helper decrypt the ByteBooks / Adobe device key,
+    # so it matches the activation that's being imported. None keeps the old behaviour
+    # (ByteBooks if BDE has a device key, otherwise Adobe).
     import subprocess, os, re
 
     verbose_logging = False
@@ -95,7 +98,11 @@ def GetMasterKey(wineprefix):
         traceback.print_exc()
 
     # calls decrypt_win32.exe or decrypt_win64.exe
-    proc = subprocess.Popen(["wine", "decrypt_" + winearch + ".exe"], shell=False, cwd=moddir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env_dict)
+    helper_cmd = ["wine", "decrypt_" + winearch + ".exe"]
+    if use_bytebooks is not None:
+        helper_cmd.append("bytebooks" if use_bytebooks else "adobe")
+
+    proc = subprocess.Popen(helper_cmd, shell=False, cwd=moddir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env_dict)
     prog_stdout, prog_stderr = proc.communicate()
 
     if verbose_logging:
