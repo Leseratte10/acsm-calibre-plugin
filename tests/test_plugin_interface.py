@@ -125,7 +125,8 @@ class TestPluginInterface(unittest.TestCase):
             "user": 'urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa',
             "operatorURL": 'https://acs.example.com/fulfillment',
             "loanID": '34659b20-92c8-4004-9fd8-c5174e7eed47-00010214',
-            "validUntil": '2022-07-03T01:14:42Z'
+            "validUntil": '2022-07-03T01:14:42Z', 
+            "useByteBooks": True
         }
 
         self.assertEqual(extracted_token, expected_token, "Loan record generator broken")

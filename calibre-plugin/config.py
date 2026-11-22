@@ -520,7 +520,7 @@ class ConfigWidget(QWidget):
        
         try: 
             from libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
-            from libadobeFulfill import getDecryptedCert
+            from libadobeFulfill import getDecryptedCert, is_bytebooks_account
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -568,16 +568,36 @@ class ConfigWidget(QWidget):
             if container.find(adeptNS("activationToken")) == None:
                 return "ADE authorization seems to be corrupted (activationToken missing)", False, None
 
-            if container.find(adeptNS("credentials")).find(adeptNS("pkcs12")) == None:
-                return "ADE authorization seems to be corrupted (pkcs12 missing)", False, None
+            if is_bytebooks_account():
+                acc_type = "ByteBooks"
+            else: 
+                acc_type = "Adobe"
 
-            if getDecryptedCert() is None: 
-                return "ADE authorization seems to be corrupted (failed to decrypt pkcs12)", False, None            
+            if getDecryptedCert(None, acc_type == "ByteBooks") is None:
+                return "ADE authorization seems to be corrupted (failed to decrypt pkcs12)", False, None
+
 
             if not anon: 
-                return "Authorized with ADE ID ("+ade_type+") " + ade_mail + "\non device " + ade_device_name + ", emulating " + ADE_version + ".", True, ade_mail
+                ade_type_str = " (" + ade_type + ")"
+                if ade_type == "AdobeID":
+                    ade_type_str = ""
+
+                display_str = "Authorized with "+ acc_type +" ID"+ade_type_str + " " + ade_mail + "\non device " + ade_device_name + ", emulating " + ADE_version + "."
+
+                if acc_type != "ByteBooks":
+                    display_str += "\n\nNote: Your authorization still uses the old Adobe format, not the new ByteBooks format."
+                    display_str += "\nYou will run into issues downloading books from any server running CS7 or newer."
+                    display_str += "\nPlease remove your authorization by pressing Ctrl+Shift+D, then re-authorize with a ByteBooks ID."
+
+                return display_str, True, ade_mail
             else: 
-                return "Authorized with an anonymous ADE ID\non device " + ade_device_name + ", emulating " + ADE_version + ".", True, None
+                display_str = "Authorized with an anonymous "+acc_type+" ID\non device " + ade_device_name + ", emulating " + ADE_version + "."
+                if acc_type != "ByteBooks":
+                    display_str += "\n\nNote: Your authorization still uses the old Adobe format, not the new ByteBooks format."
+                    display_str += "\nYou will run into issues downloading books from any server running CS7 or newer."
+                    display_str += "\nPlease remove your authorization by pressing Ctrl+Shift+D, then re-authorize."
+                
+                return display_str, True, None
         except: 
             traceback.print_exc()
             return "ADE authorization seems to be corrupted", False, None
@@ -889,7 +909,7 @@ class ConfigWidget(QWidget):
                         
         createDeviceKeyFile()
         createDeviceFile(False, 0)
-        success, resp = createUser(0, None)
+        success, resp = createUser(0, None, None)
         if (success is False):
             return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 
@@ -1006,7 +1026,7 @@ class ConfigWidget(QWidget):
 
 
         # Get account types
-        types, authCert = getAuthMethodsAndCert()
+        types, authCert_bb, authCert_adobe = getAuthMethodsAndCert()
         
         msg = "Please select your ID provider (usually ByteBooks ID)"
 
@@ -1035,7 +1055,7 @@ class ConfigWidget(QWidget):
                 
         createDeviceKeyFile()
         createDeviceFile(False, vers_idx)
-        success, resp = createUser(vers_idx, authCert)
+        success, resp = createUser(vers_idx, authCert_bb, authCert_adobe)
         if (success is False):
             return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
 

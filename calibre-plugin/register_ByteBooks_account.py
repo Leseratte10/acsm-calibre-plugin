@@ -48,7 +48,7 @@ def main():
         print("Error, couldn't create device file.")
         exit(1)
 
-    success, resp = createUser(0, None)
+    success, resp = createUser(0, None, None)
     if (success is False):
         print("Error, couldn't create user: %s" % resp)
         exit(1)

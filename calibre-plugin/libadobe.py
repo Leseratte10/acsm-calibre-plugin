@@ -536,7 +536,7 @@ def get_cert_from_pkcs12(_pkcs12, _key):
 
 
 
-def sign_node(node):
+def sign_node(node, prefer_bytebooks):
 
     sha_hash = hash_node(node)
     sha_hash = sha_hash.digest()
@@ -544,7 +544,6 @@ def sign_node(node):
     # print("Hash is " + sha_hash.hex())
 
     global devkey_bytes
-    global pkcs12
 
     if devkey_bytes is None: 
         f = open(FILE_DEVICEKEY, "rb")
@@ -553,12 +552,42 @@ def sign_node(node):
 
     # Get private key
 
+
+    activationxml = etree.parse(FILE_ACTIVATIONXML)
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    # If prefer_bytebooks is set, this function will first try to use the ByteBooks cert. 
+    # If it isn't, it tries the Adobe cert. 
+    # If the requested one isn't found, it uses the other one.
+
     try: 
-        activationxml = etree.parse(FILE_ACTIVATIONXML)
-        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-        pkcs12 = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("pkcs12"))).text
+        pkcs12bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12"))).text
     except: 
+        pkcs12bb = None
+
+    try: 
+        pkcs12adobe = next(
+                        c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
+                        if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+                        )
+    except: 
+        pkcs12adobe = None
+
+
+    if pkcs12adobe is None and pkcs12bb is None: 
         return None
+
+    if prefer_bytebooks:
+        if pkcs12bb is not None: 
+            pkcs12 = pkcs12bb
+        else: 
+            pkcs12 = pkcs12adobe
+    else: 
+        if pkcs12adobe is not None: 
+            pkcs12 = pkcs12adobe
+        else: 
+            pkcs12 = pkcs12bb
+
 
     my_pkcs12 = base64.b64decode(pkcs12)
     my_priv_key, _, _ = keys.parse_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))
