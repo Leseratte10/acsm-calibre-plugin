@@ -373,9 +373,11 @@ class ACSMInput(FileTypePlugin):
         try: 
             download_url = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("src"))).text
         except: 
+            # If src is present, it is used. If it isn't, ADE uses /Download instead.
+            # If downloadType is "simple", it does a GET. If it's anything else, it does a POST including a bunch of data.
             print("{0} v{1}: FulfillmentResult does not contain the <src> tag. This may be an ACSM with download type 'auth'?".format(PLUGIN_NAME, PLUGIN_VERSION))
-            print("{0} v{1}: Please download the book through ADE (so the ACSM file is 'used').".format(PLUGIN_NAME, PLUGIN_VERSION))
-            print("{0} v{1}: After that, please open a bug report and attach the ACSM file.".format(PLUGIN_NAME, PLUGIN_VERSION))
+            print("{0} v{1}: Please go into the plugin settings, make sure 'Enable verbose debug logging' is enabled, then try again.".format(PLUGIN_NAME, PLUGIN_VERSION))
+            print("{0} v{1}: After that, please open a bug report and attach the full log file.".format(PLUGIN_NAME, PLUGIN_VERSION))
             return None
 
         license_token_node = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken")))
@@ -440,10 +442,11 @@ class ACSMInput(FileTypePlugin):
             ret = patch_drm_into_pdf(filename, rights_xml_str, pdf_tmp_file, resource)
             if (ret):
                 print("{0} v{1}: File successfully fulfilled ...".format(PLUGIN_NAME, PLUGIN_VERSION))
+                return pdf_tmp_file
             else:
                 print("{0} v{1}: There was an error patching the PDF file.".format(PLUGIN_NAME, PLUGIN_VERSION))
+                return None
 
-            return pdf_tmp_file
         else: 
             print("{0} v{1}: Error: Unsupported file type ...".format(PLUGIN_NAME, PLUGIN_VERSION))
             return None

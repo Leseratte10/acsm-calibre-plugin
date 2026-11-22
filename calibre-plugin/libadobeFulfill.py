@@ -964,7 +964,17 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
     return False, errmsg
 
 
+def quote_query_value(value):
+    try: 
+        from urllib.parse import quote
+    except ImportError:
+        from urllib import quote
 
+    # Python 2's quote() raises KeyError on unicode with non-ASCII characters,
+    # so always hand it UTF-8 bytes. Python 3's quote() accepts bytes as well.
+    if not isinstance(value, bytes):
+        value = value.encode("utf-8")
+    return quote(value)
 
 def fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe = False):
 
@@ -995,7 +1005,7 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe = False):
     
     info_entry = etree.SubElement(list, etree.QName(NSMAP["adept"], "licenseServiceInfo"))
 
-    licenseServiceInfoReq = operatorURL + "/LicenseServiceInfo?licenseURL=" + licenseURL
+    licenseServiceInfoReq = operatorURL + "/LicenseServiceInfo?licenseURL=" + quote_query_value(licenseURL) 
     if not use_adobe:
         licenseServiceInfoReq = licenseServiceInfoReq + "&ofByteBooks=1"
 

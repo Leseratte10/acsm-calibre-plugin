@@ -62,6 +62,9 @@ def download(replyData):
     print(download_url)
 
     filename_tmp = book_name + ".tmp"
+    
+    # Prevent Book names like "../../" from writing outside of the folder
+    filename_tmp = filename_tmp.replace("/", "").replace("\\", "")
 
     dl_start_time = int(time.time() * 1000)
     ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp, False)
@@ -85,7 +88,13 @@ def download(replyData):
         filetype = ".pdf"
 
     filename = book_name + filetype
-    shutil.move(filename_tmp, filename)
+    filename = filename.replace("/", "").replace("\\", "")
+    try: 
+        shutil.move(filename_tmp, filename)
+    except: 
+        shutil.move(filename_tmp, "Book" + filetype)
+        filename = "Book" + filetype
+
 
     if filetype == ".epub":
         # Store EPUB rights / encryption stuff
