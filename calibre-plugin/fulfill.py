@@ -16,9 +16,9 @@ import sys, os, time, shutil
 import zipfile
 from lxml import etree
 
-from libadobe import sendHTTPRequest_DL2FILE
-from libadobeFulfill import buildRights, fulfill
-from libpdf import patch_drm_into_pdf
+from acsm_input.libadobe import sendHTTPRequest_DL2FILE
+from acsm_input.libadobeFulfill import buildRights, fulfill
+from acsm_input.libpdf import patch_drm_into_pdf
 
 
 #######################################################################

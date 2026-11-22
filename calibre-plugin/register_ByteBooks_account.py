@@ -12,8 +12,8 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 import getpass
 
-from libadobe import createDeviceKeyFile
-from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+from acsm_input.libadobe import createDeviceKeyFile
+from acsm_input.libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
 
 # These are the only two variables you'll need to change
 # The mail address and password of your ByteBooks account to assign. 

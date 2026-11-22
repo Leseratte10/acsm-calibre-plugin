@@ -40,7 +40,7 @@ def _acquire_prefs_mutex():
     try:
         from calibre.utils.lock import SingleInstance       # type: ignore
     except ImportError:
-        from calibre_plugins.deacsm.singleinstance_helper import SingleInstance     # type: ignore
+        from .singleinstance_helper import SingleInstance
 
     deadline = time.time() + _PREFS_LOCK_TIMEOUT
     while True:

@@ -10,11 +10,9 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 from lxml import etree
 import base64
 
-#@@CALIBRE_COMPAT_CODE@@
-
-from libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
-from libadobe import get_devkey_path, get_device_path, get_activation_xml_path
-from libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_HOBBES_VERSIONS
+from .libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
+from .libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+from .libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_HOBBES_VERSIONS
 
 
  
@@ -165,7 +163,7 @@ def getDecryptedCert(pkcs12_b64_string = None, force_bytebooks = False):
 
     pkcs12_data = base64.b64decode(pkcs12_b64_string)
 
-    from libadobe import devkey_bytes as devkey_adobe
+    from .libadobe import devkey_bytes as devkey_adobe
     
     if devkey_adobe is not None: 
         devkey_bytes = devkey_adobe
@@ -473,7 +471,7 @@ def fulfill(acsm_file, do_notify = False):
 
     verbose_logging = False
     try: 
-        import calibre_plugins.deacsm.prefs as prefs  # type: ignore
+        from . import prefs
         acsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = acsmprefs["detailed_logging"]
     except:
@@ -704,7 +702,7 @@ def updateLoanReturnData(fulfillmentResultToken, forceTestBehaviour=False, use_a
 def addLoanRecordToConfigFile(new_loan_record):
 
     try: 
-        import calibre_plugins.deacsm.prefs as prefs     # type: ignore
+        from . import prefs
         acsmprefs = prefs.ACSMInput_Prefs()
     except: 
         print("Exception while reading config file")
@@ -722,7 +720,7 @@ def tryReturnBook(bookData):
 
     verbose_logging = False
     try: 
-        import calibre_plugins.deacsm.prefs as prefs    # type: ignore
+        from . import prefs
         acsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = acsmprefs["detailed_logging"]
     except:
@@ -802,7 +800,7 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
 
     verbose_logging = False
     try: 
-        import calibre_plugins.deacsm.prefs as prefs    # type: ignore
+        from . import prefs
         acsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = acsmprefs["detailed_logging"]
     except:

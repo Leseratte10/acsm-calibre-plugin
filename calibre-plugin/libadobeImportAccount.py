@@ -9,7 +9,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 
 from lxml import etree
-import base64, traceback
+import base64, traceback, warnings
 import os, locale, platform
 from xml.sax.saxutils import escape as xml_escape
 
@@ -21,9 +21,6 @@ except ImportError:
     from Crypto.Cipher import AES as _AES
 
 
-#@@CALIBRE_COMPAT_CODE@@
-
-
 class AES(object):
     def __init__(self, key, iv):
         self._aes = _AES.new(key, _AES.MODE_CBC, iv)
@@ -31,8 +28,8 @@ class AES(object):
         return self._aes.decrypt(data)
 
 
-from libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path
-from libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS, VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
+from .libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path
+from .libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS, VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
 
 
 def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
@@ -61,7 +58,7 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
         return False, "There has been an error while reading through the Registry."
 
     # Get encryption key
-    from getEncryptionKeyLinux import GetMasterKey
+    from .getEncryptionKeyLinux import GetMasterKey
 
     master_key = GetMasterKey(wine_prefix_path, root_is_bytebooks)
 
@@ -191,7 +188,7 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
             return False, "Could not locate ADE activation"
 
     # Get encryption key:
-    from getEncryptionKeyWindows import GetMasterKey
+    from .getEncryptionKeyWindows import GetMasterKey
 
     master_key = GetMasterKey(root_is_bytebooks)
 
@@ -352,7 +349,11 @@ def finalize_write_config_Windows(data, key, buildID):
 
     language = None
     try: 
-        language = locale.getdefaultlocale()[0].split('_')[0]
+        with warnings.catch_warnings():
+            # Python claims that this is deprecated, but it has been un-deprecated later.
+            # Disable the warning.
+            warnings.filterwarnings("ignore", category=DeprecationWarning)
+            language = locale.getdefaultlocale()[0].split('_')[0]
     except:
         pass
     if language is None or language == "": 

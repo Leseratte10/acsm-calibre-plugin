@@ -26,8 +26,6 @@ except ImportError:
     else:
         raise
 
-#@@CALIBRE_COMPAT_CODE@@
-
 def GetSystemDirectory():
     from ctypes import windll, c_wchar_p, c_uint, create_unicode_buffer
     MAX_PATH = 255
@@ -127,7 +125,7 @@ def GetMasterKey(use_bytebooks = True):
 
     verbose_logging = False
     try: 
-        import calibre_plugins.deacsm.prefs as prefs
+        from . import prefs
         acsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = acsmprefs["detailed_logging"]
     except:
@@ -142,7 +140,7 @@ def GetMasterKey(use_bytebooks = True):
     
     # Get CPU vendor:
 
-    import cpuid
+    from . import cpuid
     import struct
     cpu = cpuid.CPUID()
     _, b, c, d = cpu(0)

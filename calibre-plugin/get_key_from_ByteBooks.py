@@ -29,8 +29,8 @@ if sys.version_info[0] < 3:
     print("This script requires Python 3.")
     exit(1)
 
-from libadobe import createDeviceKeyFile, update_account_path
-from libadobeAccount import createDeviceFile, createUser, signIn, exportAccountEncryptionKeyDER, getAccountUUID
+from acsm_input.libadobe import createDeviceKeyFile, update_account_path
+from acsm_input.libadobeAccount import createDeviceFile, createUser, signIn, exportAccountEncryptionKeyDER, getAccountUUID
 
 # These are the only two variables you'll need to change
 # The mail address and password of your Adobe account 
