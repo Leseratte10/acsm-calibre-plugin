@@ -7,5 +7,7 @@
 /devel
 /deps
 /releases
+/tests/__pycache__
+/tests/*.pyc
 
 /adobe_account_backup_*.zip
