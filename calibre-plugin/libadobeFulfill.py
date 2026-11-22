@@ -211,9 +211,12 @@ def doOperatorAuth(operatorURL):
     authURL = operatorURL
     if authURL.endswith("Fulfill"):
         authURL = authURL.replace("/Fulfill", "")
-
-
-    replyData = sendRequestDocu(auth_req, authURL + "/Auth").decode("utf-8")
+    
+    
+    # The operator is the distributor's own ACS server, not ByteBooks. Don't validate TLS here,
+    # same as for /Fulfill: lots of distributors have invalid or expired certs.
+    
+    replyData = sendRequestDocu(auth_req, authURL + "/Auth", False).decode("utf-8")
 
     if not "<success" in replyData:
         return "ERROR: Operator responded with %s\n" % replyData
@@ -232,7 +235,7 @@ def doOperatorAuth(operatorURL):
         return "Creating license request failed!"
 
 
-    resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService").decode("utf-8")
+    resp = sendRequestDocu(init_license_service_request, activationURL + "/InitLicenseService", True).decode("utf-8")
     if "<error" in resp: 
         return "Looks like that failed: %s" % resp
     elif "<success" in resp: 
@@ -434,7 +437,7 @@ def fulfill(acsm_file, do_notify = False):
     # For debugging only
     # fulfillURL = fulfillURL.replace("https:", "http:")
 
-    replyData = sendRequestDocu(fulfill_req_signed, fulfillURL).decode("utf-8")
+    replyData = sendRequestDocu(fulfill_req_signed, fulfillURL, False).decode("utf-8")
 
     if "<error" in replyData: 
         if "E_ADEPT_DISTRIBUTOR_AUTH" in replyData:
@@ -444,7 +447,7 @@ def fulfill(acsm_file, do_notify = False):
             if (ret is not None):
                 return False, "doOperatorAuth error: %s" % ret
 
-            replyData = sendRequestDocu(fulfill_req_signed, fulfillURL).decode("utf-8")
+            replyData = sendRequestDocu(fulfill_req_signed, fulfillURL, False).decode("utf-8")
             if "<error" in replyData:
                 return False, "Looks like there's been an error during Fulfillment even after auth: %s" % replyData
         else: 
@@ -652,7 +655,7 @@ def tryReturnBook(bookData):
         print(doc_send)
 
 
-    retval = sendRequestDocu(doc_send, operatorURL + "/LoanReturn").decode("utf-8")
+    retval = sendRequestDocu(doc_send, operatorURL + "/LoanReturn", False).decode("utf-8")
 
     if "<error" in retval: 
         print("Loan return failed: %s" % (retval))
@@ -804,7 +807,7 @@ def performFulfillmentNotification(fulfillmentResultToken, forceOptional = False
             print(doc_send)
 
         try: 
-            code, msg = sendRequestDocuRC(doc_send, url)
+            code, msg = sendRequestDocuRC(doc_send, url, False)
         except:
             if not critical:
                 print("There was an error during an optional fulfillment notification:")
@@ -887,7 +890,7 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL):
     licenseServiceInfoReq = operatorURL + "/LicenseServiceInfo?licenseURL=" + licenseURL
 
     try: 
-        response = sendHTTPRequest(licenseServiceInfoReq).decode("utf-8")
+        response = sendHTTPRequest(licenseServiceInfoReq, False).decode("utf-8")
     except: 
         return False, "HTTP download for the licenseServiceInfo failed ... why?"
 

@@ -244,8 +244,69 @@ def makeFingerprint(serial):
 
 ############################################## HTTP stuff:
 
-def sendHTTPRequest_DL2FILE(URL, outputfile):
-    # type: (str, str) -> int
+calibre_ca_locations = None
+
+def get_calibre_ca_locations():
+    # type: () -> tuple
+    # Returns (cafile, capath) for the Mozilla CA bundle that ships with Calibre.
+    # Newer Calibre versions ship it as a hashed directory ("mozilla-ca-certs"),
+    # older ones as a single PEM file ("mozilla-ca-certs.pem").
+    # Returns (None, None) outside of Calibre (standalone scripts, tests) or if
+    # this Calibre install doesn't contain the bundle (some distro packages strip it).
+
+    global calibre_ca_locations
+    if calibre_ca_locations is not None:
+        return calibre_ca_locations
+
+    cafile = None
+    capath = None
+    try:
+        from calibre.utils.resources import get_path    # type: ignore
+
+        # allow_user_override=False, same as Calibre itself uses for its CA files,
+        # so a file in the user's Calibre config folder can't replace the trusted CAs.
+        path = get_path("mozilla-ca-certs", allow_user_override=False)
+        if os.path.isdir(path):
+            capath = path
+        else:
+            path = get_path("mozilla-ca-certs.pem", allow_user_override=False)
+            if os.path.isfile(path):
+                cafile = path
+    except Exception:
+        pass
+
+    calibre_ca_locations = (cafile, capath)
+    return calibre_ca_locations
+
+
+def create_ssl_context(validate_tls):
+    # type: (bool) -> ssl.SSLContext
+
+    ctx = ssl.create_default_context()
+
+    if validate_tls:
+        # Also trust the CA bundle that ships with Calibre. Windows only downloads root
+        # certificates into its store when Windows itself needs one, so verification can
+        # fail for a perfectly valid server certificate whose root Windows hasn't fetched yet.
+        cafile, capath = get_calibre_ca_locations()
+        if cafile is not None or capath is not None:
+            try:
+                ctx.load_verify_locations(cafile=cafile, capath=capath)
+            except Exception:
+                # A broken bundle must not stop us from using the system certificates.
+                print("Couldn't load Calibre's CA certificates, using the system ones only.")
+    else:
+        # It appears as if lots of book distributors have either invalid or expired certs ...
+        # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
+        # Order matters here, too: check_hostname must be disabled before CERT_NONE.
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+    return ctx
+
+
+def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
+    # type: (str, str, bool) -> int
 
     headers = {
         "Accept": "*/*",
@@ -253,21 +314,7 @@ def sendHTTPRequest_DL2FILE(URL, outputfile):
         # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
     }
 
-    # Ignore SSL:
-    # It appears as if lots of book distributors have either invalid or expired certs ...
-    # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
-    # Not the best solution, but it works.
-    try: 
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-        # This is needed due to an Adobe change. 
-        # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
-        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
-        # just enforce TLSv1.2 here.
-    except:
-        ctx = ssl.create_default_context()
-
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    ctx = create_ssl_context(validate_tls)
 
 
     req = ulib.Request(url=URL, headers=headers)
@@ -277,15 +324,6 @@ def sendHTTPRequest_DL2FILE(URL, outputfile):
 
     ret_code = handler.getcode()
 
-
-    loc = None
-    try: 
-        loc = req.headers.get("Location")
-    except:
-        pass
-
-    if loc is not None: 
-        return sendHTTPRequest_DL2FILE(loc)
 
     if ret_code != 200:
         return ret_code
@@ -299,8 +337,8 @@ def sendHTTPRequest_DL2FILE(URL, outputfile):
 
     return 200
 
-def sendHTTPRequest_getSimple(URL):
-    # type: (str) -> str
+def sendHTTPRequest_getSimple(URL, validate_tls = True):
+    # type: (str, bool) -> str
 
     headers = {
         "Accept": "*/*",
@@ -308,63 +346,26 @@ def sendHTTPRequest_getSimple(URL):
         # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
     }
 
-    # Ignore SSL:
-    # It appears as if lots of book distributors have either invalid or expired certs ...
-    # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
-    # Not the best solution, but it works.
-    try: 
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-        # This is needed due to an Adobe change. 
-        # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
-        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
-        # just enforce TLSv1.2 here.
-    except:
-        ctx = ssl.create_default_context()
-
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    ctx = create_ssl_context(validate_tls)
 
     req = ulib.Request(url=URL, headers=headers)
     handler = ulib.urlopen(req, context=ctx)
 
     content = handler.read()
 
-    loc = None
-    try: 
-        loc = req.headers.get("Location")
-    except:
-        pass
-
-    if loc is not None: 
-        return sendHTTPRequest_getSimple(loc)
-
     return content
 
-def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
-    # type: (str, bytes, str, bool) -> str
+def sendPOSTHTTPRequest(URL, document, contenttype, returnRC = False, validate_tls = True):
+    # type: (str, bytes, str, bool, bool) -> str
 
     headers = {
         "Accept": "*/*",
         "User-Agent": "book2png",
         # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
-        "Content-Type": type
+        "Content-Type": contenttype
     }
 
-    # Ignore SSL:
-    # It appears as if lots of book distributors have either invalid or expired certs ...
-    # No idea how Adobe handles that (pinning?), but we can just ignore SSL errors and continue anyways.
-    # Not the best solution, but it works.
-    try: 
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-        # This is needed due to an Adobe change. 
-        # Without this, only Python <= 3.7.16 can connect, 3.7.17 and above fail.
-        # Cloudflare detects that Python uses TLS1.3 which ADE doesn't support, so
-        # just enforce TLSv1.2 here.
-    except:
-        ctx = ssl.create_default_context()
-
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    ctx = create_ssl_context(validate_tls)
 
     # Make sure URL has a protocol
     # Some vendors (see issue #22) apparently don't include "http://" in some of their URLs.
@@ -386,11 +387,21 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
             return None
 
     except uliberror.URLError as err: 
-        # This happens if the hostname cannot be resolved.
-        print("Post request failed with URLError")
+        # This happens if the hostname cannot be resolved, or (with validate_tls)
+        # if the server's certificate chain can't be verified.
+        print("Post request failed with URLError: %s" % (err.reason))
         if returnRC:
             return 900, "Post request failed with URLError"
         else: 
+            return None
+
+    except ssl.CertificateError as err:
+        # Hostname mismatch with validate_tls. Python 2 and Python < 3.7 raise this
+        # directly instead of wrapping it in a URLError like Python 3.7+ does.
+        print("Post request failed, certificate does not match host: %s" % (err))
+        if returnRC:
+            return 900, "Post request failed with CertificateError"
+        else:
             return None
 
     ret_code = handler.getcode()
@@ -401,33 +412,24 @@ def sendPOSTHTTPRequest(URL, document, type, returnRC = False):
 
     content = handler.read()
 
-    loc = None
-    try: 
-        loc = req.headers.get("Location")
-    except:
-        pass
-
-    if loc is not None: 
-        return sendPOSTHTTPRequest(loc, document, type, returnRC)
-
     if returnRC:
         return ret_code, content
 
     return content
 
 
-def sendHTTPRequest(URL):
-    # type: (str) -> str
-    return sendHTTPRequest_getSimple(URL)
+def sendHTTPRequest(URL, validate_tls = True):
+    # type: (str, bool) -> str
+    return sendHTTPRequest_getSimple(URL, validate_tls)
 
 
-def sendRequestDocu(document, URL):
-    # type: (str, str) -> str
-    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", False)
+def sendRequestDocu(document, URL, validate_tls = True):
+    # type: (str, str, bool) -> str
+    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", False, validate_tls)
 
-def sendRequestDocuRC(document, URL):
-    # type: (str, str) -> str
-    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", True)
+def sendRequestDocuRC(document, URL, validate_tls = True):
+    # type: (str, str, bool) -> str
+    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", True, validate_tls)
 
 
 

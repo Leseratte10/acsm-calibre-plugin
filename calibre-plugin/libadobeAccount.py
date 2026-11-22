@@ -117,7 +117,7 @@ def getAuthMethodsAndCert():
     # Otherwise the plugin will not look 100% like ADE to Adobe.
 
     authenticationURL = VAR_ACS_SERVER_HTTP + "/AuthenticationServiceInfo"
-    response2 = sendHTTPRequest(authenticationURL)
+    response2 = sendHTTPRequest(authenticationURL, True)
 
     adobe_response_xml2 = etree.fromstring(response2)
 
@@ -173,7 +173,7 @@ def createUser(useVersionIndex = 0, authCert = None):
     else:
         activationURL = VAR_ACS_SERVER_HTTP + "/ActivationServiceInfo"
 
-    response = sendHTTPRequest(activationURL)
+    response = sendHTTPRequest(activationURL, True)
 
     #print("======================================================")
     #print("Sending request to " + activationURL)
@@ -205,7 +205,7 @@ def createUser(useVersionIndex = 0, authCert = None):
     if authCert is None: 
         # This is not supposed to happen, but if it does, then just query it again from Adobe.
         authenticationURL = authURL + "/AuthenticationServiceInfo"
-        response2 = sendHTTPRequest(authenticationURL)
+        response2 = sendHTTPRequest(authenticationURL, True)
 
         adobe_response_xml2 = etree.fromstring(response2)
         authCert = adobe_response_xml2.find("./%s" % (adNS("certificate"))).text
@@ -351,7 +351,7 @@ def convertAnonAuthToAccount(username, passwd):
 
     linkRequest = buildSignInRequestForAnonAuthConvert(username, passwd, authenticationCertificate)
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/AddSignInDirect"
-    linkResponse = sendRequestDocu(linkRequest, signInURL)
+    linkResponse = sendRequestDocu(linkRequest, signInURL, True)
 
     try: 
         credentialsXML = etree.fromstring(linkResponse)
@@ -430,7 +430,7 @@ def signIn(account_type, username, passwd):
 
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/SignInDirect"
 
-    credentials = sendRequestDocu(signInRequest, signInURL)
+    credentials = sendRequestDocu(signInRequest, signInURL, True)
     
     
     #print("======================================================")
@@ -843,9 +843,9 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
 
     if useHTTPS:
         # ADE 4.X uses HTTPS
-        ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTPS + "/Activate")
+        ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTPS + "/Activate", True)
     else:
-        ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTP + "/Activate")
+        ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTP + "/Activate", True)
 
     try: 
         credentialsXML = etree.fromstring(ret)

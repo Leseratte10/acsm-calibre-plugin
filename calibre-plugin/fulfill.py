@@ -64,7 +64,7 @@ def download(replyData):
     filename_tmp = book_name + ".tmp"
 
     dl_start_time = int(time.time() * 1000)
-    ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp)
+    ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp, False)
     dl_end_time = int(time.time() * 1000)
     print("Download took %d milliseconds" % (dl_end_time - dl_start_time))
 
