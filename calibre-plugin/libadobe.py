@@ -127,11 +127,14 @@ def get_activation_xml_path():
 def update_account_path(folder_path):
     # type: (str) -> None
 
-    global FILE_DEVICEKEY, FILE_DEVICEXML, FILE_ACTIVATIONXML
+    global FILE_DEVICEKEY, FILE_DEVICEXML, FILE_ACTIVATIONXML, devkey_bytes
 
     FILE_DEVICEKEY = os.path.join(folder_path, "devicesalt")
     FILE_DEVICEXML = os.path.join(folder_path, "device.xml")
     FILE_ACTIVATIONXML = os.path.join(folder_path, "activation.xml")
+
+    # force reloading the device key when it is next used.
+    devkey_bytes = None
 
 
 def createDeviceKeyFile():

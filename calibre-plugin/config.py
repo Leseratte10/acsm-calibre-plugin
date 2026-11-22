@@ -700,11 +700,14 @@ class ConfigWidget(QWidget):
             return error_dialog(None, "Import failed", "The WINEPREFIX you entered doesn't seem to contain an authorized ADE.", show=True, show_copy_button=False)
 
 
+        from libadobe import update_account_path
         from libadobeImportAccount import importADEactivationLinuxWine
 
         ret, msg = importADEactivationLinuxWine(text)
 
         if (ret):
+            update_account_path(self.acsmprefs["path_to_account_data"])           
+
             # update display
             info_string, activated, ade_mail = self.get_account_info()
             self.lblAccInfo.setText(info_string)
@@ -719,7 +722,6 @@ class ConfigWidget(QWidget):
             self.button_import_LinuxWineADE.setEnabled(not activated)
             self.button_export_key.setEnabled(activated)
             self.button_export_activation.setEnabled(activated)
-            
 
             self.resize(self.sizeHint())
 
@@ -737,11 +739,14 @@ class ConfigWidget(QWidget):
     def import_activation_from_Win(self):
         # This will try to import the activation from Adobe Digital Editions on Windows ...
 
+        from libadobe import update_account_path
         from libadobeImportAccount import importADEactivationWindows
 
         ret, msg = importADEactivationWindows()
 
         if (ret):
+            update_account_path(self.acsmprefs["path_to_account_data"])
+
             # update display
             info_string, activated, ade_mail = self.get_account_info()
             self.lblAccInfo.setText(info_string)
@@ -756,7 +761,6 @@ class ConfigWidget(QWidget):
             self.button_import_WinADE.setEnabled(not activated)
             self.button_export_key.setEnabled(activated)
             self.button_export_activation.setEnabled(activated)
-            
 
             self.resize(self.sizeHint())
 
@@ -779,11 +783,14 @@ class ConfigWidget(QWidget):
 
         info_dialog(None, "Importing from ADE", msg, show=True, show_copy_button=False)
 
+        from libadobe import update_account_path
         from libadobeImportAccount import importADEactivationMac
 
         ret, msg = importADEactivationMac()
 
         if (ret):
+            update_account_path(self.acsmprefs["path_to_account_data"])
+
             # update display
             info_string, activated, ade_mail = self.get_account_info()
             self.lblAccInfo.setText(info_string)
@@ -819,6 +826,7 @@ class ConfigWidget(QWidget):
         filenames = choose_files(self, "Import DE activation file (ZIP)", _("Import DE activation file (ZIP)"), 
                 filters, all_files=False, select_only_single_file=True)
 
+        from libadobe import update_account_path
         from libadobeAccount import changeDeviceVersion
         
         try: 
@@ -857,6 +865,7 @@ class ConfigWidget(QWidget):
                 return error_dialog(None, "Import failed", "Can't write file", show=True, det_msg=err, show_copy_button=False)
 
 
+        update_account_path(self.acsmprefs["path_to_account_data"])
         changeDeviceVersion(0, onlyIfUnknown=True)
         
         # update display

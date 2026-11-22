@@ -8,7 +8,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
 from lxml import etree
-import base64
+import base64, traceback
 import os, locale, platform
 from xml.sax.saxutils import escape as xml_escape
 
@@ -57,6 +57,10 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
         err += "please open a bug report."
 
         return False, err
+
+    global persistent_data, account_method
+    persistent_data = dict()
+    account_method = None
 
     # Loop through the registry:
     try: 
@@ -110,8 +114,8 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
 
     except: 
         # There was an error hunting through the registry. 
-        raise
-        pass
+        traceback.print_exc()
+        return False, "There has been an error while reading through the Registry."
 
 def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
     # Tries to import the system activation from Adobe Digital Editions on Windows into the plugin
@@ -147,6 +151,10 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
         activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, PRIVATE_LICENCE_KEY_PATH)
     except: 
         return False, "Could not locate ADE activation"
+
+    global persistent_data, account_method
+    persistent_data = dict()
+    account_method = None
 
     i = 0
     while True:
@@ -187,14 +195,7 @@ account_method = None
 def finalize_write_config_Windows(data, key, buildID):
     # Okay, finally got all the data that's needed - recreate all the files.
 
-     # Create devicekey file:
-    f = open(get_devkey_path(), "wb")
-    f.write(key)
-    f.close()
-
     # Create activation.xml
-    f = open(get_activation_xml_path(), "wb")
-
     content = '<?xml version="1.0"?>\n'
     content += "<activationInfo xmlns=\"http://ns.adobe.com/adept\">\n"
     content += '<adept:activationServiceInfo xmlns:adept="http://ns.adobe.com/adept">\n'
@@ -229,24 +230,21 @@ def finalize_write_config_Windows(data, key, buildID):
     content += '</activationToken>\n'
     content += '</activationInfo>\n'
 
-    f.write(content.encode("utf-8"))
-    f.close()
-
     # Re-create device.xml from scratch:
 
-    content = '<?xml version="1.0"?>\n'
-    content += '<adept:deviceInfo xmlns:adept="http://ns.adobe.com/adept">\n'
-    content += "<adept:deviceType>%s</adept:deviceType>\n" % (data["activationToken"]["deviceType"])
-    content += "<adept:deviceClass>%s</adept:deviceClass>\n" % ("Desktop")
-    content += "<adept:deviceSerial>%s</adept:deviceSerial>\n" % (makeSerial(False))
-    content += "<adept:deviceName>%s</adept:deviceName>\n" % (platform.uname()[1])
+    dev_content = '<?xml version="1.0"?>\n'
+    dev_content += '<adept:deviceInfo xmlns:adept="http://ns.adobe.com/adept">\n'
+    dev_content += "<adept:deviceType>%s</adept:deviceType>\n" % (data["activationToken"]["deviceType"])
+    dev_content += "<adept:deviceClass>%s</adept:deviceClass>\n" % ("Desktop")
+    dev_content += "<adept:deviceSerial>%s</adept:deviceSerial>\n" % (makeSerial(False))
+    dev_content += "<adept:deviceName>%s</adept:deviceName>\n" % (platform.uname()[1])
 
     version_idx = VAR_VER_BUILD_IDS.index(buildID)
     hobbes_ver = VAR_VER_HOBBES_VERSIONS[version_idx]
     clientOS = VAR_VER_OS_IDENTIFIERS[version_idx]
 
-    content += "<adept:version name=\"hobbes\" value=\"%s\"/>\n" % (hobbes_ver)
-    content += "<adept:version name=\"clientOS\" value=\"%s\"/>\n" % (clientOS)
+    dev_content += "<adept:version name=\"hobbes\" value=\"%s\"/>\n" % (hobbes_ver)
+    dev_content += "<adept:version name=\"clientOS\" value=\"%s\"/>\n" % (clientOS)
 
     language = None
     try: 
@@ -257,15 +255,26 @@ def finalize_write_config_Windows(data, key, buildID):
         # Can sometimes happen on MacOS with default English language
         language = "en"
 
-    content += "<adept:version name=\"clientLocale\" value=\"%s\"/>\n" % (language)
-    content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (data["activationToken"]["fingerprint"])
-    content += "</adept:deviceInfo>"
+    dev_content += "<adept:version name=\"clientLocale\" value=\"%s\"/>\n" % (language)
+    dev_content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (data["activationToken"]["fingerprint"])
+    dev_content += "</adept:deviceInfo>"
 
-    # Write device.xml
-    f = open(get_device_path(), "wb")
+    # Content prepared, now write all three files.
+
+    # Create devicekey file:
+    f = open(get_devkey_path(), "wb")
+    f.write(key)
+    f.close()
+
+    # Create activation file
+    f = open(get_activation_xml_path(), "wb")
     f.write(content.encode("utf-8"))
     f.close()
 
+    # Create device file
+    f = open(get_device_path(), "wb")
+    f.write(dev_content.encode("utf-8"))
+    f.close()
 
     return True, "Done"
 
@@ -285,7 +294,13 @@ def handle_subkey(parent, subkey, value, encryption_key, method, buildID):
         aes = AES(encryption_key, iv)
 
         value = base64.b64decode(persistent_data["credentials"]["privateLicenseKey"])
-        persistent_data["credentials"]["privateLicenseKey"] = base64.b64encode(aes.decrypt(value)).decode("latin-1")
+        decrypted_key = bytearray(aes.decrypt(value))
+
+        # Remove padding
+        decrypted_key = bytes(decrypted_key[:-decrypted_key[-1]])
+
+        persistent_data["credentials"]["privateLicenseKey"] = base64.b64encode(decrypted_key).decode("latin-1")
+
 
         return finalize_write_config_Windows(persistent_data, encryption_key, buildID)
     else: 
@@ -305,7 +320,7 @@ def handle_subkey(parent, subkey, value, encryption_key, method, buildID):
 
 def getMacCredential(type):
 
-    import os, re
+    import os, re, binascii
 
     # Just calling a native binary.
     # The python modules were all A) pretty complicated and B) are only intended
@@ -329,9 +344,11 @@ def getMacCredential(type):
     if m:
         hexform, stringform = m.groups()
         if hexform:
-            return bytes.fromhex(hexform)
+            return binascii.unhexlify(hexform)
+        elif isinstance(stringform, bytes):
+            return stringform
         else:
-            return bytes(stringform, 'latin-1')
+            return stringform.encode('latin-1')
         
     return None
 
@@ -436,7 +453,7 @@ def recreateMacActivationFiles(path_to_activation, deviceKey, deviceFingerprint,
         language = "en"
 
     content += "<adept:version name=\"clientLocale\" value=\"%s\"/>\n" % (language)
-    content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (base64.b64encode(deviceFingerprint))
+    content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (base64.b64encode(deviceFingerprint).decode("latin-1"))
     content += "</adept:deviceInfo>"
 
     # Write device.xml
