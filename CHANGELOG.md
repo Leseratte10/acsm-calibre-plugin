@@ -1,0 +1,145 @@
+# Changelog
+
+## 0.1.1 (currently being worked on, not yet released)
+
+- Switch from Adobe to ByteBooks (#185): ByteBooks has taken over the ADE / ACS platform, so the plugin now emulates ByteBooks Digital Editions 5.0.76 and uses the ByteBooks activation server. New authorizations require a ByteBooks ID (fixes #153, #159).
+- Existing authorizations are automatically switched to the emulated BDE 5.0 version, since older ADE versions will no longer work reliably.
+- Replace `oscrypto` and `asn1crypto` with a built-in pure-Python PKCS#12 implementation (#186) based on oscrypto. This removes the need for OpenSSL and should fix a bunch of issues with loading the correct libraries on MacOS or in a Linux Flatpak (fixes #24, #63, #65, #67, #68, #85, #86, #92, #99, #100, #106, #107, #109, #110, #112, #113, #124, #127, #128, #130, #133, #139, #150 and #152).
+- Drop support for the environment variables `ACSM_LIBCRYPTO` and `ACSM_LIBSSL` since the plugin no longer uses libssl (obsoletes #95, fixes #153).
+- Validate TLS certificates for all requests to the ByteBooks activation server, using Calibre's bundled CA certificates in addition to the system ones. Requests to book distributors still ignore certificate errors (fixes #58, #97, #105).
+- Add a 30 second timeout to all HTTP requests to prevent Calibre from hanging indefinitely.
+- Fixes bug that causes the loan list to not update correctly when multiple threads accessed it simultaneously (fixes #37 and #178).
+- Fix XML hashing used for request signatures by adding bytewise sorting of XML attributes. 
+- Fix XML hashing for nodes with less than 32k UTF-8 characters but more than 32k bytes.
+- Fix XML corruption when using an E-Mail address that contains non-ASCII characters.
+- Fix several bugs in the activation import from ADE / BDE:
+  - Data from a previous (failed) import attempt no longer ends up in the next one.
+  - Remove the padding from the decrypted private license key.
+  - Reload the device key after import if it changed.
+  - When importing from a Wine prefix, the plugin no longer modifies Calibre's process environment. 
+  - Fix corrupted device fingerprint after a MacOS import.
+- Fix a bug where importing a corrupted activation backup ZIP would claim the import was successful. 
+- Make the plugin more resilient to a server sending junk data. 
+- Fix a bug where authorizing an eReader over USB failed on Calibre 3. 
+- URL-encode the license URL when requesting the license service certificate, fixing a bug where license service certificates failed to download if their URL contained special characters.
+- Don't return a broken PDF if adding the rights.xml failed.
+- fulfill.py: Fix a bug that could cause a malicious fulfillment server to cause the script to write files outside of the intended directory. 
+- Fix a bug in the PDF parser that would corrupt PDFs if their file size was an exact multiple of the buffer block size (4096 bytes).
+- Only use datetime.utcnow() when necessary (on older Python versions) since it's deprecated in Python 3.12 and will be removed from a future Python release.
+- Only add books to the loan list if the fulfillment notifications were successful.
+- Fix loan list accidentally hiding loans that had an invalid expiration date.
+
+## 0.1.0 (perpetually in beta between 2022-2026, hasn't been released)
+
+- Print useful warning if LicenseServerCertificate download fails.
+- Fixes bug that causes the GUI extension to fail to load on non-English machines.
+- Fixes softlock that occurred when importing a large number of ACSM files at once (fixes #47).
+- Fixes "account folder not found" error on some clean installations.
+- Add support for Calibre 3.48 (the last version to support Windows Vista/7).
+- Fix a bug where error codes sent by the activation server were not correctly displayed (fixes #166, #167, #169 and #172).
+- Fix plugin bundling with bundle_calibre_plugin.sh on MacOS (#184), fixes #177.
+- Fix a bug where ZIP files were not created correctly on some Python versions if SOURCE_DATE_EPOCH was set to a low value (fixes #162). This is an [upstream bug](https://github.com/python/cpython/issues/152445).
+- Fix a bug where the Adobe login failed if there were special characters in the Adobe password (fixes #93).
+- Fix loan list crashing if a loaned book had no name (fixes #55 and #108).
+
+
+## 0.0.17 (beta build from 2022, hasn't been released)
+
+- Fixes bug that would sometimes cause the wrong book (or none at all) to be returned if there were multiple active loans from the same distributor (fixes #31 and #142).
+- Add GUI toolbar button to open the plugin settings or the loan list, fixes #32.
+- Begin renaming the plugin from its old name "DeACSM" to "ACSM Input".
+
+## 0.0.16 (2022-07-31)
+
+- Add support for Calibre 4.x / Python 2.
+- Add support for Calibre 6.x / Qt 6.
+- Include custom fork of [`oscrypto`](https://github.com/wbond/oscrypto/) to fix OpenSSL 3 support. Fixes #20 and #23.
+- Allow authorizing an eReader through USB (experimental) by clicking the "Authorize eReader over USB" button in the settings.
+- Ignore fatal HTTP errors and/or missing or broken servers during fulfillment notifications marked as optional, fixes #19.
+- Drop dependencies `python-cryptography`, `python-rsa` and `python-pyasn1`.
+- Embed WINE executables for Linux through base64 to prevent false alarms from Antivirus software, fixes #13.
+- Fix broken notification URLs where no protocol is included (assuming "http"), fixes #22.
+- Fix loan data for book loans without deviceID, fixes #25.
+- Fix nonce calculations (yet again), fixes #27.
+- Merge #26 to make importing an existing authorization through WINE more reliable.
+
+## 0.0.15 (2021-12-15)
+
+- Add support for anonymous authorizations - just click "Create anonymous authorization" instead of "Link to ADE account". Thanks to JJTech0130 for telling me how these work. Fixes #9.
+- Add support for AdobeIDs of other authorization providers. Thanks to JJTech0130 for telling me how these work.
+- Bugfix for ACSM files downloaded from Google Play Books (ACSM files without metadata node). Fixes #11.
+- Allow linking an existing anonymous authorization to a new AdobeID by clicking the "Connect anonymous auth to ADE account" button.
+- Update dependency python-cryptography from 3.4.8 to 36.0.1.
+- Update dependency python-rsa from 4.7.2 to 4.8.
+
+## 0.0.14 (2021-12-11)
+
+- Allow choosing between different ADE versions (2.0.1, 3.0.1, 4.0.3, 4.5.11) when linking an ADE account. 2.0.1 is recommended (and selected by default).
+- Allow switching between ADE versions in the plugin settings (same versions as above, plus 1.7.2). 1.7.2 support is experimental, only use if necessary. It's recommended to just stay at 2.0.1. 
+- If you don't have your AdobeID connected yet (and you have ADE installed on your machine), there's a new button "Import activation from ADE" - this will copy the existing activation from ADE into the plugin without using up one of the 6 activations.
+- Fix a race condition bug when importing multiple ACSM files at the same time.
+- Fix a bug where authorization would fail with non-ASCII characters in the OS username.
+- Pressing Ctrl+Shift+D in the plugin settings removes the existing authorization (like in ADE).
+- Add a setting (disabled by default) for verbose debug logs. This can result in sensitive data like keys or book credentials to be included in the logfile.
+- Add a setting (disabled by default) to auto-delete the ACSM file after successful import.
+- Add a proper error message for ACSMs using a download type other than "simple". If you see that message, please open a bug report.
+
+## 0.0.12 (2021-11-15)
+
+- Fixes a bug that caused the plugin to not show up in the Calibre Plugin index. You can now download and update this plugin directly from Calibre by clicking the "Get new plugins" button in the Calibre settings.
+
+## 0.0.11 (2021-11-12)
+
+- Ignoring SSL errors during FulfillmentNotify. Some distributors apparently haven't set up their SSL correctly (invalid certificates). While not ideal, the plugin will now ignore SSL errors on these requests. They don't contain sensitive data, so that's probably fine. Fixes #6.
+- Update and improve the element hashing algorithm for the Adobe signature. 
+- Small bugfix update for eBook distributors that use the PassHash algorithm (for example, Barnes & Noble). 
+- Activation (key) exports now include the unique user ID in the default filename.
+- Fixes a bug where other FileTypePlugins would not run on EPUB and PDF files created by this plugin.
+
+## 0.0.10 (2021-10-23)
+
+- Fix incorrect nonce calculation. The nonce value in the Adobe library was calculated wrong which made the plugin stop working due to an overflow. If you get the error "int too big to convert" with v0.0.9 or earlier, you'll need to update to v0.0.10. Fixes #5.
+- Use Cryptodomex if Crypto is not found. This is required on some Linux distributions apparently. Fixes #2 and #4.
+
+## 0.0.9 (2021-10-04)
+
+- Add support for FulfillmentNotification. This lets Adobe (and the book source server) know that you've successfully downloaded a book. 
+- Add support for LoanReturn. This lets you return a loaned library book from the Calibre plugin settings. Just open the settings, click "Show loaned books" and you'll see a list of books you've loaned from a library. 
+
+## 0.0.8 (2021-10-03)
+
+- Fix some more bugs with some PDF files.
+- Fix PDF files larger than 4 GB.
+- Fix PDF or EPUB files larger than available RAM.
+- Fix for ACSM files not showing up in Calibre's "Add Book" dialog.
+
+## 0.0.7 (2021-10-01)
+
+- (Hopefully) fixing a bug with some PDFs not working.
+- Add more logging for invalid / non-working PDF files.
+- Fix a bug where Adobe login didn't work on MacOS with the default US English locale.
+
+## 0.0.6 (2021-09-28)
+
+- Add initial support for PDFs. This might not work with all PDF files yet.
+- Add support for importing an existing activation backup ZIP file.
+
+## 0.0.5 (2021-09-27)
+
+- Fixes a bug in the previous version where other FileTypePlugins were also executed on books if they were disabled. 
+
+## 0.0.4 (2021-09-26)
+
+- Implement workaround to be compatible with other FileTypePlugins - automatically execute them after converting ACSM to EPUB/PDF.
+
+## 0.0.3 (2021-09-25)
+
+- Initial (re-)implementation in Python, with support for Windows, Linux and MacOS.
+
+## 0.0.2 (unreleased)
+
+- Allow key extraction without extra binary call.
+
+## 0.0.1 (2021-09-20)
+
+- Initial implementation, wrapper around libgourou, only for Linux.

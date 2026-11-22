@@ -34,62 +34,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 See the "LICENSE" file for a full copy of the GNU GPL v3.
-
 '''
-
-# Revision history: 
-# v0.0.1: First version.
-# v0.0.2: Allow key extraction without extra binary call (unreleased test version)
-# v0.0.3: Standalone Calibre plugin for Linux, Windows, MacOS without the need for libgourou.
-# v0.0.4: Manually execute DeDRM (if installed) after converting ACSM to EPUB.
-# v0.0.5: Bugfix: DeDRM plugin was also executed if it's installed but disabled.
-# v0.0.6: First PDF support, allow importing previously exported activation data.
-# v0.0.7: More PDF logging, PDF reading in latin-1, MacOS locale bugfix
-# v0.0.8: More PDF bugfixes, support unlimited PDF file sizes, tell Calibre ACSMs are books.
-# v0.0.9: Add FulfillmentNotification support, add LoanReturn support.
-# v0.0.10: Fix nonce calculation, merge PRs #3 and #4 (PyCryptodome stuff)
-# v0.0.11: Ignore SSL errors during ACS notify, improve element hashing code, 
-#          improve PassHash support, include UUID in key export filename, 
-#          fix bug that would block other FileTypePlugins
-# v0.0.12: Fix Calibre Plugin index / updater
-# v0.0.13: v0.0.13 was a development / beta version with lots of different published test 
-#          versions. To make support easier there's no "final" v0.0.13 version. Instead, 
-#          all the changes from the various v0.0.13 beta versions are released with v0.0.14. 
-# v0.0.14: Add support for emulating multiple ADE versions (1.7.2, 2.0.1, 3.0.1, 4.0.3, 4.5.11),
-#          add code to import existing activation from ADE (Windows, MacOS or Linux/Wine), 
-#          add code to remove an existing activation from the plugin (Ctrl+Shift+D),
-#          fix race condition when importing multiple ACSMs simultaneously, 
-#          fix authorization failing with certain non-ASCII characters in username, 
-#          add detailed logging toggle setting, add auto-delete ACSM setting, 
-#          add useful error message for ACSMs with nonstandard download type.
-# v0.0.15: Add support for anonymous authorizations, add support for other ID providers, 
-#          fix ACSM files from Google Play books (no metadata node), 
-#          allow converting an anonymous auth to an AdobeID auth, 
-#          update python-cryptography from 3.4.8 to 36.0.1, update python-rsa from 4.7.2 to 4.8.
-# v0.0.16: Ignore fatal HTTP errors and/or a missing or broken server during optional 
-#          fulfillment notifications, allow authorizing an eReader through USB (experimental), 
-#          drop dependencies python-cryptography, python-rsa and python-pyasn1. 
-#          add a ton of testing code, try to prevent AV false-positives, 
-#          experimental support for Python2 / Calibre < 5, 
-#          fix broken URLs with missing protocol, fix loan data for loans without device ID, 
-#          fix nonce calculation yet again, merge #26 to make importing a WINE auth more reliable,
-#          update python-oscrypto to unofficial fork to fix OpenSSL 3 support.
-# v0.0.17: 
-#          Fix bug that would sometimes return the wrong book (or none at all) if you had 
-#          multiple active loans from the same distributor, add experimental GUI button, 
-#          rename plugin from "DeACSM" to "ACSM Input". BETA build, not a normal release!!
-#
-# v0.1.0:  Continue work on renaming from "DeACSM" to "ACSM Input". 
-#          The big version number jump is to make that name change clearer,
-#          and to support the "migration plugin" to rename the plugin.
-#          Print useful warning if LicenseServiceCertificate download fails,
-#          fix error with the loan list not being updated when importing multiple ACSMs at once,
-#          fix bug with the GUI extension in non-English environments,
-#          fix softlock when importing a large number of ACSM files at once,
-#          fix "account folder not found" error message on some clean installations,
-#          add experimental support for Calibre 3.48. 
-
-
 
 
 PLUGIN_NAME = "ACSM Input"
@@ -97,7 +42,6 @@ PLUGIN_VERSION_TUPLE = (0, 1, 0)
 
 from calibre.customize import FileTypePlugin        # type: ignore
 __version__ = PLUGIN_VERSION = ".".join([str(x)for x in PLUGIN_VERSION_TUPLE])
-
 
 
 from calibre.utils.config import config_dir         # type: ignore
@@ -108,7 +52,7 @@ try:
 except:
     from .singleinstance_helper import SingleInstance
 
-import os, shutil, traceback, sys, time, io
+import os, shutil, traceback, sys, time
 import zipfile
 from lxml import etree
 

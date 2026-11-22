@@ -93,7 +93,7 @@ In the folder "calibre-plugin" in this repo (or inside the Calibre plugin ZIP fi
 - `fulfill.py` can be used - with valid ByteBooks account files in the same folder - to turn an URLLink.acsm file into an eBook. 
 - `get_key_from_ByteBooks.py` can be used to contact the ByteBooks server and download the DER key file for a given AdobeID / ByteBooks ID to import into a DeDRM plugin. Just input your credentials and this script will output the DER file that can be used with DeDRM to decrypt books for this ID. This works independantly from the account activation files or from this plugin, so it's a good way to get your decryption key, especially if you're on Linux and it's too difficult to export the keys from ADE or BDE running inside Wine. This process does not use up one of your available device activations.
 
-Though, generally it's recommended to use the Calibre plugin instead of these standalone scripts. Except for maybe the `get_key_from_Adobe.py` script if you want to remove DRM from existing eBooks without having to extract the key from Digital Editions.
+Though, generally it's recommended to use the Calibre plugin instead of these standalone scripts. Except for maybe the `get_key_from_ByteBooks.py` script if you want to remove DRM from existing eBooks without having to extract the key from Digital Editions.
 
 ## Building from source
 
