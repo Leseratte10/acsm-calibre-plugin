@@ -26,7 +26,7 @@ except:
     import urllib2 as uliberror
     import httplib as ulibhttp
 
-from datetime import datetime, timedelta
+import datetime
 
 from lxml import etree
 
@@ -499,8 +499,15 @@ def addNonce():
     # What Adobe does instead is save the current time on program start, then increase tmp
     # every time a Nonce is needed. 
 
-    dt = datetime.utcnow()
-    sec = (dt - datetime(1970,1,1)).total_seconds()
+    if sys.version_info < (3, 7, 0):
+        # https://blog.miguelgrinberg.com/post/it-s-time-for-a-change-datetime-utcnow-is-now-deprecated 
+        dt = datetime.datetime.utcnow()
+        sec = (dt - datetime.datetime(1970,1,1)).total_seconds()
+    else: 
+        dt = datetime.datetime.now(datetime.timezone.utc)
+        sec = (dt - datetime.datetime(1970,1,1, tzinfo=datetime.timezone.utc)).total_seconds()
+
+
     Ntime = int(sec * 1000)
     # Ntime is now milliseconds since 1970
 
@@ -523,7 +530,7 @@ def addNonce():
 
     ret += "<adept:nonce>%s</adept:nonce>" % (base64.b64encode(final).decode("utf-8"))
 
-    m10m = dt + timedelta(minutes=10)
+    m10m = dt + datetime.timedelta(minutes=10)
     m10m_str = m10m.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     ret += "<adept:expiration>%s</adept:expiration>" % (m10m_str)
