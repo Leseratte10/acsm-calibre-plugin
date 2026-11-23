@@ -154,7 +154,6 @@ class ConfigWidget(QWidget):
 
         from .libadobeLoans import remove_overdue_books_from_list
         self.acsmprefs.update_loan_list(remove_overdue_books_from_list)
-        self.acsmprefs.writeprefs()
 
 
         if (len(self.acsmprefs["list_of_rented_books"]) == 0):
@@ -1193,7 +1192,6 @@ class ConfigWidget(QWidget):
         self.acsmprefs.set('notify_fulfillment', self.chkNotifyFulfillment.isChecked())
         self.acsmprefs.set('detailed_logging', self.chkDetailedLogging.isChecked())
         self.acsmprefs.set('delete_acsm_after_fulfill', self.chkDeleteAfterFulfill.isChecked())
-        self.acsmprefs.writeprefs()
 
     def load_resource(self, name):
         # TODO: Figure out what the heck this function is used for, doesn't seem to be called anywhere.
@@ -1221,7 +1219,6 @@ class RentedBooksDialog(QDialog):
 
         from .libadobeLoans import remove_overdue_books_from_list
         self.acsmprefs.update_loan_list(remove_overdue_books_from_list)
-        self.acsmprefs.writeprefs()
 
         # Start Qt Gui dialog layout
         layout = QVBoxLayout(self)

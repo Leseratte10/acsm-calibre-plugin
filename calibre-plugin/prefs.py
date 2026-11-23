@@ -86,8 +86,6 @@ class ACSMInput_Prefs():
 
         self.acsmprefs = JSONConfig(JSON_PATH)
 
-        self.acsmprefs.defaults['configured'] = False
-
         self.acsmprefs.defaults['notify_fulfillment'] = True
         self.acsmprefs.defaults['detailed_logging'] = False
         self.acsmprefs.defaults['delete_acsm_after_fulfill'] = False
@@ -132,9 +130,6 @@ class ACSMInput_Prefs():
         with _PrefsWriteLock():
             self.acsmprefs.refresh()
             self.acsmprefs[kind] = value
-
-    def writeprefs(self,value = True):
-        self.set('configured', value)
 
     def update_loan_list(self, modify):
         # type: (callable) -> list

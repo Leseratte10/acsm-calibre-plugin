@@ -97,12 +97,6 @@ class ACSMInput(FileTypePlugin):
 
     def initialize(self):
 
-        """
-        On initialization, make sure we have all the libraries (oscrypto and its dependency 
-        asn1crypto) that the plugin needs. Unfortunately the Adobe encryption is kinda weird 
-        and nonstandard and doesn't work with just the python modules included with Calibre. 
-        """
-
         try:
 
             # Patch Calibre to consider "ACSM" a book. This makes ACSM files show up
