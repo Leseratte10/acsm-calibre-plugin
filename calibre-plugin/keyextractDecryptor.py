@@ -1,6 +1,6 @@
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -23,6 +23,13 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 # antivirus programs shut up and stop reporting this plugin as a virus. 
 
 import base64
+
+def are_wine_binaries_available():
+    # Note: This only checks part of the string to ensure the string in this statement
+    # is not replaced by the b64 code when the plugin is packaged.
+    # This function determines whether WINE import will be offered.
+    return (not '@@@CALIBRE_DECRYPTOR_WIN32_B64' in data_win32 and 
+            not '@@@CALIBRE_DECRYPTOR_WIN64_B64' in data_win64)
 
 def get_win32_data(): 
     return base64.b64decode(data_win32)

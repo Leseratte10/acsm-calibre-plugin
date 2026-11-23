@@ -97,9 +97,10 @@ Though, generally it's recommended to use the Calibre plugin instead of these st
 
 ## Building from source
 
-If you want to run this plugin from source code (because you want to modify something or run a newer version from the master branch), it is not enough to simply ZIP up the "calibre-plugin" folder. You need to checkout the repository, then execute the "bundle_calibre_plugin.sh" script (which works on Linux and macOS; on macOS install the Windows cross-compiler first with `brew install mingw-w64`). 
+If you want to run this plugin from source code (because you want to modify something or run a newer version from the master branch), it is not enough to simply ZIP up the "calibre-plugin" folder. You need to checkout the repository, then execute the "bundle_calibre_plugin.sh" script (which works on Linux and macOS). This will create the "calibre-plugin.zip" file which you can import into Calibre as a plugin.
 
-This will create the "calibre-plugin.zip" file which you can import into Calibre as a plugin.
+If you want to build a version identical to the released version that includes the Windows executables only necessary for WINE activation imports on Linux, you need to have the Windows cross compiler installed - by running `apt install gcc-mingw-w64-i686 gcc-mingw-w64-x86-64` on Linux or `brew install mingw-w64` on MacOS). In most cases, this will not be necessary, though.
+
 
 ## To-Do list for the future (in no particular order)
 

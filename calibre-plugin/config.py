@@ -42,6 +42,7 @@ from calibre.constants import isosx, iswindows, islinux                 # type: 
 # modules from this plugin's zipfile.
 from . import PLUGIN_NAME, PLUGIN_VERSION
 from . import prefs
+from .keyextractDecryptor import are_wine_binaries_available
 
 
 if sys.version_info[0] == 2:
@@ -98,7 +99,7 @@ class ConfigWidget(QWidget):
                 self.button_import_WinADE.clicked.connect(self.import_activation_from_Win)
                 ua_group_box_layout.addWidget(self.button_import_WinADE)
 
-            if islinux:
+            if islinux and are_wine_binaries_available():
                 self.button_import_LinuxWineADE = QtGui.QPushButton(self)
                 self.button_import_LinuxWineADE.setText(_("Import activation from Digital Editions (Wine)"))
                 self.button_import_LinuxWineADE.clicked.connect(self.import_activation_from_LinuxWine)
@@ -162,7 +163,7 @@ class ConfigWidget(QWidget):
 
 
         self.chkNotifyFulfillment = QtGui.QCheckBox("Notify CS server after successful fulfillment")
-        self.chkNotifyFulfillment.setToolTip("Default: True\n\nIf this is enabled, the CS server will receive a notification once the ACSM has successfully been converted. \nThis is not strictly necessary, but it is what ADE does, so it's probably safer to just do it as well.\nAlso, it is required to be able to return loaned books.")
+        self.chkNotifyFulfillment.setToolTip("Default: True\n\nIf this is enabled, the CS server will receive a notification once the ACSM has successfully been converted. \nThis is not strictly necessary, but it is what Digital Editions does, so it's probably safer to just do it as well.\nAlso, it is required to be able to return loaned books.")
         self.chkNotifyFulfillment.setChecked(self.acsmprefs["notify_fulfillment"])
         layout.addWidget(self.chkNotifyFulfillment)
 
@@ -201,7 +202,7 @@ class ConfigWidget(QWidget):
                         self.button_import_MacADE.setEnabled(activated)
                     if iswindows:
                         self.button_import_WinADE.setEnabled(activated)
-                    if islinux:
+                    if islinux and are_wine_binaries_available():
                         self.button_import_LinuxWineADE.setEnabled(activated)
                 else:
                     try: 
@@ -580,7 +581,7 @@ class ConfigWidget(QWidget):
                     pass
 
             if container.find(adeptNS("activationToken")) == None:
-                return "ADE authorization seems to be corrupted (activationToken missing)", False, None
+                return "DE authorization seems to be corrupted (activationToken missing)", False, None
 
             if is_bytebooks_account():
                 acc_type = "ByteBooks"
@@ -588,7 +589,7 @@ class ConfigWidget(QWidget):
                 acc_type = "Adobe"
 
             if getDecryptedCert(None, acc_type == "ByteBooks") is None:
-                return "ADE authorization seems to be corrupted (failed to decrypt pkcs12)", False, None
+                return "DE authorization seems to be corrupted (failed to decrypt pkcs12)", False, None
 
 
             if not anon: 
@@ -614,7 +615,7 @@ class ConfigWidget(QWidget):
                 return display_str, True, None
         except: 
             traceback.print_exc()
-            return "ADE authorization seems to be corrupted", False, None
+            return "DE authorization seems to be corrupted", False, None
 
 
     def export_activation(self):
@@ -714,7 +715,7 @@ class ConfigWidget(QWidget):
             return error_dialog(None, "Import failed", "The WINEPREFIX path you entered doesn't seem to exist.", show=True, show_copy_button=False)
 
         if (not self.check_ADE_registry(text)):
-            return error_dialog(None, "Import failed", "The WINEPREFIX you entered doesn't seem to contain an authorized ADE.", show=True, show_copy_button=False)
+            return error_dialog(None, "Import failed", "The WINEPREFIX you entered doesn't seem to contain an authorized DE.", show=True, show_copy_button=False)
 
 
         from .libadobe import update_account_path
@@ -796,9 +797,9 @@ class ConfigWidget(QWidget):
 
         msg = "Trying to import existing activation from Digital Editions ...\n"
         msg += "You might get a prompt asking you to unlock your keychain / enter your keychain password.\n"
-        msg += "This is necessary to extract the ADE encryption keys. "
+        msg += "This is necessary to extract the encryption keys. "
 
-        info_dialog(None, "Importing from ADE", msg, show=True, show_copy_button=False)
+        info_dialog(None, "Importing from Digital Editions", msg, show=True, show_copy_button=False)
 
         from .libadobe import update_account_path
         from .libadobeImportAccount import importADEactivationMac
@@ -906,7 +907,7 @@ class ConfigWidget(QWidget):
             self.button_import_MacADE.setEnabled(not activated)
         if iswindows:
             self.button_import_WinADE.setEnabled(not activated)
-        if islinux:
+        if islinux and are_wine_binaries_available():
             self.button_import_LinuxWineADE.setEnabled(not activated)
         
         self.resize(self.sizeHint())
@@ -983,7 +984,7 @@ class ConfigWidget(QWidget):
             self.button_import_MacADE.setEnabled(not activated)
         if iswindows:
             self.button_import_WinADE.setEnabled(not activated)
-        if islinux:
+        if islinux and are_wine_binaries_available():
             self.button_import_LinuxWineADE.setEnabled(not activated)
 
         self.resize(self.sizeHint())
@@ -1139,7 +1140,7 @@ class ConfigWidget(QWidget):
             self.button_import_MacADE.setEnabled(not activated)
         if iswindows:
             self.button_import_WinADE.setEnabled(not activated)
-        if islinux:
+        if islinux and are_wine_binaries_available():
             self.button_import_LinuxWineADE.setEnabled(not activated)
 
         self.resize(self.sizeHint())
