@@ -111,7 +111,6 @@ class ActualACSMInputGUIExtension(InterfaceAction):
         # instead of opening the full dialog.
         from .libadobeLoans import remove_overdue_books_from_list
         acsmprefs.update_loan_list(remove_overdue_books_from_list)
-        acsmprefs.writeprefs()
 
         if (len(acsmprefs["list_of_rented_books"]) == 0):
             return info_dialog(None, "No loaned books", "You currently have no loaned books.", show=True, show_copy_button=False)
