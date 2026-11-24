@@ -519,6 +519,34 @@ class ConfigWidget(QWidget):
         self.lblAccInfo.setText("Authorization deleted.\nClose and re-open this window to add a new authorization.")
 
 
+    def update_account_display(self):
+        # type: () -> tuple
+        # Shows the current authorization in the dialog and enables the buttons that fit it.
+        # Returns the same as get_account_info(). Which buttons exist depends on the platform
+        # and on whether there was an authorization when the dialog was opened (__init__).
+
+        info_string, activated, mail = self.get_account_info()
+        self.lblAccInfo.setText(info_string)
+
+        for name, enabled in [
+                ("button_link_account", not activated),
+                ("button_anon_auth", not activated),
+                ("button_import_MacADE", not activated),
+                ("button_import_WinADE", not activated),
+                ("button_import_LinuxWineADE", not activated),
+                ("button_import_activation", not activated),
+                ("button_convert_anon_to_account", mail is None),
+                ("button_export_key", activated),
+                ("button_export_activation", activated)]:
+            button = getattr(self, name, None)
+            if button is not None:
+                button.setEnabled(enabled)
+
+        self.resize(self.sizeHint())
+
+        return info_string, activated, mail
+
+
     def get_account_info(self): 
 
        
@@ -719,21 +747,7 @@ class ConfigWidget(QWidget):
             update_account_path(self.acsmprefs["path_to_account_data"])           
 
             # update display
-            info_string, activated, ade_mail = self.get_account_info()
-            self.lblAccInfo.setText(info_string)
-
-            self.button_link_account.setEnabled(not activated)
-            self.button_anon_auth.setEnabled(not activated)
-            try: 
-                self.button_convert_anon_to_account.setEnabled(ade_mail is None)
-            except:
-                pass
-            self.button_import_activation.setEnabled(not activated)
-            self.button_import_LinuxWineADE.setEnabled(not activated)
-            self.button_export_key.setEnabled(activated)
-            self.button_export_activation.setEnabled(activated)
-
-            self.resize(self.sizeHint())
+            info_string, activated, ade_mail = self.update_account_display()
 
             if (activated):
                 if ade_mail is None: 
@@ -758,21 +772,7 @@ class ConfigWidget(QWidget):
             update_account_path(self.acsmprefs["path_to_account_data"])
 
             # update display
-            info_string, activated, ade_mail = self.get_account_info()
-            self.lblAccInfo.setText(info_string)
-
-            self.button_link_account.setEnabled(not activated)
-            self.button_anon_auth.setEnabled(not activated)
-            try: 
-                self.button_convert_anon_to_account.setEnabled(ade_mail is None)
-            except:
-                pass
-            self.button_import_activation.setEnabled(not activated)
-            self.button_import_WinADE.setEnabled(not activated)
-            self.button_export_key.setEnabled(activated)
-            self.button_export_activation.setEnabled(activated)
-
-            self.resize(self.sizeHint())
+            info_string, activated, ade_mail = self.update_account_display()
 
             if (activated):
                 if ade_mail is None: 
@@ -802,21 +802,7 @@ class ConfigWidget(QWidget):
             update_account_path(self.acsmprefs["path_to_account_data"])
 
             # update display
-            info_string, activated, ade_mail = self.get_account_info()
-            self.lblAccInfo.setText(info_string)
-
-            self.button_link_account.setEnabled(not activated)
-            self.button_anon_auth.setEnabled(not activated)
-            try: 
-                self.button_convert_anon_to_account.setEnabled(ade_mail is None)
-            except:
-                pass
-            self.button_import_activation.setEnabled(not activated)
-            self.button_import_MacADE.setEnabled(not activated)
-            self.button_export_key.setEnabled(activated)
-            self.button_export_activation.setEnabled(activated)
-
-            self.resize(self.sizeHint())
+            info_string, activated, ade_mail = self.update_account_display()
 
             if (activated):
                 if ade_mail is None: 
@@ -888,26 +874,7 @@ class ConfigWidget(QWidget):
         changeDeviceVersion(0, onlyIfUnknown=True)
         
         # update display
-        info_string, activated, ade_mail = self.get_account_info()
-        self.lblAccInfo.setText(info_string)
-
-        self.button_link_account.setEnabled(not activated)
-        self.button_anon_auth.setEnabled(not activated)
-        try: 
-            self.button_convert_anon_to_account.setEnabled(ade_mail is None)
-        except:
-            pass
-        self.button_import_activation.setEnabled(not activated)
-        self.button_export_key.setEnabled(activated)
-        self.button_export_activation.setEnabled(activated)
-        if isosx:
-            self.button_import_MacADE.setEnabled(not activated)
-        if iswindows:
-            self.button_import_WinADE.setEnabled(not activated)
-        if islinux and are_wine_binaries_available():
-            self.button_import_LinuxWineADE.setEnabled(not activated)
-        
-        self.resize(self.sizeHint())
+        info_string, activated, ade_mail = self.update_account_display()
 
         if activated:
             if ade_mail is None: 
@@ -965,26 +932,7 @@ class ConfigWidget(QWidget):
 
 
         # update display
-        info_string, activated, mail = self.get_account_info()
-        self.lblAccInfo.setText(info_string)
-
-        self.button_link_account.setEnabled(not activated)
-        self.button_anon_auth.setEnabled(not activated)
-        try: 
-            self.button_convert_anon_to_account.setEnabled(mail is None)
-        except:
-            pass
-        self.button_import_activation.setEnabled(not activated)
-        self.button_export_key.setEnabled(activated)
-        self.button_export_activation.setEnabled(activated)
-        if isosx:
-            self.button_import_MacADE.setEnabled(not activated)
-        if iswindows:
-            self.button_import_WinADE.setEnabled(not activated)
-        if islinux and are_wine_binaries_available():
-            self.button_import_LinuxWineADE.setEnabled(not activated)
-
-        self.resize(self.sizeHint())
+        info_string, activated, mail = self.update_account_display()
 
         info_dialog(None, "Done", "Authorized to anonymous account.", show=True, show_copy_button=False)
 
@@ -1033,15 +981,7 @@ class ConfigWidget(QWidget):
 
         if (success):
             # update display
-            info_string, activated, mail = self.get_account_info()
-            self.lblAccInfo.setText(info_string)
-
-            try: 
-                self.button_convert_anon_to_account.setEnabled(mail is None)
-            except:
-                pass
-
-            self.resize(self.sizeHint())
+            info_string, activated, mail = self.update_account_display()
 
             return info_dialog(None, "Done", "Successfully converted anonymous authentication to ByteBooks ID", show=True, show_copy_button=False)
 
@@ -1121,26 +1061,7 @@ class ConfigWidget(QWidget):
 
 
         # update display
-        info_string, activated, mail = self.get_account_info()
-        self.lblAccInfo.setText(info_string)
-
-        self.button_link_account.setEnabled(not activated)
-        self.button_anon_auth.setEnabled(not activated)
-        try: 
-            self.button_convert_anon_to_account.setEnabled(mail is None)
-        except:
-            pass
-        self.button_import_activation.setEnabled(not activated)
-        self.button_export_key.setEnabled(activated)
-        self.button_export_activation.setEnabled(activated)
-        if isosx:
-            self.button_import_MacADE.setEnabled(not activated)
-        if iswindows:
-            self.button_import_WinADE.setEnabled(not activated)
-        if islinux and are_wine_binaries_available():
-            self.button_import_LinuxWineADE.setEnabled(not activated)
-
-        self.resize(self.sizeHint())
+        info_string, activated, mail = self.update_account_display()
 
         info_dialog(None, "Done", "Authorized to '" + acc_item + "' account " + str(mail), show=True, show_copy_button=False)
 
