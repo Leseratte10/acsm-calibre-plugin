@@ -15,7 +15,7 @@ Helper library with code needed for Adobe stuff.
 '''
 
 from uuid import getnode
-import sys, os, hashlib, base64, platform
+import sys, os, hashlib, base64, platform, tempfile, stat
 import ssl
 try: 
     import urllib.request as ulib
@@ -131,6 +131,76 @@ def safe_xml_parser():
     return etree.XMLParser(resolve_entities=False, no_network=True)
 
 
+def replace_file(src, dst):
+    # type: (str, str) -> None
+    # Renames src to dst. An existing dst is replaced in one step, so there's always either
+    # the old or the new file under that name.
+    if hasattr(os, "replace"):
+        # Python 3.3 and newer
+        os.replace(src, dst)
+    elif sys.platform == "win32":
+        # Python 2 on Windows, where os.rename fails if dst exists. This is what os.replace does.
+        import ctypes
+        MOVEFILE_REPLACE_EXISTING = 0x1
+        MOVEFILE_WRITE_THROUGH = 0x8
+        text = type(u"")
+        if not isinstance(src, text):
+            src = src.decode("mbcs")
+        if not isinstance(dst, text):
+            dst = dst.decode("mbcs")
+        if not ctypes.windll.kernel32.MoveFileExW(src, dst, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH):
+            raise ctypes.WinError()
+    else:
+        # Python 2 on Linux and macOS, where os.rename replaces dst in one step
+        os.rename(src, dst)
+
+
+def write_files_atomically(files):
+    # type: (list) -> None
+    # Writes the (path, data) pairs without ever leaving a truncated or empty file behind.
+    # Each file is first written completely to a temporary file in the same folder, and
+    # only once all of them are written, they replace the old files. If anything fails
+    # before that (a full disk, an unplugged eReader, a killed process), the old files
+    # stay as they are.
+
+    renames = []        # (temporary file, file)
+    try:
+        for path, data in files:
+            # Write the target of a symlink, and keep the symlink
+            path = os.path.realpath(path)
+            folder, name = os.path.split(path)
+
+            fd, tmp_path = tempfile.mkstemp(prefix=name + ".", suffix=".tmp", dir=folder)
+            renames.append((tmp_path, path))
+            with os.fdopen(fd, "wb") as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+
+            # mkstemp creates the file for the owner only. Keep the permissions of an existing file.
+            try:
+                os.chmod(tmp_path, stat.S_IMODE(os.stat(path).st_mode))
+            except OSError:
+                pass
+
+        for tmp_path, path in renames:
+            replace_file(tmp_path, path)
+    except:
+        # Remove the temporary files that weren't renamed
+        for tmp_path, path in renames:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        raise
+
+
+def write_file_atomically(path, data):
+    # type: (str, bytes) -> None
+    # See write_files_atomically()
+    write_files_atomically([(path, data)])
+
+
 def update_account_path(folder_path):
     # type: (str) -> None
 
@@ -150,9 +220,7 @@ def createDeviceKeyFile():
     global devkey_bytes
     devkey_bytes = Random.get_random_bytes(DEVICE_KEY_SIZE)
 
-    f = open(FILE_DEVICEKEY, "wb")
-    f.write(devkey_bytes)
-    f.close()
+    write_file_atomically(FILE_DEVICEKEY, devkey_bytes)
 
 def int_to_bytes(value, length, big_endian = True):
     # Helper function for Python2 only (big endian)

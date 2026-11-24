@@ -28,7 +28,7 @@ class AES(object):
         return self._aes.decrypt(data)
 
 
-from .libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path, get_device_name
+from .libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path, get_device_name, safe_xml_parser, write_files_atomically
 from .libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS, VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
 
 
@@ -364,22 +364,15 @@ def finalize_write_config_Windows(data, key, buildID):
     dev_content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (data["activationToken"]["fingerprint"])
     dev_content += "</adept:deviceInfo>"
 
-    # Content prepared, now write all three files.
-
-    # Create devicekey file:
-    f = open(get_devkey_path(), "wb")
-    f.write(key)
-    f.close()
-
-    # Create activation file
-    f = open(get_activation_xml_path(), "wb")
-    f.write(content.encode("utf-8"))
-    f.close()
-
-    # Create device file
-    f = open(get_device_path(), "wb")
-    f.write(dev_content.encode("utf-8"))
-    f.close()
+    # Content prepared, now replace all three files together.
+    try:
+        write_files_atomically([
+            (get_devkey_path(), key),
+            (get_activation_xml_path(), content.encode("utf-8")),
+            (get_device_path(), dev_content.encode("utf-8")),
+        ])
+    except (IOError, OSError) as e:
+        return False, "Can't write the account files: %s" % (e)
 
     return True, "Done"
 
@@ -532,20 +525,26 @@ def recreateMacActivationFiles(path_to_activation, deviceKey, deviceFingerprint,
         print("Looks like the device key is invalid ...")
         return False, "Invalid device key"
     
-    # Create activation.xml file:
-    import shutil
-    shutil.copyfile(path_to_activation, get_activation_xml_path())
+    # Read and check activation.dat before anything is written, so a broken or
+    # de-authorized file doesn't leave a half imported account behind.
+    try:
+        with open(path_to_activation, "rb") as f:
+            activation_data = f.read()
+        activationxml = etree.fromstring(activation_data, parser=safe_xml_parser()).getroottree()
+    except (IOError, OSError, etree.XMLSyntaxError) as e:
+        return False, "Can't read activation.dat: %s" % (e)
 
-    # Create devicekey file:
-    f = open(get_devkey_path(), "wb")
-    f.write(deviceKey)
-    f.close()
+    # The plugin parses its own account files with lxml's default parser, so just like
+    # the ZIP import, don't import a file with a DOCTYPE.
+    if activationxml.docinfo.doctype:
+        return False, "activation.dat has an invalid format"
 
-    # Read and parse activation.xml
-    activationxml = etree.parse(get_activation_xml_path())
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-    devtype = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("deviceType"))).text
+    devtype_node = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("deviceType")))
+    if devtype_node is None or not devtype_node.text:
+        return False, "activation.dat contains no authorization. Is Digital Editions authorized?"
+    devtype = devtype_node.text
 
 
     # Re-create device.xml from scratch:
@@ -581,9 +580,15 @@ def recreateMacActivationFiles(path_to_activation, deviceKey, deviceFingerprint,
     content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (base64.b64encode(deviceFingerprint).decode("latin-1"))
     content += "</adept:deviceInfo>"
 
-    # Write device.xml
-    f = open(get_device_path(), "wb")
-    f.write(content.encode("utf-8"))
-    f.close()
+    # Content prepared, now replace all three files together. activation.xml is
+    # activation.dat, byte for byte.
+    try:
+        write_files_atomically([
+            (get_activation_xml_path(), activation_data),
+            (get_devkey_path(), deviceKey),
+            (get_device_path(), content.encode("utf-8")),
+        ])
+    except (IOError, OSError) as e:
+        return False, "Can't write the account files: %s" % (e)
 
     return True, "Success"

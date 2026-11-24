@@ -17,7 +17,10 @@ sys.path.append("../calibre-plugin")
 import unittest
 from freezegun import freeze_time
 from lxml import etree
-
+if sys.version_info[0] >= 3:
+    from unittest.mock import patch
+else: 
+    from mock import patch
 
 
 from acsm_input import libadobeLoans        # type: ignore
@@ -38,15 +41,9 @@ class TestPluginInterface(unittest.TestCase):
 
     @unittest.skipIf(sys.platform.startswith("win"), "Does not work on Windows due to file permissions.")
     @unittest.skipIf(sys.version_info >= (3, 14, 0), "This is currently buggy, see cpython bug #152445")
+    @patch.dict(os.environ, {'SOURCE_DATE_EPOCH': '1'})
     def test_addFileToZipIn1970(self):
         '''Check if ZIP file writing works in 1970'''
-
-        source_date_epoch_old = None
-
-        if 'SOURCE_DATE_EPOCH' in os.environ:
-            source_date_epoch_old = os.environ['SOURCE_DATE_EPOCH']
-        
-        os.environ['SOURCE_DATE_EPOCH'] = '1'
 
         import zipfile, tempfile, struct
         try: 
@@ -60,11 +57,7 @@ class TestPluginInterface(unittest.TestCase):
             tf.close()
         except struct.error:
             self.fail("Failed to add file to ZIP archive")
-        finally: 
-            if source_date_epoch_old is not None: 
-                os.environ['SOURCE_DATE_EPOCH'] = source_date_epoch_old
-            else: 
-                del os.environ['SOURCE_DATE_EPOCH']
+
 
 
     @freeze_time("2022-07-01 07:34:32.000000")

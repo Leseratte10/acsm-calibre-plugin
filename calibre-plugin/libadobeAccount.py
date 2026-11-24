@@ -30,7 +30,7 @@ from .libadobe import get_devkey_path, get_device_path, get_activation_xml_path
 from .libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
 from .libadobe import VAR_VER_SUPP_VERSIONS
 from .libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
-from .libadobe import safe_xml_parser
+from .libadobe import safe_xml_parser, write_file_atomically
 
 
 def createDeviceFile(randomSerial, useVersionIndex = 0): 
@@ -96,10 +96,7 @@ def createDeviceFile(randomSerial, useVersionIndex = 0):
 
     etree.SubElement(root, etree.QName(NSMAP["adept"], "fingerprint")).text = fingerprint
 
-    f = open(get_device_path(), "wb")
-    f.write(b"<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False))
-    f.close()
+    write_file_atomically(get_device_path(), b"<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False))
 
     return True
 
@@ -256,10 +253,7 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
         print("Warning: authCertBB and authCertAdobe are both None ...")
 
     
-    f = open(get_activation_xml_path(), "wb")
-    f.write(b"<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False))
-    f.close()
+    write_file_atomically(get_activation_xml_path(), b"<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False))
 
     return True, "Done"
 
@@ -457,10 +451,7 @@ def convertAnonAuthToAccount(username, passwd):
     tmp_node.text = username
 
     # Write to file
-    f = open(get_activation_xml_path(), "wb")
-    f.write(b"<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
-    f.close()
+    write_file_atomically(get_activation_xml_path(), b"<?xml version=\"1.0\"?>\n" + etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
 
     
     return True, "Account linking successful"
@@ -626,9 +617,7 @@ def signIn(account_type, username, passwd):
     content += "</adept:credentials>\n"
     content += "</activationInfo>\n"
 
-    f = open(get_activation_xml_path(), "wb")
-    f.write(content.encode("utf-8"))
-    f.close()
+    write_file_atomically(get_activation_xml_path(), content.encode("utf-8"))
 
     return True, "Done"
 
@@ -741,9 +730,7 @@ def exportProxyAuth(act_xml_path, activationToken):
     # Okay, now we can finally write this to the device. 
 
     try: 
-        f = open(act_xml_path, "wb")
-        f.write(ret.encode("utf-8"))
-        f.close()
+        write_file_atomically(act_xml_path, ret.encode("utf-8"))
     except: 
         return False, "Can't write file"
 
@@ -957,10 +944,7 @@ def changeDeviceVersion(useVersionIndex = 0, onlyIfUnknown = False):
         return True, ""
 
     try: 
-        f = open(get_device_path(), "wb")
-        f.write(b"<?xml version=\"1.0\"?>\n")
-        f.write(etree.tostring(devicexml, encoding="utf-8", pretty_print=True, xml_declaration=False))
-        f.close()
+        write_file_atomically(get_device_path(), b"<?xml version=\"1.0\"?>\n" + etree.tostring(devicexml, encoding="utf-8", pretty_print=True, xml_declaration=False))
     except: 
         return False, "Failed to update device file."
 
@@ -1045,10 +1029,7 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
     activationxml = etree.parse(get_activation_xml_path())
     activationxml.getroot().append(credentialsXML)
 
-    f = open(get_activation_xml_path(), "wb")
-    f.write(b"<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
-    f.close()
+    write_file_atomically(get_activation_xml_path(), b"<?xml version=\"1.0\"?>\n" + etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
 
     return True, ret  
 

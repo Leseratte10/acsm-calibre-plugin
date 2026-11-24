@@ -14,7 +14,7 @@ from xml.sax.saxutils import escape as xml_escape
 from .libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
 from .libadobe import get_devkey_path, get_device_path, get_activation_xml_path
 from .libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_HOBBES_VERSIONS
-from .libadobe import safe_xml_parser
+from .libadobe import safe_xml_parser, write_file_atomically
 
 
  
@@ -382,10 +382,7 @@ def operatorAuth(operatorURL):
     
     etree.SubElement(list, etree.QName(NSMAP["adept"], "operatorURL")).text = operatorURL
 
-    f = open(get_activation_xml_path(), "wb")
-    f.write(b"<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
-    f.close()
+    write_file_atomically(get_activation_xml_path(), b"<?xml version=\"1.0\"?>\n" + etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
 
     return None, reqtype
 
@@ -1030,10 +1027,7 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe = False):
     etree.SubElement(info_entry, etree.QName(NSMAP["adept"], "licenseURL")).text = server_lic_url
     etree.SubElement(info_entry, etree.QName(NSMAP["adept"], "certificate")).text = server_cert
 
-    f = open(get_activation_xml_path(), "wb")
-    f.write(b"<?xml version=\"1.0\"?>\n")
-    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
-    f.close()
+    write_file_atomically(get_activation_xml_path(), b"<?xml version=\"1.0\"?>\n" + etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
 
     return True, "Done"
 

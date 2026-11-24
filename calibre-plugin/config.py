@@ -445,15 +445,8 @@ class ConfigWidget(QWidget):
             if not ret: 
                 return error_dialog(None, "Authorize eReader", "Couldn't activate device, server returned error.", show=True, det_msg=data, show_copy_button=False)
 
-            if already_activated:
-                # The reader was already activated with another ID,
-                # so we need to remove that before storing the new one.
-                try: 
-                    os.remove(act_xml_path)
-                except: 
-                    error_dialog(None, "Authorize eReader", "Failed to remove existing authorization.", show=True, show_copy_button=False)
-                    return
-
+            # If the reader was already activated with another ID, this replaces that
+            # authorization, but only once the new one is written completely.
             ret, data = exportProxyAuth(act_xml_path, data)
 
             if not ret: 
@@ -843,7 +836,7 @@ class ConfigWidget(QWidget):
         filenames = choose_files(self, "Import DE activation file (ZIP)", _("Import DE activation file (ZIP)"), 
                 filters, all_files=False, select_only_single_file=True)
 
-        from .libadobe import update_account_path, safe_xml_parser
+        from .libadobe import update_account_path, safe_xml_parser, write_files_atomically
         from .libadobeAccount import changeDeviceVersion
         
         try: 
@@ -874,18 +867,14 @@ class ConfigWidget(QWidget):
                         return error_dialog(None, "Import failed", name + " in this ZIP has invalid format.", show=True, show_copy_button=False)
 
                 try: 
-                    # Copy the files byte for byte, so they're not re-encoded with the system's default encoding.
-                    output_device = open(os.path.join(self.acsmprefs["path_to_account_data"], "device.xml"), "wb")
-                    output_device.write(device)
-                    output_device.close()
-
-                    output_activation = open(os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml"), "wb")
-                    output_activation.write(activation)
-                    output_activation.close()
-
-                    output_salt = open(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"), "wb")
-                    output_salt.write(salt)
-                    output_salt.close()
+                    # Copy the files byte for byte, so they're not re-encoded with the system's
+                    # default encoding, and replace all three together.
+                    account_folder = self.acsmprefs["path_to_account_data"]
+                    write_files_atomically([
+                        (os.path.join(account_folder, "device.xml"), device),
+                        (os.path.join(account_folder, "activation.xml"), activation),
+                        (os.path.join(account_folder, "devicesalt"), salt),
+                    ])
 
                 except: 
                     err = traceback.format_exc()

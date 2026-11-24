@@ -601,6 +601,67 @@ class TestAdobe(unittest.TestCase):
         self.assertEqual(received.find(adNS("deviceType")).text, device_type, "The server gets different text than what was signed")
         self.assertEqual(libadobe.hash_node(received).hexdigest(), signed_hashes[0], "The signature doesn't match the request the server gets")
 
+    def test_writeFilesAtomically(self):
+        '''Check if account files are replaced completely or not at all'''
+
+        # When managing an activation, we need to write multiple files. 
+        # If only some of them get written and some don't, then the activation
+        # is corrupted. Ensure that that's not going to happen.
+
+        import tempfile, shutil, errno, stat
+
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            path_a = os.path.join(tmp_dir, "activation.xml")
+            path_b = os.path.join(tmp_dir, "device.xml")
+            with open(path_a, "wb") as f:
+                f.write(b"old a")
+            if sys.platform != "win32":
+                os.chmod(path_a, 0o640)
+
+            # One existing and one new file
+            libadobe.write_files_atomically([(path_a, b"new a"), (path_b, b"new b")])
+            for path, content in [(path_a, b"new a"), (path_b, b"new b")]:
+                with open(path, "rb") as f:
+                    self.assertEqual(f.read(), content, "%s wasn't written" % (os.path.basename(path)))
+            if sys.platform != "win32":
+                self.assertEqual(stat.S_IMODE(os.stat(path_a).st_mode), 0o640, "The file's permissions changed")
+
+            # A full disk while writing the second file leaves both files as they were
+            real_fsync = os.fsync
+            fsync_calls = []
+            def failing_fsync(fd):
+                fsync_calls.append(fd)
+                if len(fsync_calls) == 2:
+                    raise OSError(errno.ENOSPC, "No space left on device")
+                return real_fsync(fd)
+
+            with patch.object(os, "fsync", side_effect=failing_fsync):
+                self.assertRaises(OSError, libadobe.write_files_atomically, [(path_a, b"newer a"), (path_b, b"newer b")])
+            for path, content in [(path_a, b"new a"), (path_b, b"new b")]:
+                with open(path, "rb") as f:
+                    self.assertEqual(f.read(), content, "%s changed although writing failed" % (os.path.basename(path)))
+
+            # A symlink to an account file stays a symlink
+            if hasattr(os, "symlink") and sys.platform != "win32":
+                real_path = os.path.join(tmp_dir, "real.xml")
+                link_path = os.path.join(tmp_dir, "link.xml")
+                with open(real_path, "wb") as f:
+                    f.write(b"old")
+                os.symlink(real_path, link_path)
+                libadobe.write_file_atomically(link_path, b"new")
+                self.assertTrue(os.path.islink(link_path), "The symlink was replaced by a file")
+                with open(real_path, "rb") as f:
+                    self.assertEqual(f.read(), b"new", "The symlink's target wasn't written")
+                os.remove(link_path)
+                os.remove(real_path)
+
+            # No temporary files are left behind
+            self.assertEqual(sorted(os.listdir(tmp_dir)), ["activation.xml", "device.xml"], "Temporary files are left behind")
+        finally:
+            shutil.rmtree(tmp_dir)
+
+
     def test_Account_loginCredentialEncryption(self):
         '''Check if we can properly encrypt login credentials (ASCII)'''
 
