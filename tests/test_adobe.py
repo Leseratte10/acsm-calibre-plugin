@@ -147,6 +147,114 @@ class TestAdobe(unittest.TestCase):
         self.assertIsInstance(libadobe.makeSerial(True), str, "Serial must be a string, not bytes!")
         self.assertIsInstance(libadobe.makeSerial(False), str, "Serial must be a string, not bytes!")
 
+    def test_serialGenerationNonASCIIUser(self):
+        '''Check if serial generation works with a user name that isn't ASCII'''
+
+        # Python 2 returns the user name as a byte string in the system's encoding, which
+        # made makeSerial crash. It has to give the same serial as the name as text.
+
+        import getpass, hashlib
+
+        name = b"j\xc3\xbcrgen".decode("utf-8")
+        name_bytes = name.encode("mbcs" if sys.platform == "win32" else "utf-8")
+
+        class PasswdEntry:
+            def __init__(self, pw_name):
+                self.pw_name = pw_name
+
+        def serial_for(user):
+            with patch.object(os, "getlogin", return_value=user, create=True), \
+                    patch.object(getpass, "getuser", return_value=user):
+                try:
+                    import pwd
+                except ImportError:
+                    # Windows
+                    return libadobe.makeSerial(False)
+                with patch.object(pwd, "getpwuid", return_value=PasswdEntry(user)):
+                    return libadobe.makeSerial(False)
+
+        serial = serial_for(name)
+        self.assertEqual(serial_for(name_bytes), serial, "A user name as a byte string gives a different serial")
+
+        # The serial is still the SHA-1 of "uid:user name as UTF-8:MAC address" and a null byte
+        uid = os.getuid() if hasattr(os, "getuid") else 1000
+        mac = tuple(bytearray(libadobe.get_mac_address()))
+        data_to_hash = ("%d:" % uid).encode("ascii") + name.encode("utf-8") + (":%02x:%02x:%02x:%02x:%02x:%02x\x00" % mac).encode("ascii")
+        self.assertEqual(serial, hashlib.sha1(data_to_hash).hexdigest().lower(), "The serial for a user name as text changed")
+
+
+    def test_deviceNameNonASCII(self):
+        '''Check if device.xml is correct for a computer name that isn't ASCII'''
+
+        # Python 2 returns the computer name as a byte string in the system's encoding,
+        # which lxml rejects. The import code also inserted it without escaping it.
+
+        import tempfile, shutil, platform
+        from acsm_input import libadobeImportAccount       # type: ignore
+
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+        name = b"B\xc3\x9cRO & <Co>".decode("utf-8")
+        uname = list(platform.uname())
+        uname[1] = name.encode("mbcs" if sys.platform == "win32" else "utf-8")
+
+        mock_mac_activation_xml = b"""<?xml version="1.0"?>
+<activationInfo xmlns="http://ns.adobe.com/adept">
+  <adept:activationToken xmlns:adept="http://ns.adobe.com/adept">
+    <adept:deviceType>standalone</adept:deviceType>
+  </adept:activationToken>
+</activationInfo>
+"""
+
+        mock_import_data = {
+            "activationServiceInfo": {
+                "authURL": "https://example.com/auth", "userInfoURL": "https://example.com/userinfo",
+                "activationURL": "https://example.com/activate", "certificate": "Q0VSVA==",
+                "authenticationCertificate": "QVVUSA=="
+            },
+            "credentials": {
+                "user": "urn:uuid:11111111-2222-3333-4444-555555555555", "pkcs12": "UEtDUzEy",
+                "licenseCertificate": "TElD", "privateLicenseKey": "S0VZ", "authenticationCertificate": "QVVUSA=="
+            },
+            "activationToken": {
+                "device": "urn:uuid:66666666-7777-8888-9999-000000000000", "fingerprint": "RklOR0VS",
+                "deviceType": "standalone", "activationURL": "https://example.com/activate",
+                "user": "urn:uuid:11111111-2222-3333-4444-555555555555", "signature": "U0lH"
+            }
+        }
+
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            dev_xml_path = os.path.join(tmp_dir, "device.xml")
+
+            with patch.object(platform, "uname", return_value=tuple(uname)), \
+                    patch.object(libadobe, "FILE_DEVICEXML", dev_xml_path), \
+                    patch.object(libadobe, "FILE_ACTIVATIONXML", os.path.join(tmp_dir, "activation.xml")), \
+                    patch.object(libadobe, "FILE_DEVICEKEY", os.path.join(tmp_dir, "devicesalt")), \
+                    patch.object(libadobe, "devkey_bytes", bytearray(16)):
+
+                self.assertEqual(libadobe.get_device_name(), name, "Wrong computer name")
+
+                # New authorization
+                self.assertTrue(libadobeAccount.createDeviceFile(True, 0), "createDeviceFile failed")
+                self.assertEqual(etree.parse(dev_xml_path).find(adNS("deviceName")).text, name, "Wrong deviceName for a new authorization")
+
+                # Import from ADE on Windows or in Wine
+                result, msg = libadobeImportAccount.finalize_write_config_Windows(mock_import_data, bytearray(16), libadobe.VAR_VER_DEFAULT_BUILD_ID)
+                self.assertTrue(result, msg)
+                self.assertEqual(etree.parse(dev_xml_path).find(adNS("deviceName")).text, name, "Wrong deviceName after a Windows import")
+
+                # Import from ADE on macOS
+                mac_activation_path = os.path.join(tmp_dir, "activation.dat")
+                with open(mac_activation_path, "wb") as f:
+                    f.write(mock_mac_activation_xml)
+                result, msg = libadobeImportAccount.recreateMacActivationFiles(mac_activation_path, bytearray(16), b"fingerprint", libadobe.VAR_VER_DEFAULT_BUILD_ID)
+                self.assertTrue(result, msg)
+                self.assertEqual(etree.parse(dev_xml_path).find(adNS("deviceName")).text, name, "Wrong deviceName after a macOS import")
+        finally:
+            shutil.rmtree(tmp_dir)
+
+
     def test_fingerprintGeneration(self): 
         '''Check if fingerprint generation works'''
         libadobe.devkey_bytes = bytearray([0xf8, 0x7a, 0xfc, 0x8c, 0x75, 0x25, 0xdc, 0x4b, 0x83, 0xec, 0x0c, 0xe2, 0xab, 0x4b, 0xef, 0x51])
@@ -378,6 +486,121 @@ class TestAdobe(unittest.TestCase):
         self.assertIsNotNone(decrypted)
 
     
+    def test_Account_activationReplyWithDeclaration(self):
+        '''Check if the /Activate reply is stored correctly without XML declaration'''
+
+        # activateDevice used to paste the reply as it is in front of "</activationInfo>". An
+        # XML declaration in front of the activationToken then ended up in the middle of
+        # activation.xml, and the file never parsed again. A BOM became a stray character.
+
+        import tempfile, shutil
+
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+        mock_activation_xml = b"""<?xml version="1.0"?>
+<activationInfo xmlns="http://ns.adobe.com/adept">
+  <adept:activationServiceInfo xmlns:adept="http://ns.adobe.com/adept">
+    <adept:authURL>https://example.com/auth</adept:authURL>
+  </adept:activationServiceInfo>
+  <adept:credentials xmlns:adept="http://ns.adobe.com/adept">
+    <adept:user>urn:uuid:11111111-2222-3333-4444-555555555555</adept:user>
+    <adept:username method="AdobeID">J&#252;rgen</adept:username>
+  </adept:credentials>
+</activationInfo>
+"""
+
+        mock_token = b"""<activationToken xmlns="http://ns.adobe.com/adept">
+  <device>urn:uuid:66666666-7777-8888-9999-000000000000</device>
+  <fingerprint>AAAAAAAAAAAAAAAAAAAAAAAAAAA=</fingerprint>
+  <deviceType>standalone</deviceType>
+  <activationURL>https://example.com/activate</activationURL>
+  <user>urn:uuid:11111111-2222-3333-4444-555555555555</user>
+  <signature>c2lnbmF0dXJl</signature>
+</activationToken>"""
+
+        mock_request = """<adept:activate xmlns:adept="http://ns.adobe.com/adept" requestType="initial"><adept:fingerprint>AAAAAAAAAAAAAAAAAAAAAAAAAAA=</adept:fingerprint></adept:activate>"""
+
+        replies = [
+            ("no declaration", mock_token),
+            ("XML declaration", b'<?xml version="1.0" encoding="UTF-8"?>\n' + mock_token),
+            ("BOM", b"\xef\xbb\xbf" + mock_token),
+            ("BOM and XML declaration", b'\xef\xbb\xbf<?xml version="1.0" encoding="UTF-8"?>\n' + mock_token + b"\n"),
+        ]
+
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            act_xml_path = os.path.join(tmp_dir, "activation.xml")
+
+            for name, reply in replies:
+                with open(act_xml_path, "wb") as f:
+                    f.write(mock_activation_xml)
+                username = etree.parse(act_xml_path).find("./%s/%s" % (adNS("credentials"), adNS("username"))).text
+
+                with patch.object(libadobe, "FILE_ACTIVATIONXML", act_xml_path), \
+                        patch.object(libadobeAccount, "buildActivateReq", return_value=(True, mock_request)), \
+                        patch.object(libadobeAccount, "buildActivateReqProxy", return_value=(True, mock_request)), \
+                        patch.object(libadobeAccount, "sign_node", return_value="c2lnbmF0dXJl"), \
+                        patch.object(libadobeAccount, "sendRequestDocu", return_value=reply):
+
+                    result, _ = libadobeAccount.activateDevice(0, None)
+                    self.assertTrue(result, "activateDevice failed (%s)" % name)
+
+                    try:
+                        activation = etree.parse(act_xml_path)
+                    except etree.XMLSyntaxError as e:
+                        self.fail("activation.xml doesn't parse any more (%s): %s" % (name, e))
+
+                    self.assertEqual(activation.find("./%s/%s" % (adNS("activationToken"), adNS("device"))).text,
+                        "urn:uuid:66666666-7777-8888-9999-000000000000", "activationToken wasn't stored (%s)" % name)
+                    self.assertEqual(activation.find("./%s/%s" % (adNS("credentials"), adNS("username"))).text,
+                        username, "The existing account data changed (%s)" % name)
+
+                    # For an eReader, activateDevice returns the token, and exportProxyAuth
+                    # pastes it into the eReader's activation.xml.
+                    result, token = libadobeAccount.activateDevice(0, "proxy data")
+                    self.assertTrue(result, "activateDevice failed for an eReader (%s)" % name)
+                    self.assertTrue(token.startswith(b"<activationToken"), "The token for an eReader still has what the reply had in front of it (%s)" % name)
+                    self.assertEqual(etree.fromstring(token).find(adNS("device")).text,
+                        "urn:uuid:66666666-7777-8888-9999-000000000000", "Wrong token for an eReader (%s)" % name)
+        finally:
+            shutil.rmtree(tmp_dir)
+
+    def test_Account_activationRequestNonASCII(self):
+        '''Check if a signed activation request with non-ASCII text reaches the server as it was signed'''
+
+        # activateDevice used to decode the request's UTF-8 serialization as Latin-1, and
+        # sendRequestDocu then encoded that as UTF-8 again. Non-ASCII text arrived encoded
+        # twice, so it no longer matched the signature.
+
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+        mock_request = """<adept:activate xmlns:adept="http://ns.adobe.com/adept" requestType="initial"><adept:fingerprint>AAAAAAAAAAAAAAAAAAAAAAAAAAA=</adept:fingerprint><adept:deviceType>Leseger&#228;t</adept:deviceType></adept:activate>"""
+        device_type = etree.fromstring(mock_request).find(adNS("deviceType")).text
+
+        signed_hashes = []
+        def mock_sign_node(node, prefer_bytebooks):
+            signed_hashes.append(libadobe.hash_node(node).hexdigest())
+            return "c2lnbmF0dXJl"
+
+        sent_data = []
+        def mock_send(URL, document, contenttype, returnRC = False, validate_tls = True):
+            # What would go over the network
+            sent_data.append(document)
+            return b'<error xmlns="http://ns.adobe.com/adept" data="E_TEST_ONLY"/>'
+
+        with patch.object(libadobeAccount, "buildActivateReq", return_value=(True, mock_request)), \
+                patch.object(libadobeAccount, "sign_node", side_effect=mock_sign_node), \
+                patch.object(libadobe, "sendPOSTHTTPRequest", side_effect=mock_send):
+            result, msg = libadobeAccount.activateDevice(0, None)
+
+        self.assertFalse(result, "activateDevice should return the mocked server error")
+        self.assertEqual(len(sent_data), 1, "activateDevice didn't send the request")
+
+        # The server parses the request as UTF-8 and checks the signature against its hash
+        received = etree.fromstring(sent_data[0])
+        self.assertEqual(received.find(adNS("deviceType")).text, device_type, "The server gets different text than what was signed")
+        self.assertEqual(libadobe.hash_node(received).hexdigest(), signed_hashes[0], "The signature doesn't match the request the server gets")
+
     def test_Account_loginCredentialEncryption(self):
         '''Check if we can properly encrypt login credentials (ASCII)'''
 

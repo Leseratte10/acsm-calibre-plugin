@@ -15,7 +15,7 @@ Helper library with code needed for Adobe stuff.
 '''
 
 from uuid import getnode
-import sys, os, hashlib, base64
+import sys, os, hashlib, base64, platform
 import ssl
 try: 
     import urllib.request as ulib
@@ -185,6 +185,27 @@ def get_mac_address():
 
 
 
+def os_string_to_text(value):
+    # type: (str|bytes) -> str
+    # Python 2 returns names from the operating system, like the user name or the
+    # computer name, as byte strings in the system's encoding: the ANSI code page on
+    # Windows, usually UTF-8 everywhere else. Python 3 already returns text.
+    if isinstance(value, bytes):
+        try:
+            return value.decode("mbcs" if sys.platform == "win32" else "utf-8")
+        except UnicodeDecodeError:
+            # Not in the expected encoding. Latin-1 can decode any bytes.
+            return value.decode("latin-1")
+    return value
+
+
+def get_device_name():
+    # type: () -> str
+    # The computer name for device.xml, as text. On Python 2, lxml rejects the byte
+    # string platform.uname() returns if the name isn't ASCII.
+    return os_string_to_text(platform.uname()[1])
+
+
 def makeSerial(random):
     # type: (bool) -> str
 
@@ -200,15 +221,15 @@ def makeSerial(random):
             # Linux
             uid = os.getuid()
             import pwd
-            username = pwd.getpwuid(uid).pw_name.encode("utf-8").decode("latin-1")
+            username = os_string_to_text(pwd.getpwuid(uid).pw_name)
         except: 
             # Windows
             uid = 1000
             try: 
-                username = os.getlogin().encode("utf-8").decode("latin-1")
+                username = os_string_to_text(os.getlogin())
             except: 
                 import getpass
-                username = getpass.getuser().encode("utf-8").decode("latin-1")
+                username = os_string_to_text(getpass.getuser())
 
         mac_address = get_mac_address()
 
@@ -216,7 +237,8 @@ def makeSerial(random):
             mac_address[0], mac_address[1], mac_address[2], 
             mac_address[3], mac_address[4], mac_address[5])
             
-        sha_out = hashlib.sha1(dataToHash.encode('latin-1')).hexdigest().lower()
+        # The user name is hashed as UTF-8, everything else in the string is ASCII.
+        sha_out = hashlib.sha1(dataToHash.encode("utf-8")).hexdigest().lower()
     else: 
         # SHA1 of a bunch of random bytes
         sha_out = hashlib.sha1(Random.get_random_bytes(256)).hexdigest().lower()

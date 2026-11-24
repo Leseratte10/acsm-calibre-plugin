@@ -775,7 +775,10 @@ def tryReturnBook(bookData):
 
 
     try:
-        retval = sendRequestDocu(doc_send, return_server, False).decode("utf-8")
+        retval = sendRequestDocu(doc_send, return_server, False)
+        if isinstance(retval, bytes):
+            # Turn the response into a string, ignoring invalid characters.
+            retval = retval.decode("utf-8", "replace")
     except: 
         print("Error while returning!")
         return False, "sendRequest failed."
@@ -929,10 +932,10 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
                 crit_errors += 1
                 continue
 
-        try: 
-            msg = msg.decode("utf-8")
-        except:
-            pass
+        if isinstance(msg, bytes):
+            # The reply is only checked for "<error" and "<success" and shown in the log,
+            # so bytes that aren't valid UTF-8 don't change the result.
+            msg = msg.decode("utf-8", "replace")
 
         if verbose_logging:
             print("MSG:")

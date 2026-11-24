@@ -10,7 +10,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 from lxml import etree
 import base64, traceback, warnings
-import os, locale, platform
+import os, locale
 from xml.sax.saxutils import escape as xml_escape
 
 
@@ -28,7 +28,7 @@ class AES(object):
         return self._aes.decrypt(data)
 
 
-from .libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path
+from .libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path, get_device_name
 from .libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS, VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
 
 
@@ -338,7 +338,7 @@ def finalize_write_config_Windows(data, key, buildID):
     dev_content += "<adept:deviceType>%s</adept:deviceType>\n" % (data["activationToken"]["deviceType"])
     dev_content += "<adept:deviceClass>%s</adept:deviceClass>\n" % ("Desktop")
     dev_content += "<adept:deviceSerial>%s</adept:deviceSerial>\n" % (makeSerial(False))
-    dev_content += "<adept:deviceName>%s</adept:deviceName>\n" % (platform.uname()[1])
+    dev_content += "<adept:deviceName>%s</adept:deviceName>\n" % (xml_escape(get_device_name()))
 
     version_idx = VAR_VER_BUILD_IDS.index(buildID)
     hobbes_ver = VAR_VER_HOBBES_VERSIONS[version_idx]
@@ -555,7 +555,7 @@ def recreateMacActivationFiles(path_to_activation, deviceKey, deviceFingerprint,
     content += "<adept:deviceType>%s</adept:deviceType>\n" % (devtype)
     content += "<adept:deviceClass>%s</adept:deviceClass>\n" % ("Desktop")
     content += "<adept:deviceSerial>%s</adept:deviceSerial>\n" % (makeSerial(False))
-    content += "<adept:deviceName>%s</adept:deviceName>\n" % (platform.uname()[1])
+    content += "<adept:deviceName>%s</adept:deviceName>\n" % (xml_escape(get_device_name()))
 
     version_idx = VAR_VER_BUILD_IDS.index(buildIDtoEmulate)
     hobbes_ver = VAR_VER_HOBBES_VERSIONS[version_idx]
@@ -566,7 +566,11 @@ def recreateMacActivationFiles(path_to_activation, deviceKey, deviceFingerprint,
 
     language = None
     try: 
-        language = locale.getdefaultlocale()[0].split('_')[0]
+        with warnings.catch_warnings():
+            # Python claims that this is deprecated, but it has been un-deprecated later.
+            # Disable the warning.
+            warnings.filterwarnings("ignore", category=DeprecationWarning)
+            language = locale.getdefaultlocale()[0].split('_')[0]
     except:
         pass
     if language is None or language == "": 

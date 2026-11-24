@@ -10,7 +10,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 from lxml import etree
 import base64
-import locale, platform
+import locale, warnings
 from xml.sax.saxutils import escape as xml_escape
 
 try:
@@ -25,7 +25,7 @@ except ImportError:
 
 
 from .libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
-from .libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key
+from .libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key, get_device_name
 from .libadobe import get_devkey_path, get_device_path, get_activation_xml_path
 from .libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
 from .libadobe import VAR_VER_SUPP_VERSIONS
@@ -61,7 +61,7 @@ def createDeviceFile(randomSerial, useVersionIndex = 0):
     # These three elements are not supposed to be sent to Adobe:
     etree.SubElement(root, etree.QName(NSMAP["adept"], "deviceClass")).text = "Desktop"
     etree.SubElement(root, etree.QName(NSMAP["adept"], "deviceSerial")).text = serial
-    etree.SubElement(root, etree.QName(NSMAP["adept"], "deviceName")).text = platform.uname()[1]
+    etree.SubElement(root, etree.QName(NSMAP["adept"], "deviceName")).text = get_device_name()
     # ##
 
     atr_ver = etree.SubElement(root, etree.QName(NSMAP["adept"], "version"))
@@ -81,7 +81,11 @@ def createDeviceFile(randomSerial, useVersionIndex = 0):
 
     language = None
     try: 
-        language = locale.getdefaultlocale()[0].split('_')[0]
+        with warnings.catch_warnings():
+            # Python claims that this is deprecated, but it has been un-deprecated later.
+            # Disable the warning.
+            warnings.filterwarnings("ignore", category=DeprecationWarning)
+            language = locale.getdefaultlocale()[0].split('_')[0]
     except:
         pass
     if language is None or language == "": 
@@ -331,7 +335,7 @@ def buildSignInRequestForAnonAuthConvert(username, password, authenticationCerti
         return None
     etree.SubElement(root, etree.QName(NSMAP["adept"], "signature")).text = signature
 
-    return "<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
+    return "<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
 
 
 def buildSignInRequest(type, username, password, authenticationCertificate):
@@ -366,7 +370,7 @@ def buildSignInRequest(type, username, password, authenticationCertificate):
     etree.SubElement(root, etree.QName(NSMAP["adept"], "publicLicenseKey")).text = base64.b64encode(licensekey_pub)
     etree.SubElement(root, etree.QName(NSMAP["adept"], "encryptedPrivateLicenseKey")).text = base64.b64encode(licensekey_priv_enc)
 
-    return "<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
+    return "<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
     
 
 def convertAnonAuthToAccount(username, passwd):
@@ -1005,9 +1009,9 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
 
     if verbose_logging:
         print ("Activation request:")
-        print(etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1"))
+        print(etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8"))
 
-    data = "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("latin-1")
+    data = "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
 
     ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTPS + "/Activate?ofByteBooks=1", True)
 
@@ -1035,19 +1039,15 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
     if proxyData is not None: 
         # If we have a proxy device, this function doesn't know where to store the activation.
         # Just return the data and have the caller figure that out.
-        return True, ret
+        return True, etree.tostring(credentialsXML, encoding="utf-8", xml_declaration=False)
 
-    # Soooo, lets go and append that to the XML: 
-    
-    f = open(get_activation_xml_path(), "rb")
-    old_xml = f.read().replace(b"</activationInfo>", b"")
-    f.close()
-    
+    # Append the parsed activationToken element to activation.xml.
+    activationxml = etree.parse(get_activation_xml_path())
+    activationxml.getroot().append(credentialsXML)
+
     f = open(get_activation_xml_path(), "wb")
-
-    f.write(old_xml)
-    f.write(ret)
-    f.write(b"</activationInfo>\n")
+    f.write(b"<?xml version=\"1.0\"?>\n")
+    f.write(etree.tostring(activationxml, encoding="utf-8", pretty_print=True, xml_declaration=False))
     f.close()
 
     return True, ret  
