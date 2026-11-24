@@ -129,7 +129,7 @@ def GetMasterKey():
     except:
         import calibre_plugins.deacsm.cpuid as cpuid
 
-    import struct
+    import struct, binascii
     cpu = cpuid.CPUID()
     _, b, c, d = cpu(0)
     vendor = struct.pack("III", b, d, c)
@@ -141,7 +141,7 @@ def GetMasterKey():
     signature = struct.pack('>I', signature)[1:]
 
     if verbose_logging:
-        print("Signature: " + str(signature.hex()))
+        print("Signature: " + binascii.hexlify(signature).decode("ascii"))
 
     # Search for the username in the registry:
     user = None

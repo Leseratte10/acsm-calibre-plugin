@@ -141,7 +141,7 @@ def GetMasterKey(use_bytebooks = True):
     # Get CPU vendor:
 
     from . import cpuid
-    import struct
+    import struct, binascii
     cpu = cpuid.CPUID()
     _, b, c, d = cpu(0)
     vendor = struct.pack("III", b, d, c)
@@ -153,7 +153,7 @@ def GetMasterKey(use_bytebooks = True):
     signature = struct.pack('>I', signature)[1:]
 
     if verbose_logging:
-        print("Signature: " + str(signature.hex()))
+        print("Signature: " + binascii.hexlify(signature).decode("ascii"))
 
     # Search for the username in the registry:
     user = None

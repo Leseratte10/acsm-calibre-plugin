@@ -10,18 +10,32 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-import getpass
+import sys, getpass
 
 from acsm_input.libadobe import createDeviceKeyFile
 from acsm_input.libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+
+try:
+    # Python 2: input() runs what you type as Python code, raw_input() returns the text
+    input = raw_input           # type: ignore
+except NameError:
+    pass
 
 # These are the only two variables you'll need to change
 # The mail address and password of your ByteBooks account to assign. 
 
 
-VAR_MAIL = ""
-VAR_PASS = ""
+VAR_MAIL = u""
+VAR_PASS = u""
 #################################################################
+
+def typed_text(value):
+    # type: (str|bytes) -> str
+    # On Python 2, raw_input and getpass return what was typed as bytes in the terminal's
+    # encoding. signIn needs text, or a non-ASCII address or password crashes it.
+    if isinstance(value, bytes):
+        return value.decode(sys.stdin.encoding or "utf-8")
+    return value
 
 def main():
 
@@ -30,10 +44,10 @@ def main():
 
 
     if (VAR_MAIL == ""):
-        VAR_MAIL = input("Please enter your AdobeID (or press enter for anonymous auth): ")
+        VAR_MAIL = typed_text(input("Please enter your AdobeID (or press enter for anonymous auth): "))
     
     if (VAR_PASS == "" and VAR_MAIL != ""):
-        VAR_PASS = getpass.getpass("Please enter the password for your AdobeID: ")
+        VAR_PASS = typed_text(getpass.getpass("Please enter the password for your AdobeID: "))
 
     if (VAR_MAIL != "" and VAR_PASS == ""):
         print("Empty password, aborting")
