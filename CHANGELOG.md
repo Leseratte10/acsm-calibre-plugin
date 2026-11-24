@@ -9,9 +9,12 @@
 - Validate TLS certificates for all requests to the ByteBooks activation server, using Calibre's bundled CA certificates in addition to the system ones. Requests to book distributors still ignore certificate errors (fixes #58, #97, #105).
 - Add a 30 second timeout to all HTTP requests to prevent Calibre from hanging indefinitely.
 - Fixes bug that causes the loan list to not update correctly when multiple threads accessed it simultaneously (fixes #37 and #178).
-- Fix XML hashing used for request signatures by adding bytewise sorting of XML attributes. 
-- Fix XML hashing for nodes with less than 32k UTF-8 characters but more than 32k bytes.
-- Fix XML corruption when using an E-Mail address that contains non-ASCII characters.
+- Fix several bugs regarding XML loading and XML node hashing: 
+  - Fix XML hashing used for request signatures by adding bytewise sorting of XML attributes. 
+  - Fix XML hashing for nodes with less than 32k UTF-8 characters but more than 32k bytes.
+  - Fix XML hashing for nodes that contain comments or processing instructions.
+  - Fix XML corruption when using an E-Mail address that contains non-ASCII characters.
+  - Make sure XXEs are disabled when parsing untrusted XML files.
 - Fix several bugs in the activation import from ADE / BDE:
   - Data from a previous (failed) import attempt no longer ends up in the next one.
   - Remove the padding from the decrypted private license key.

@@ -247,7 +247,7 @@ class ConfigWidget(QWidget):
         # So just open up a folder picker dialog and have the user select the eReader's root folder. 
 
         try: 
-            from .libadobe import update_account_path, VAR_VER_HOBBES_VERSIONS
+            from .libadobe import update_account_path, VAR_VER_HOBBES_VERSIONS, safe_xml_parser
             from .libadobeAccount import activateDevice, exportProxyAuth
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -324,7 +324,7 @@ class ConfigWidget(QWidget):
             dev_xml_path = os.path.join(adobe_path, "device.xml")
             act_xml_path = os.path.join(adobe_path, "activation.xml")
 
-            dev_xml_tree = etree.parse(dev_xml_path)
+            dev_xml_tree = etree.parse(dev_xml_path, parser=safe_xml_parser())
             adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
             try: 
                 devClass = dev_xml_tree.find("./%s" % (adNS("deviceClass"))).text
@@ -346,7 +346,7 @@ class ConfigWidget(QWidget):
 
             if os.path.isfile(act_xml_path) and os.path.getsize(act_xml_path) > 0:
 
-                active_device_act = etree.parse(act_xml_path)
+                active_device_act = etree.parse(act_xml_path, parser=safe_xml_parser())
                 adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
                 act_uuid = active_device_act.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
                 act_username_name = None
@@ -843,7 +843,7 @@ class ConfigWidget(QWidget):
         filenames = choose_files(self, "Import DE activation file (ZIP)", _("Import DE activation file (ZIP)"), 
                 filters, all_files=False, select_only_single_file=True)
 
-        from .libadobe import update_account_path
+        from .libadobe import update_account_path, safe_xml_parser
         from .libadobeAccount import changeDeviceVersion
         
         try: 
@@ -863,6 +863,15 @@ class ConfigWidget(QWidget):
                     salt = zipfile.read("devicesalt")
                 except: 
                     return error_dialog(None, "Import failed", "Can't find required files in this ZIP", show=True, show_copy_button=False)
+
+                # Check the XML files for the correct format, and ensure they don't use any DOCTYPE declarations.
+                for name, data in [("device.xml", device), ("activation.xml", activation)]:
+                    try:
+                        doctype = etree.fromstring(data, parser=safe_xml_parser()).getroottree().docinfo.doctype
+                    except etree.XMLSyntaxError:
+                        return error_dialog(None, "Import failed", name + " in this ZIP isn't valid XML.", show=True, show_copy_button=False)
+                    if doctype:
+                        return error_dialog(None, "Import failed", name + " in this ZIP has invalid format.", show=True, show_copy_button=False)
 
                 try: 
                     # Copy the files byte for byte, so they're not re-encoded with the system's default encoding.

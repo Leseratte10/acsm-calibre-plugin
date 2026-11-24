@@ -211,12 +211,12 @@ class ACSMInput(FileTypePlugin):
         # type: (str) -> str
 
 
-        from .libadobe import sendHTTPRequest_DL2FILE
+        from .libadobe import sendHTTPRequest_DL2FILE, safe_xml_parser
         from .libadobeFulfill import buildRights
         from .libpdf import patch_drm_into_pdf
 
 
-        adobe_fulfill_response = etree.fromstring(replyData)
+        adobe_fulfill_response = etree.fromstring(replyData, parser=safe_xml_parser())
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
         
@@ -282,7 +282,7 @@ class ACSMInput(FileTypePlugin):
             return filename
 
         elif filetype == ".pdf":
-            adobe_fulfill_response = etree.fromstring(rights_xml_str)
+            adobe_fulfill_response = etree.fromstring(rights_xml_str, parser=safe_xml_parser())
 
             adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
             resource = adobe_fulfill_response.find("./%s/%s" % (adNS("licenseToken"), adNS("resource"))).text

@@ -13,6 +13,7 @@ import base64
 from .libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
 from .libadobe import get_devkey_path, get_device_path, get_activation_xml_path
 from .libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_HOBBES_VERSIONS
+from .libadobe import safe_xml_parser
 
 
  
@@ -119,7 +120,7 @@ def buildInitLicenseServiceRequest(authURL, force_adobe):
     ret += "<adept:user>%s</adept:user>" % (user_uuid)
     ret += "</adept:licenseServiceRequest>"
 
-    req_xml = etree.fromstring(ret)
+    req_xml = etree.fromstring(ret, parser=safe_xml_parser())
 
     signature = sign_node(req_xml, not force_adobe)
     if (signature is None):
@@ -441,7 +442,7 @@ def signAndSendFulfillRequest(fulfill_request, use_adobe, fulfillURL):
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     etree.register_namespace("adept", NSMAP["adept"])
 
-    fulfill_request_xml = etree.fromstring(fulfill_request)
+    fulfill_request_xml = etree.fromstring(fulfill_request, parser=safe_xml_parser())
     signature = sign_node(fulfill_request_xml, not use_adobe)
     if (signature is None):
         return None
@@ -482,7 +483,7 @@ def fulfill(acsm_file, do_notify = False):
     acsmxml = None
     
     try: 
-        acsmxml = etree.parse(acsm_file)
+        acsmxml = etree.parse(acsm_file, parser=safe_xml_parser())
     except: 
         return False, "ACSM not found or invalid"
 
@@ -577,7 +578,7 @@ def fulfill(acsm_file, do_notify = False):
         print("fulfillmentResult:")
         print(replyData)
 
-    adobe_fulfill_response = etree.fromstring(replyData)
+    adobe_fulfill_response = etree.fromstring(replyData, parser=safe_xml_parser())
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
@@ -754,7 +755,7 @@ def tryReturnBook(bookData):
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     etree.register_namespace("adept", NSMAP["adept"])
 
-    full_text_xml = etree.fromstring(req_data)
+    full_text_xml = etree.fromstring(req_data, parser=safe_xml_parser())
 
     signature = sign_node(full_text_xml, use_bytebooks)
     if (signature is None):
@@ -786,7 +787,7 @@ def tryReturnBook(bookData):
         print("Loan return successful")
         if verbose_logging:
             print(retval)
-        bl, txt = performFulfillmentNotification(etree.fromstring(retval), use_bytebooks, user=user, device=device)
+        bl, txt = performFulfillmentNotification(etree.fromstring(retval, parser=safe_xml_parser()), use_bytebooks, user=user, device=device)
         if not bl: 
             print("Error while notifying of book return. Book's probably still been returned properly.")
         return True, retval
@@ -888,7 +889,7 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
         NSMAP = { "adept" : "http://ns.adobe.com/adept" }
         etree.register_namespace("adept", NSMAP["adept"])
 
-        full_text_xml = etree.fromstring(full_text)
+        full_text_xml = etree.fromstring(full_text, parser=safe_xml_parser())
 
         signature = sign_node(full_text_xml, use_bytebooks)
         if (signature is None):
@@ -1017,7 +1018,7 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL, use_adobe = False):
 
     #print(response)
 
-    responseXML = etree.fromstring(response)
+    responseXML = etree.fromstring(response, parser=safe_xml_parser())
 
     server_cert = responseXML.find("./%s" % (adNS("certificate"))).text
     server_lic_url = responseXML.find("./%s" % (adNS("licenseURL"))).text

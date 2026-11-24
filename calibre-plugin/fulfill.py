@@ -16,7 +16,7 @@ import sys, os, time, shutil
 import zipfile
 from lxml import etree
 
-from acsm_input.libadobe import sendHTTPRequest_DL2FILE
+from acsm_input.libadobe import sendHTTPRequest_DL2FILE, safe_xml_parser
 from acsm_input.libadobeFulfill import buildRights, fulfill
 from acsm_input.libpdf import patch_drm_into_pdf
 
@@ -26,7 +26,7 @@ from acsm_input.libpdf import patch_drm_into_pdf
 
 def download(replyData):
     # replyData: str
-    adobe_fulfill_response = etree.fromstring(replyData)
+    adobe_fulfill_response = etree.fromstring(replyData, parser=safe_xml_parser())
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     adDC = lambda tag: '{%s}%s' % ('http://purl.org/dc/elements/1.1/', tag)
@@ -104,7 +104,7 @@ def download(replyData):
     elif filetype == ".pdf":
         print("Successfully downloaded PDF, patching encryption ...")
 
-        adobe_fulfill_response = etree.fromstring(rights_xml_str)
+        adobe_fulfill_response = etree.fromstring(rights_xml_str, parser=safe_xml_parser())
         NSMAP = { "adept" : "http://ns.adobe.com/adept" }
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
         resource = adobe_fulfill_response.find("./%s/%s" % (adNS("licenseToken"), adNS("resource"))).text

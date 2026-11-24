@@ -121,6 +121,16 @@ def get_activation_xml_path():
     return FILE_ACTIVATIONXML
 
 
+def safe_xml_parser():
+    # type: () -> etree.XMLParser
+    # Returns a new parser for XML the plugin didn't write itself: server replies,
+    # ACSM files, files from an eReader or an import, and requests that contain parts
+    # of those. It doesn't resolve entities and never loads anything over the network,
+    # so a DOCTYPE can't pull a local file or a URL into the document (XXE). Before
+    # lxml 5.0, the default parser resolved external entities, including local files.
+    return etree.XMLParser(resolve_entities=False, no_network=True)
+
+
 def update_account_path(folder_path):
     # type: (str) -> None
 

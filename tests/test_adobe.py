@@ -83,6 +83,58 @@ class TestAdobe(unittest.TestCase):
         self.assertFalse(ctx.check_hostname, "validate_tls=False still checks the hostname")
 
 
+    def test_safeXMLParser(self):
+        '''Check if XML from servers and ACSM files can't pull in local files (XXE)'''
+
+        # Before lxml 5.0, the default parser resolves external entities, so a DOCTYPE in
+        # a server reply or an ACSM file could put the contents of a local file into the
+        # parsed XML, and from there into a request.
+
+        import tempfile, shutil
+        try:
+            from urllib.request import pathname2url
+        except ImportError:
+            from urllib import pathname2url
+
+        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            secret_path = os.path.join(tmp_dir, "secret.txt")
+            with open(secret_path, "w") as f:
+                f.write("SECRET")
+
+            mock_xml_str = """<!DOCTYPE licenseServiceInfo [
+              <!ENTITY ext SYSTEM "file:%s">
+              <!ENTITY int "INTERNAL">
+            ]>
+            <licenseServiceInfo xmlns="http://ns.adobe.com/adept">
+              <licenseURL>https://example.com/&ext;</licenseURL>
+              <certificate>&int;</certificate>
+              <operatorURL>https://example.com/?a=1&amp;b=2&#38;c=3</operatorURL>
+            </licenseServiceInfo>""" % (pathname2url(secret_path))
+
+            mock_xml_path = os.path.join(tmp_dir, "book.acsm")
+            with open(mock_xml_path, "w") as f:
+                f.write(mock_xml_str)
+
+            # A parser that resolves entities really loads the file, so the test can fail
+            unsafe = etree.fromstring(mock_xml_str, parser=etree.XMLParser(resolve_entities=True))
+            self.assertEqual(unsafe.find(adNS("licenseURL")).text, "https://example.com/SECRET", "Test setup is broken")
+
+            parsed = [
+                etree.fromstring(mock_xml_str, parser=libadobe.safe_xml_parser()),
+                etree.parse(mock_xml_path, parser=libadobe.safe_xml_parser()).getroot()
+            ]
+            for xml in parsed:
+                self.assertEqual(xml.find(adNS("licenseURL")).text, "https://example.com/", "External entity was resolved")
+                self.assertNotEqual(xml.find(adNS("certificate")).text, "INTERNAL", "Internal entity was expanded")
+                # Predefined entities and character references still work
+                self.assertEqual(xml.find(adNS("operatorURL")).text, "https://example.com/?a=1&b=2&c=3", "Escaped characters are broken")
+        finally:
+            shutil.rmtree(tmp_dir)
+
+
     def test_serialGeneration(self):
         '''Check if serial generation works'''
         self.assertEqual((len(libadobe.get_mac_address())), 6,  "MAC address invalid")
@@ -156,7 +208,7 @@ class TestAdobe(unittest.TestCase):
         self.assertEqual(nonce_return, expected_return, "Invalid nonce calculation in 2038, 2k38 problem")
 
 
-    
+
     def test_sign_node_old(self):
 
         '''Check if the external RSA library (unused) signs correctly'''

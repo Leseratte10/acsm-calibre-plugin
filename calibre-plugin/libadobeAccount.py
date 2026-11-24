@@ -30,6 +30,7 @@ from .libadobe import get_devkey_path, get_device_path, get_activation_xml_path
 from .libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
 from .libadobe import VAR_VER_SUPP_VERSIONS
 from .libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
+from .libadobe import safe_xml_parser
 
 
 def createDeviceFile(randomSerial, useVersionIndex = 0): 
@@ -116,7 +117,7 @@ def getAuthMethodsAndCert():
     authenticationURL = VAR_ACS_SERVER_HTTPS + "/AuthenticationServiceInfo?ofByteBooks=1"
     response2 = sendHTTPRequest(authenticationURL, True)
 
-    adobe_response_xml2 = etree.fromstring(response2)
+    adobe_response_xml2 = etree.fromstring(response2, parser=safe_xml_parser())
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
@@ -183,7 +184,7 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
     #print(response)
     #print("======================================================")
 
-    adobe_response_xml = etree.fromstring(response)
+    adobe_response_xml = etree.fromstring(response, parser=safe_xml_parser())
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
@@ -223,7 +224,7 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
         authenticationURL = authURL + "/AuthenticationServiceInfo?ofByteBooks=1"
         response2 = sendHTTPRequest(authenticationURL, True)
 
-        adobe_response_xml2 = etree.fromstring(response2)
+        adobe_response_xml2 = etree.fromstring(response2, parser=safe_xml_parser())
         try: 
             authCertBB = adobe_response_xml2.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
         except: 
@@ -401,7 +402,7 @@ def convertAnonAuthToAccount(username, passwd):
         return False, "Error while calling AddSignInDirect"
 
     try: 
-        credentialsXML = etree.fromstring(linkResponse)
+        credentialsXML = etree.fromstring(linkResponse, parser=safe_xml_parser())
         
         if (credentialsXML.tag == adNS("error")): 
             err = credentialsXML.get("data")
@@ -517,7 +518,7 @@ def signIn(account_type, username, passwd):
 
 
     try: 
-        credentialsXML = etree.fromstring(credentials)
+        credentialsXML = etree.fromstring(credentials, parser=safe_xml_parser())
         
         if (credentialsXML.tag == adNS("error")): 
             err = credentialsXML.get("data")
@@ -993,7 +994,7 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     etree.register_namespace("adept", NSMAP["adept"])
 
-    req_xml = etree.fromstring(activate_req)
+    req_xml = etree.fromstring(activate_req, parser=safe_xml_parser())
 
     signature = sign_node(req_xml, True) 
     if signature is None: 
@@ -1011,7 +1012,7 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
     ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTPS + "/Activate?ofByteBooks=1", True)
 
     try: 
-        credentialsXML = etree.fromstring(ret)
+        credentialsXML = etree.fromstring(ret, parser=safe_xml_parser())
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
 
