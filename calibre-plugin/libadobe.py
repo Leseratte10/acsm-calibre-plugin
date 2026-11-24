@@ -307,18 +307,28 @@ def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
 
     ctx = create_ssl_context(validate_tls)
 
-
     try: 
         req = ulib.Request(url=URL, headers=headers)
         handler = ulib.urlopen(req, context=ctx, timeout=VAR_HTTP_TIMEOUT)
-
+        try: 
+            cl = handler.headers.get("Content-Length")
+            cl = int(cl) if cl is not None else None
+        except: 
+            cl = None
+        
         with open(outputfile, "wb") as f:
+            received = 0
             chunksize = 16 * 1024
             while True:
                 chunk = handler.read(chunksize)
                 if not chunk:
                     break
                 f.write(chunk)
+                received += len(chunk)
+
+            if cl is not None and received != cl: 
+                print("Download aborted after %d out of %d bytes." % (received, cl))
+                return 900
 
     except uliberror.HTTPError as err: 
         # This happens with HTTP 500 and related errors.
@@ -328,6 +338,9 @@ def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
         # Server not reachable, timeout, or the connection broke during the download.
         print("Download failed: %s" % (err))
         return 900
+
+    finally: 
+        handler.close()
 
     return 200
 

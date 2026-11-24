@@ -29,6 +29,8 @@
 - Only add books to the loan list if the fulfillment notifications were successful.
 - Fix loan list accidentally hiding loans that had an invalid expiration date.
 - Allow building the plugin without Windows cross-compilers. If the WINE key extraction binaries are missing from the plugin, hide the "Import from WINE" button. 
+- Print an error and abort if the EPUB / PDF download aborts mid-file instead of silently leaving the corrupted file.
+
 
 ## 0.1.0 (perpetually in beta between 2022-2026, hasn't been released)
 
