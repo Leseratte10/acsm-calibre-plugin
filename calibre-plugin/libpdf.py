@@ -7,7 +7,7 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-import sys, os, zlib, base64, time
+import sys, os, zlib, base64, time, shutil
 
 class BackwardReader:
     """
@@ -171,10 +171,12 @@ def find_enc(filename_in):
 
         find_enc_end = int(time.time() * 1000)
         print("Found ENC after %d attempts - took %d ms" % (i, find_enc_end - find_enc_start))                
+        fl.close()
         return line
     
     find_enc_end = int(time.time() * 1000)
     print("Error: Did not find ENC - took %d ms" % (find_enc_end - find_enc_start))
+    fl.close()
     return None
 
 
@@ -308,9 +310,11 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
 
 
     inp = open(filename_in, "rb")
-
     out = open(filename_out, "wb")
-    out.write(inp.read())
+    
+    # Copy input file to output
+    shutil.copyfileobj(inp, out)
+    # Append encryption data.
     out.write(additional_data.encode("latin-1"))
     inp.close()
     out.close()
