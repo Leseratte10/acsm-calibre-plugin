@@ -280,9 +280,11 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
     arr_root_str = encrypt.split('/')
     did_prev = False
     for elem in arr_root_str: 
+        prev_is_last_element = False
         if elem.startswith("Prev"):
             did_prev = True
             additional_data += "Prev " + str(startxref_offset)
+            prev_is_last_element = True
             #print("Replacing prev from '%s' to '%s'" % (elem, "Prev " + startxref))
         else:
             additional_data += cleanup_encrypt_element(elem)
@@ -293,9 +295,12 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
         additional_data = additional_data[:-3]
         additional_data += "/Prev " + str(startxref_offset) + ">>" + "/"
         #print("Faking Prev %s" % startxref)
+    elif prev_is_last_element:
+        # Prev was the last element in the trailer so we need to close it
+        additional_data += ">>/"
+
 
     additional_data = additional_data[:-1]
-
     additional_data += "\r" + "startxref\r" + str(ptr) + "\r" + "%%EOF"
 
     #print("Appending DRM data: %s" % (additional_data))

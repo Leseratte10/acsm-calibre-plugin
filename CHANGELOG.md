@@ -22,12 +22,13 @@
 - Make the plugin more resilient to a server sending junk data. 
 - Fix a bug where authorizing an eReader over USB failed on Calibre 3. 
 - URL-encode the license URL when requesting the license service certificate, fixing a bug where license service certificates failed to download if their URL contained special characters.
-- Don't return a broken PDF if adding the rights.xml failed.
 - fulfill.py: Fix a bug that could cause a malicious fulfillment server to cause the script to write files outside of the intended directory. 
 - Fix multiple bugs in the PDF parser:
+  - Don't return a broken PDF if adding the rights.xml failed.
   - No longer breaks when the file size is an exact multiple of the buffer block size (4096 bytes).
   - No longer breaks if the file uses multiple different line endings within their internal data structures.
   - No longer breaks if there is leading data without a linebreak before the trailer.
+  - No longer breaks if the elements inside the trailer are in an uncommon order.
 - Only use datetime.utcnow() when necessary (on older Python versions) since it's deprecated in Python 3.12 and will be removed from a future Python release.
 - Only add books to the loan list if the fulfillment notifications were successful.
 - Fix loan list accidentally hiding loans that had an invalid expiration date.
