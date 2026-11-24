@@ -260,8 +260,9 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
     #print(ebx_elem)
         
 
-    filesize_str = str(os.path.getsize(filename_in))
-    filesize_pad = filesize_str.zfill(10)
+    # The appended data starts with "\r", so the new object begins one byte
+    # after the end of the original file.
+    obj_offset = os.path.getsize(filename_in) + 1
 
 
     additional_data = "\r"
@@ -270,10 +271,10 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
     additional_data += "\r"
     additional_data += "endobj"
 
-    ptr = int(filesize_str) + len(additional_data)
+    ptr = obj_offset + len(additional_data)
 
     additional_data += "\rxref\r" + r_encrypt_offs1 + " " + str((int(r_encrypt_offs2) + 1)) + "\r"
-    additional_data += filesize_pad + " 00000 n" + "\r\n"
+    additional_data += str(obj_offset).zfill(10) + " 00000 n" + "\r\n"
     additional_data += "trailer"
     additional_data += "\r"
 
