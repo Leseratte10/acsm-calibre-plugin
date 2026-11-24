@@ -153,6 +153,97 @@ class TestAccountImport(unittest.TestCase):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+    def test_importWineRegistryEscapes(self):
+        '''Check if the Wine import decodes the escapes in Wine's user.reg'''
+
+        # Wine stores every character above 127 as \x and up to four hex digits, and escapes
+        # backslashes, quotes and control characters. The import used to take the strings as
+        # they were, so an umlaut in an ID ended up as \xfc in activation.xml.
+
+        import tempfile, shutil
+
+        # Strings as they are in user.reg, and what they stand for
+        cases = [
+            ("plain text", u"plain text"),
+            (r"j\xfcrgen", b"j\xc3\xbcrgen".decode("utf-8")),           # as few hex digits as needed ...
+            (r"b\x00e4cker", b"b\xc3\xa4cker".decode("utf-8")),         # ... and four if a hex digit follows
+            (r"\xd83d\xde00", b"\xf0\x9f\x98\x80".decode("utf-8")),     # a UTF-16 surrogate pair
+            (r"a\\b \"c\"", u'a\\b "c"'),
+            (r"\t\n\r\a\b\e\f\v", u"\t\n\r\a\b\x1b\f\v"),
+            (r"\1x\0012", u"\x01x\x012"),                               # octal escapes
+            (r"\xq \[\]", u"xq []"),                                    # anything else stands for itself
+        ]
+        for escaped, expected in cases:
+            self.assertEqual(libadobeImportAccount.decode_wine_registry_string(escaped), expected, "Wrong result for %r" % (escaped))
+
+        # A whole import, with a username and method that contain escapes
+        fingerprint = base64.b64encode(bytes(bytearray([0x01] * 20))).decode("ascii")
+        private_license_key = base64.b64encode(bytes(bytearray(32))).decode("ascii")
+
+        # (registry key name, list of (name, value, method or None)), values escaped like in user.reg
+        activation = [
+            ("activationServiceInfo", [
+                ("authURL", "https://auth.example.com/adept", None),
+                ("userInfoURL", "https://userinfo.example.com/adept", None),
+                ("activationURL", "https://activate.example.com/adept", None),
+                ("certificate", "ASI_CERT", None),
+                ("authenticationCertificate", "ASI_AUTH", None),
+            ]),
+            ("credentials", [
+                ("user", "urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa", None),
+                ("username", r"j\xfcrgen.b\x00e4cker@example.de", r"H\xe4ndler"),
+                ("pkcs12", "P12", None),
+                ("licenseCertificate", "LIC", None),
+                ("privateLicenseKey", private_license_key, None),
+                ("authenticationCertificate", "AUTH", None),
+            ]),
+            ("activationToken", [
+                ("device", "urn:uuid:83681cbb-b6df-44a3-a423-c2b37ba66e84", None),
+                ("fingerprint", fingerprint, None),
+                ("deviceType", "standalone", None),
+                ("activationURL", "https://activate.example.com/adept", None),
+                ("user", "urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa", None),
+                ("signature", "SIGNATURE", None),
+            ]),
+        ]
+
+        prefix = "Software\\\\Adobe\\\\Adept\\\\Activation\\\\"
+        reg = "WINE REGISTRY Version 2\n;; All keys relative to \\\\User\\\\S-1-5-21-0-0-0-1000\n"
+        for i, (parent, children) in enumerate(activation):
+            reg += "\n[%s%04d] 1700000000\n#time=1d9000000000000\n@=\"%s\"\n" % (prefix, i, parent)
+            for j, (name, value, method) in enumerate(children):
+                reg += "\n[%s%04d\\\\%04d] 1700000000\n#time=1d9000000000000\n@=\"%s\"\n" % (prefix, i, j, name)
+                if method is not None:
+                    reg += "\"method\"=\"%s\"\n" % (method)
+                reg += "\"value\"=\"%s\"\n" % (value)
+        reg += "\n[Software\\\\Adobe\\\\Adept\\\\Device] 1700000000\n#time=1d9000000000000\n"
+
+        temp_dir = tempfile.mkdtemp()
+        try:
+            wine_prefix = os.path.join(temp_dir, "wineprefix")
+            account_dir = os.path.join(temp_dir, "account")
+            os.mkdir(wine_prefix)
+            os.mkdir(account_dir)
+
+            f = open(os.path.join(wine_prefix, "user.reg"), "w")
+            f.write(reg)
+            f.close()
+
+            libadobe.update_account_path(account_dir)
+
+            with patch("acsm_input.getEncryptionKeyLinux.GetMasterKey", return_value=bytes(bytearray([0x02] * 16))):
+                success, msg = libadobeImportAccount.importADEactivationLinuxWine(wine_prefix)
+            self.assertTrue(success, "Wine import failed: %s" % (msg))
+
+            adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+            username = etree.parse(os.path.join(account_dir, "activation.xml")).find("./%s/%s" % (adNS("credentials"), adNS("username")))
+            self.assertEqual(username.text, b"j\xc3\xbcrgen.b\xc3\xa4cker@example.de".decode("utf-8"), "Username imported with Wine's escapes")
+            self.assertEqual(username.get("method"), b"H\xc3\xa4ndler".decode("utf-8"), "Method imported with Wine's escapes")
+
+        finally:
+            libadobe.update_account_path("")
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_wineHelperOutputIsChecked(self):
         '''Check if the Wine key helper's output is only accepted if it's a 16-byte key'''
 

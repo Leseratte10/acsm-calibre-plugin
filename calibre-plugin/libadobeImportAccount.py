@@ -10,7 +10,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 from lxml import etree
 import base64, traceback, warnings
-import os, locale
+import os, locale, re, struct
 from xml.sax.saxutils import escape as xml_escape
 
 
@@ -30,6 +30,55 @@ class AES(object):
 
 from .libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path, get_device_name, safe_xml_parser, write_files_atomically
 from .libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS, VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
+
+
+# The C escapes in Wine's registry files, see decode_wine_registry_string()
+WINE_REGISTRY_ESCAPES = {"a": 7, "b": 8, "e": 27, "f": 12, "n": 10, "r": 13, "t": 9, "v": 11}
+
+def decode_wine_registry_string(value):
+    # type: (str) -> str
+    # Wine's user.reg is plain ASCII. Strings are stored with \x and up to four hex digits for
+    # every UTF-16 code unit above 127, with \a \b \e \f \n \r \t \v or up to three octal digits
+    # for control characters, and with a backslash in front of a backslash or a quote. This
+    # decodes them the way Wine does when it loads the file (parse_strW in server/unicode.c).
+    units = []      # UTF-16 code units
+    i = 0
+    while i < len(value):
+        c = value[i]
+        i += 1
+        if c != "\\":
+            code = ord(c)
+            if code > 0xFFFF:
+                code -= 0x10000
+                units += [0xD800 + (code >> 10), 0xDC00 + (code & 0x3FF)]
+            else:
+                units.append(code)
+            continue
+
+        if i == len(value):
+            # Wine drops a backslash at the very end
+            break
+        c = value[i]
+        i += 1
+        if c in WINE_REGISTRY_ESCAPES:
+            units.append(WINE_REGISTRY_ESCAPES[c])
+        elif c == "x":
+            digits = re.match("[0-9a-fA-F]{1,4}", value[i:i + 4])
+            if digits:
+                units.append(int(digits.group(0), 16))
+                i += len(digits.group(0))
+            else:
+                units.append(ord("x"))
+        elif c in "01234567":
+            digits = re.match("[0-7]{0,2}", value[i:i + 2]).group(0)
+            units.append(int(c + digits, 8))
+            i += len(digits)
+        else:
+            # Any other character after a backslash, like in \\ or \", stands for itself
+            units.append(ord(c))
+
+    # A character outside the BMP is two \x escapes, a UTF-16 surrogate pair
+    return struct.pack("<%dH" % len(units), *units).decode("utf-16-le", "replace")
 
 
 def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
@@ -105,16 +154,16 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
 
             if waiting_for_element:
                 if (line.lower().startswith("@=")): 
-                    current_name = line.split('=', 1)[1].strip()[1:-1]
+                    current_name = decode_wine_registry_string(line.split('=', 1)[1].strip()[1:-1])
                     continue
                 
                 if (line.lower().startswith('"value"=')): 
-                    current_value = line.split('=', 1)[1].strip()[1:-1]
+                    current_value = decode_wine_registry_string(line.split('=', 1)[1].strip()[1:-1])
                     continue
 
                 if (line.lower().startswith('"ofbytebooks"=')): 
                     # This attribute is a string, not an int.
-                    val = line.split('=', 1)[1].strip()[1:-1]
+                    val = decode_wine_registry_string(line.split('=', 1)[1].strip()[1:-1])
                     if str(val).lower() == "true" or val == True:
                         current_ofbytebooks = True
                     elif str(val).lower() == "false" or val == False:
@@ -125,7 +174,7 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
                     continue
             
                 if (line.lower().startswith('"method"=')): 
-                    current_method = line.split('=', 1)[1].strip()[1:-1]
+                    current_method = decode_wine_registry_string(line.split('=', 1)[1].strip()[1:-1])
                     continue
 
                 if (len(line) == 0):
