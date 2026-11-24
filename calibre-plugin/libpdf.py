@@ -141,10 +141,12 @@ def find_ebx(filename_in):
         if "/EBX_HANDLER/" in line:
             find_ebx_end = int(time.time() * 1000)
             print("Found EBX after %d attempts - took %d ms" % (i, find_ebx_end - find_ebx_start))
+            fl.close()
             return line
 
     find_ebx_end = int(time.time() * 1000)
     print("Error: Did not find EBX_HANDLER - took %d ms" % (find_ebx_end - find_ebx_start))
+    fl.close()
     return None
 
 def find_enc(filename_in):
@@ -191,26 +193,24 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
     startxref_offset = 0
     prevline = ""
 
-
-    fl = open(filename_in, "rb")
-    br = BackwardReader(fl)
-
     print("Searching for startxref ...")
-    for line in br.readlines():
-        trailer_idx += 1
-        trailer = line + "\n" + trailer
 
-        #print ("LINE: " + line)
+    with open(filename_in, "rb") as fl:
+        for line in BackwardReader(fl).readlines():
+            trailer_idx += 1
+            trailer = line + "\n" + trailer
 
-        if (trailer_idx > 10):
-            print("Took more than 10 attempts to find startxref ...")
-            return False
-        
-        if (line == "startxref"):
-            startxref_offset = int(prevline)
-            print("Got startxref: %d" % (startxref_offset))            
-            break
-        prevline = line
+            #print ("LINE: " + line)
+
+            if (trailer_idx > 10):
+                print("Took more than 10 attempts to find startxref ...")
+                return False
+            
+            if (line == "startxref"):
+                startxref_offset = int(prevline)
+                print("Got startxref: %d" % (startxref_offset))            
+                break
+            prevline = line
 
 
 
@@ -275,8 +275,10 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
 
     ptr = obj_offset + len(additional_data)
 
-    additional_data += "\rxref\r" + r_encrypt_offs1 + " " + str((int(r_encrypt_offs2) + 1)) + "\r"
-    additional_data += str(obj_offset).zfill(10) + " 00000 n" + "\r\n"
+    # New xref subsection with a single entry for the rewritten object.
+    # The entry has to use the generation number of that object.
+    additional_data += "\rxref\r" + r_encrypt_offs1 + " 1\r"
+    additional_data += "%010d %05d n\r\n" % (obj_offset, int(r_encrypt_offs2))
     additional_data += "trailer"
     additional_data += "\r"
 
@@ -293,31 +295,28 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
             additional_data += cleanup_encrypt_element(elem)
         additional_data += "/"
 
+    # Remove the final slash
+    additional_data = additional_data[:-1]
+
     if not did_prev:
-        # remove two >> at end
-        additional_data = additional_data[:-3]
-        additional_data += "/Prev " + str(startxref_offset) + ">>" + "/"
+        # remove two >> at end, then append the Prev attribute.
+        additional_data = additional_data[:-2]
+        additional_data += "/Prev " + str(startxref_offset) + ">>"
         #print("Faking Prev %s" % startxref)
     elif prev_is_last_element:
-        # Prev was the last element in the trailer so we need to close it
-        additional_data += ">>/"
+        # Prev was the last element in the trailer so we need to close it.
+        additional_data = additional_data + ">>"
 
-
-    additional_data = additional_data[:-1]
     additional_data += "\r" + "startxref\r" + str(ptr) + "\r" + "%%EOF"
 
     #print("Appending DRM data: %s" % (additional_data))
 
+    with open(filename_in, "rb") as inp, open(filename_out, "wb") as out:
+        # Copy input file to output
+        shutil.copyfileobj(inp, out)
+        # Append encryption data.
+        out.write(additional_data.encode("latin-1"))
 
-    inp = open(filename_in, "rb")
-    out = open(filename_out, "wb")
-    
-    # Copy input file to output
-    shutil.copyfileobj(inp, out)
-    # Append encryption data.
-    out.write(additional_data.encode("latin-1"))
-    inp.close()
-    out.close()
 
     drm_end_time = int(time.time() * 1000)
 

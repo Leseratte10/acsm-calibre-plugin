@@ -306,6 +306,7 @@ def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
     }
 
     ctx = create_ssl_context(validate_tls)
+    handler = None
 
     try: 
         req = ulib.Request(url=URL, headers=headers)
@@ -340,7 +341,8 @@ def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
         return 900
 
     finally: 
-        handler.close()
+        if handler is not None:
+            handler.close()
 
     return 200
 

@@ -57,11 +57,14 @@ class TestPluginInterface(unittest.TestCase):
                 zf = zipfile.ZipFile(tf.name, "w", strict_timestamps=False)
             zf.writestr("test.xml", "Hallo Welt")
             zf.close()
+            tf.close()
         except struct.error:
             self.fail("Failed to add file to ZIP archive")
         finally: 
             if source_date_epoch_old is not None: 
                 os.environ['SOURCE_DATE_EPOCH'] = source_date_epoch_old
+            else: 
+                del os.environ['SOURCE_DATE_EPOCH']
 
 
     @freeze_time("2022-07-01 07:34:32.000000")
