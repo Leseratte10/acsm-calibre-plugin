@@ -29,6 +29,7 @@
   - No longer breaks if the file uses multiple different line endings within their internal data structures.
   - No longer breaks if there is leading data without a linebreak before the trailer.
   - No longer breaks if the elements inside the trailer are in an uncommon order.
+  - Simplify PDF encrypt element parsing, no longer fail when encrypt elements are in an uncommon order.
 - Only use datetime.utcnow() when necessary (on older Python versions) since it's deprecated in Python 3.12 and will be removed from a future Python release.
 - Only add books to the loan list if the fulfillment notifications were successful.
 - Fix loan list accidentally hiding loans that had an invalid expiration date.

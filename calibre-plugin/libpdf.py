@@ -156,17 +156,22 @@ def find_enc(filename_in):
 
     for line in br.readlines():
         i = i + 1
-        is_encrypt_normal = "R/Encrypt" in line and "R/ID" in line
-        is_encrypt_odd = "R" in line and "/Encrypt" in line and "/ID" in line
-        if is_encrypt_normal or is_encrypt_odd:
+        lineparts = line.split('/')
+        got_encrypt = got_id = False
 
-            find_enc_end = int(time.time() * 1000)
-            print("Found ENC after %d attempts - took %d ms" % (i, find_enc_end - find_enc_start))
-            if is_encrypt_odd:
-                print("Odd formatting of encryption blob?")
-                print("If this doesn't work correctly please open a bug report.")
-                
-            return line
+        for part in lineparts:
+            if part.startswith("Encrypt"):
+                got_encrypt = True
+            if part.startswith("ID"):
+                got_id = True
+
+        if not (got_encrypt and got_id):
+            # Looks like that's not it.
+            continue
+
+        find_enc_end = int(time.time() * 1000)
+        print("Found ENC after %d attempts - took %d ms" % (i, find_enc_end - find_enc_start))                
+        return line
     
     find_enc_end = int(time.time() * 1000)
     print("Error: Did not find ENC - took %d ms" % (find_enc_end - find_enc_start))
@@ -207,8 +212,8 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
 
 
 
-    r_encrypt_offs1 = 0
-    r_encrypt_offs2 = 0
+    r_encrypt_offs1 = None
+    r_encrypt_offs2 = None
 
     encrypt = None
 
@@ -218,20 +223,19 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
         print("Error, enc not found")
         return False
 
-    line_split = encrypt.split(' ')
-    next = 0
+    line_split = encrypt.split('/')
     for element in line_split:
-        if element == "R/Encrypt" or element == "/Encrypt" or element == "null/Encrypt":
-            next = 2
+        if not element.startswith("Encrypt "):
             continue
-        if next == 2:
-            r_encrypt_offs1 = element
-            next = 1
-            continue
-        if next == 1: 
-            r_encrypt_offs2 = element
-            next = 0
-            continue
+
+        element_parts = element.split(' ')
+        r_encrypt_offs1 = element_parts[1]
+        r_encrypt_offs2 = element_parts[2]
+
+
+    if r_encrypt_offs1 is None or r_encrypt_offs2 is None:
+        print("Err: Didn't find encrypt offsets")
+        return False
 
 
     # read EBX element:
@@ -250,10 +254,6 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
     print(ebx_elem)
 
     encrypt = trim_encrypt_string(encrypt)
-
-    print("Trimmed encryption handler:")
-    print(encrypt)
-
     ebx_elem = update_ebx_with_keys(ebx_elem, adept_license_string, ebx_bookid)
 
     print("Updated EBX handler not logged due to sensitive data")
