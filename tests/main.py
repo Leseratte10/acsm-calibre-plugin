@@ -12,6 +12,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 import sys, os
 sys.path.append("../calibre-plugin")
+sys.path.append("calibre-plugin")
 
 
 import unittest

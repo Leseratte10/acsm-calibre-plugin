@@ -47,6 +47,22 @@ jobs:
           cd tests && python --version && PYTHONWARNINGS=ignore python ./main.py && cd ..
           python -m unittest discover -s calibre-plugin/customcrypto/tests -t calibre-plugin/customcrypto
 
+  test-coverage:
+    runs-on: ubuntu-26.04
+    container: python:3.15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install python requirements
+        run: |
+          pip --no-python-version-warning install -r ./.github/workflows/ci_test_requirements.txt
+
+      - name: Run coverage tests
+        run: |
+          python --version
+          python -m coverage erase
+          python -m coverage run ./tests/main.py
+          python -m coverage report
+
 
   test-ubuntu-2004:
     runs-on: ubuntu-26.04

@@ -1,5 +1,6 @@
 *.pyc
 __pycache__
+.coverage
 
 /calibre-plugin/keyextract/*.exe
 /calibre-plugin/customcrypto/readme_internal.md
