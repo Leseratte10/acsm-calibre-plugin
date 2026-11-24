@@ -102,23 +102,32 @@ def GetMasterKey(wineprefix, use_bytebooks = None):
         shutil.rmtree(helper_dir, ignore_errors=True)
 
     if verbose_logging:
-        print("Stderr log:\n{}".format(prog_stderr.decode("utf-8")))
-        print("Stdout log: {}".format(prog_stdout.decode("utf-8")))
+        print("Stderr log:\n{}".format(prog_stderr.decode("utf-8", "replace")))
+        print("Stdout log: {}".format(prog_stdout.decode("utf-8", "replace")))
         print("Exit code: {}".format(proc.returncode))
 
-    if proc.returncode == 0:
-        if verbose_logging:
-            print("Successfully got encryption key from WINE: {}".format(prog_stdout.decode("utf-8")))
-        else:
-            print("Successfully got encryption key from WINE.")
-        master_key = binascii.unhexlify(prog_stdout)
-        return master_key
-    else: 
+    if proc.returncode != 0:
         print("Failed to extract encryption key from WINE.")
         print("Exit code: {}".format(proc.returncode))
-
-
         return None
+
+    # The helper prints the 16-byte device key as 32 hex digits. Check that instead of
+    # relying on the exit code alone.
+    master_key = None
+    try:
+        master_key = binascii.unhexlify(prog_stdout.strip())
+    except (TypeError, ValueError):
+        pass
+
+    if master_key is None or len(master_key) != 16:
+        print("Failed to extract encryption key from WINE: the helper didn't print a 16-byte key.")
+        return None
+
+    if verbose_logging:
+        print("Successfully got encryption key from WINE: {}".format(prog_stdout.decode("utf-8", "replace")))
+    else:
+        print("Successfully got encryption key from WINE.")
+    return master_key
 
 
 if __name__ == "__main__":

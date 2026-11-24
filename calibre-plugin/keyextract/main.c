@@ -6,6 +6,10 @@
 // Size for buffers that will hold unknown-size data
 #define BUFSIZE 1024
 
+// Exit status for every error; the error code itself is printed to stderr. A Windows error
+// code can't be the exit status, because only its low 8 bits survive, and those can be 0.
+#define EXIT_ERROR 1
+
 union CPUIDVendor {
 	unsigned int reg[3];
 	char vendor[13];
@@ -30,7 +34,7 @@ int main(int argc, char *argv[]) {
 		}
 		else if (strcmp(argv[1], "bytebooks") != 0) {
 			fprintf(stderr, "Usage: %s [bytebooks|adobe]\n", argv[0]);
-			return ERROR_INVALID_PARAMETER;
+			return EXIT_ERROR;
 		}
 		allow_fallback = 0;
 	}
@@ -40,7 +44,7 @@ int main(int argc, char *argv[]) {
 	if (GetVolumeInformation("c:\\\\", NULL, 0, &serial, NULL, NULL, NULL, 0) == 0) {
 		DWORD err = GetLastError();
 		fprintf(stderr, "Error with GetVolumeInformation: %ld\n", err);
-		return err;
+		return EXIT_ERROR;
 	}
 	DWORD be_serial = htonl(serial);
 	fprintf(stderr, "Disk serial (hex): %08lx\n", serial);
@@ -51,7 +55,7 @@ int main(int argc, char *argv[]) {
 	union CPUIDVendor cpu_vendor;
 	if (__get_cpuid(0, &eax, &cpu_vendor.reg[0], &cpu_vendor.reg[2], &cpu_vendor.reg[1]) == 0) {
 		fprintf(stderr, "Error: cpuid(0) not supported");
-		return 1;
+		return EXIT_ERROR;
 	}
 	cpu_vendor.vendor[12] = '\0';
 	fprintf(stderr, "CPUID Vendor: %s\n", cpu_vendor.vendor);
@@ -59,7 +63,7 @@ int main(int argc, char *argv[]) {
 	unsigned int signature;
 	if (__get_cpuid(1, &signature, &ebx, &ecx, &edx) == 0) {
 		fprintf(stderr, "Error: cpuid(1) not supported");
-		return 1;
+		return EXIT_ERROR;
 	}
 	unsigned int be_signature = htonl(signature);
 	fprintf(stderr, "CPUID Signature (hex): %08x\n", signature);
@@ -87,7 +91,7 @@ int main(int argc, char *argv[]) {
 	if (key_retval != ERROR_SUCCESS) {
 		fprintf(stderr, "Error with RegGetValue: %ld\n", key_retval);
 		fprintf(stderr, "key_size: %ld\n", key_size);
-		return key_retval;
+		return EXIT_ERROR;
 	}
 	fprintf(stderr, "Encrypted key (hex): ");
 	for (size_t i = 0; i < key_size; i++ )
@@ -118,7 +122,7 @@ int main(int argc, char *argv[]) {
 			DWORD err = GetLastError();
 			fprintf(stderr, "Error with GetUserName: %ld\n", err);
 			fprintf(stderr, "wideuser_size: %ld\n", wideuser_size);
-			return err;
+			return EXIT_ERROR;
 		}
 	}
 	fprintf(stderr, "Username: %ls\n", wideuser);
@@ -156,12 +160,20 @@ int main(int argc, char *argv[]) {
 	if (CryptUnprotectData(&ciphertext_data, NULL, &entropy_data, NULL, NULL, 0, &plaintext_data) != TRUE) {
 		DWORD err = GetLastError();
 		fprintf(stderr, "Error with CryptUnprotectData: %ld\n", err);
-		return err;
+		return EXIT_ERROR;
 	}
 	fprintf(stderr, "Decrypted key length: %lu\n", plaintext_data.cbData);
+
+	// The device key has 16 bytes. Anything else isn't a device key, and printing 16 bytes
+	// of a shorter one would read past its end.
+	if (plaintext_data.cbData != 16) {
+		fprintf(stderr, "Error: the decrypted key has %lu bytes instead of 16\n", plaintext_data.cbData);
+		return EXIT_ERROR;
+	}
 
 	// Print decrypted key to stdout
 	for (unsigned int i = 0; i < 16; i++) {
 		printf("%02x", plaintext_data.pbData[i]);
 	}
+	return 0;
 }

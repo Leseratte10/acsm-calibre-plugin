@@ -153,6 +153,55 @@ class TestAccountImport(unittest.TestCase):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+    def test_wineHelperOutputIsChecked(self):
+        '''Check if the Wine key helper's output is only accepted if it's a 16-byte key'''
+
+        # GetMasterKey used to accept anything from a helper that exited with 0, so empty or
+        # broken output only failed later, with a misleading error about the registry.
+
+        import tempfile, shutil, binascii
+        from acsm_input import getEncryptionKeyLinux      # type: ignore
+
+        try:
+            # Python 2: print() writes byte strings there, which io.StringIO doesn't accept.
+            from StringIO import StringIO  # type: ignore
+        except ImportError:
+            from io import StringIO
+
+        class MockProcess(object):
+            def __init__(self, stdout, returncode):
+                self.stdout = stdout
+                self.returncode = returncode
+            def communicate(self):
+                return self.stdout, b"Using the Adobe device key\n"
+
+        key = bytes(bytearray(range(16)))
+        cases = [
+            ("a 16-byte key", binascii.hexlify(key), 0, key),
+            ("a 16-byte key and a line break", binascii.hexlify(key) + b"\r\n", 0, key),
+            ("no output", b"", 0, None),
+            ("an 8-byte key", binascii.hexlify(key[:8]), 0, None),
+            ("a 32-byte key", binascii.hexlify(key * 2), 0, None),
+            ("an odd number of hex digits", binascii.hexlify(key)[:-1], 0, None),
+            ("an error message", b"Error: something went wrong", 0, None),
+            ("an error exit code", binascii.hexlify(key), 1, None),
+        ]
+
+        wine_prefix = tempfile.mkdtemp()
+        try:
+            for label, stdout, returncode, expected in cases:
+                # GetMasterKey logs every step, keep that out of the test output.
+                old_stdout, old_stderr = sys.stdout, sys.stderr
+                sys.stdout, sys.stderr = StringIO(), StringIO()
+                try:
+                    with patch("subprocess.Popen", return_value=MockProcess(stdout, returncode)):
+                        master_key = getEncryptionKeyLinux.GetMasterKey(wine_prefix)
+                finally:
+                    sys.stdout, sys.stderr = old_stdout, old_stderr
+                self.assertEqual(master_key, expected, "Wrong result for %s" % (label))
+        finally:
+            shutil.rmtree(wine_prefix)
+
     def test_importWineKeySourceMatchesActivation(self):
         '''Check if the Wine key helper is asked for the device key of the imported activation'''
 
