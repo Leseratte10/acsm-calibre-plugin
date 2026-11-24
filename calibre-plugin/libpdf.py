@@ -69,39 +69,59 @@ class BackwardReader:
 
 def trim_encrypt_string(encrypt):
     """
-    Removes leading or trailing junk data from the encrypt string. 
+    Removes leading or trailing junk data from the encrypt string, by returning
+    the first complete dictionary in it. Returns "" if there is none.
     """
 
-    string_list = list(encrypt)
     strlen = len(encrypt)
 
     i = 0
     bracket_count = 0
     start_index = None
-    # Each check looks at two characters, so stop one character early.
-    while (i < strlen - 1):
-        if string_list[i] == "<" and string_list[i+1] == "<":
+    while (i < strlen):
+        if encrypt.startswith("<<", i):
             if start_index is None:
                 # First bracket we've found
                 start_index = i
             bracket_count += 1
+            i = i + 2
 
-        # Ignore ">>" in front of the dictionary.
-        if start_index is not None and string_list[i] == ">" and string_list[i+1] == ">":
-            bracket_count -= 1
+        elif encrypt.startswith(">>", i):
+            # Ignore ">>" in front of the dictionary.
+            if start_index is not None:
+                bracket_count -= 1
+                if bracket_count == 0:
+                    return encrypt[start_index:i+2]
+            i = i + 2
 
-        if bracket_count == 0 and start_index is not None: 
-            break
+        elif start_index is not None and encrypt[i] == "<":
+            # Hex string. Skip it, so its closing ">" isn't taken for half of a ">>".
+            end = encrypt.find(">", i)
+            if end == -1:
+                break
+            i = end + 1
 
-        i = i + 1
+        elif start_index is not None and encrypt[i] == "(":
+            # Literal string. Skip it, it can contain "<<" or ">>". Parentheses
+            # in it are balanced, or escaped with a backslash.
+            depth = 0
+            while i < strlen:
+                if encrypt[i] == "\\":
+                    i = i + 1
+                elif encrypt[i] == "(":
+                    depth += 1
+                elif encrypt[i] == ")":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                i = i + 1
+            i = i + 1
 
-    if start_index is None or bracket_count != 0:
-        # No dictionary, or it isn't closed
-        return ""
+        else:
+            i = i + 1
 
-    len_to_use = i+2
-
-    return encrypt[start_index:len_to_use]
+    # No dictionary, or it isn't closed
+    return ""
 
 
 def cleanup_encrypt_element(element):

@@ -156,6 +156,17 @@ class TestPDFFormat(unittest.TestCase):
         # ">>" in front of the dictionary belongs to something else.
         self.assertEqual(trim_encrypt_string(">> <</Root 1 0 R>>"), "<</Root 1 0 R>>", "trim didn't skip '>>' in front of the dictionary")
 
+    def test_pdf_trimEncryptNested(self):
+        '''Check if PDF encryption string trimming handles nested dictionaries and strings'''
+
+        for output in ["<</Size 3/Encrypt 1 0 R/Info<</Title(x)>>>>",
+                       "<</Size 3/Info<</A<</B 1>>>>/Encrypt 1 0 R>>",
+                       "<</Size 3/Encrypt 1 0 R/Foo<1234>>>",
+                       "<</Size 3/Encrypt 1 0 R/Foo(a >> b)>>",
+                       "<</Size 3/Encrypt 1 0 R/Foo(a \\) >> b)>>",
+                       "<</Size 3/Encrypt 1 0 R/Foo(a (b >>) c)>>"]:
+            self.assertEqual(trim_encrypt_string(output + ">>junk"), output, "trim cut '%s' at the wrong place" % output)
+
 
     # Helpers for the tests that patch a complete PDF:
 
@@ -329,4 +340,12 @@ class TestPDFFormat(unittest.TestCase):
             self.check_patched_trailer(
                 b"<</Size 6/Root 1 0 R/Info 2 0 R" + eol + b"/Encrypt 5 0 R/ID[<aa><bb>]>>", expected_trailer,
                 "dictionary starting on the keyword line, " + eol_name, trailer_on_keyword_line=True, eol=eol)
+
+    def test_pdf_patchTrailerNestedValues(self):
+        '''Check if PDFs whose trailer ends with a nested dictionary or a string can be patched'''
+
+        start = b"<</Size 6/Root 1 0 R/Encrypt 5 0 R/ID[<aa><bb>]"
+        expected_start = b"<</Size 6/Root 1 0 R/Encrypt 5 0 R/ID[<aa> <bb>]"
+        for value, name in [(b"/Info<</Title(x)>>", "nested dictionary"), (b"/Foo<1234>", "hex string"), (b"/Foo(a>>b)", "string with >>")]:
+            self.check_patched_trailer(start + value + b">>", expected_start + value + b"/Prev %d>>", name + " at the end")
 
