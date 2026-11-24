@@ -652,6 +652,15 @@ ASN_END_TAG = 3     # aka "END_ELEMENT"
 ASN_TEXT = 4        # aka "TEXT_NODE"
 ASN_ATTRIBUTE = 5   # aka "ATTRIBUTE"
 
+# The characters that are trimmed from both ends of a text node before it's hashed. The
+# server runs on Java and trims like String.strip(), which removes what Character.isWhitespace()
+# counts as whitespace: ASCII whitespace and the Unicode space, line and paragraph separators,
+# but not the non-breaking spaces U+00A0, U+2007 and U+202F. (U+000B, U+000C and U+001C to
+# U+001F are part of Java's definition, but can't appear in XML.)
+JAVA_WHITESPACE = (u"\t\n\x0b\x0c\r\x1c\x1d\x1e\x1f\x20"
+                   u"\u1680\u2000\u2001\u2002\u2003\u2004\u2005"
+                   u"\u2006\u2008\u2009\u200a\u2028\u2029\u205f\u3000")
+
 debug = False
 
 def attribute_sort_key(attribute):
@@ -754,7 +763,9 @@ def hash_text_node(hash_ctx, text):
     if text is None:
         return
 
-    text = text.strip()
+    # Trim like the server does, see JAVA_WHITESPACE. Python's strip() would also remove
+    # the non-breaking spaces which the server keeps.
+    text = text.strip(JAVA_WHITESPACE)
 
     if isinstance(text, bytes):
         text_bytes = text

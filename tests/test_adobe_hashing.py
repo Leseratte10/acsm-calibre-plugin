@@ -272,3 +272,50 @@ class TestAdobeHashing(unittest.TestCase):
         expected_hash = libadobe.hash_node(etree.fromstring(mock_xml_str_without_comments)).hexdigest().lower()
         self.assertEqual(sha_hash, expected_hash, "Text around a comment isn't hashed as one text node")
 
+    def test_hash_node_trimsLikeJava(self):
+        '''Check if XML hashing trims text nodes like the server does (Java's String.strip())'''
+
+        # The server trims what Java's Character.isWhitespace() counts as whitespace from
+        # both ends of a text node: more than XML whitespace (U+3000, for example), but not
+        # the non-breaking spaces. Neither Python's strip() nor strip(" \t\r\n") does the
+        # same, and the server rejects the signature if a text node begins or ends with a
+        # character they treat differently.
+
+        import hashlib
+
+        # Build the expected hash input by hand: each string is a 2-byte big-endian
+        # length followed by its UTF-8 bytes.
+        def asn_string(value):
+            data = value.encode("utf-8")
+            return bytearray([len(data) >> 8, len(data) & 0xff]) + bytearray(data)
+
+        def expected_hash(text):
+            stream = bytearray([libadobe.ASN_NS_TAG]) + asn_string(u"http://ns.adobe.com/adept") + asn_string(u"title")
+            stream += bytearray([libadobe.ASN_CHILD])
+            if text is not None:
+                stream += bytearray([libadobe.ASN_TEXT]) + asn_string(text)
+            stream += bytearray([libadobe.ASN_END_TAG])
+            return hashlib.sha1(bytes(stream)).hexdigest().lower()
+
+        def sha_hash(text_xml):
+            mock_xml_str = u"""<title xmlns="http://ns.adobe.com/adept">%s</title>""" % (text_xml)
+            return libadobe.hash_node(etree.fromstring(mock_xml_str)).hexdigest().lower()
+
+        # XML whitespace is trimmed. A CR only gets through the parser as a character reference.
+        self.assertEqual(sha_hash(u" \t\n&#13;Book title&#13;\n\t "), expected_hash(u"Book title"), "XML whitespace isn't trimmed")
+        self.assertEqual(sha_hash(u" \t\n&#13; "), expected_hash(None), "A text node with only XML whitespace is hashed")
+
+        # The other characters Java counts as whitespace are trimmed as well
+        for char in u"\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2008\u2009\u200a\u2028\u2029\u205f\u3000":
+            self.assertEqual(sha_hash(u"%s Book title %s" % (char, char)), expected_hash(u"Book title"), "U+%04X isn't trimmed" % ord(char))
+            self.assertEqual(sha_hash(char), expected_hash(None), "A text node with only U+%04X is hashed" % ord(char))
+
+        # Java doesn't count the non-breaking spaces and U+0085 as whitespace (Python's strip() does)
+        for char in u"\u00a0\u2007\u202f\u0085":
+            self.assertEqual(sha_hash(u" %sBook title%s\n" % (char, char)), expected_hash(u"%sBook title%s" % (char, char)), "U+%04X is trimmed" % ord(char))
+            self.assertEqual(sha_hash(char), expected_hash(char), "A text node with only U+%04X isn't hashed" % ord(char))
+
+        # Trimming stops at the first character that isn't whitespace for Java. The server
+        # rejected a text node ending in U+00A0 U+3000 when it was trimmed any other way.
+        self.assertEqual(sha_hash(u"\u3000\u00a0Book title\u00a0\u3000"), expected_hash(u"\u00a0Book title\u00a0"), "Trimming doesn't stop at a no-break space")
+
