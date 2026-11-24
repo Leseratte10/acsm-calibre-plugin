@@ -147,6 +147,15 @@ class TestPDFFormat(unittest.TestCase):
         for prefix in ["trailer", "trailer ", "  "]:
             self.assertEqual(trim_encrypt_string(prefix + output), output, "trim didn't remove the prefix '%s'" % prefix)
 
+    def test_pdf_trimEncryptIncomplete(self):
+        '''Check if PDF encryption string trimming rejects incomplete dictionaries'''
+
+        for encrypt in ["/Encrypt 1 0 R/ID[<1111><2222>]>>", "<</Root 1 0 R/Encrypt 1 0 R/ID[<1111><2222>]", "<", ">"]:
+            self.assertEqual(trim_encrypt_string(encrypt), "", "trim didn't reject '%s'" % encrypt)
+
+        # ">>" in front of the dictionary belongs to something else.
+        self.assertEqual(trim_encrypt_string(">> <</Root 1 0 R>>"), "<</Root 1 0 R>>", "trim didn't skip '>>' in front of the dictionary")
+
 
     # Helpers for the tests that patch a complete PDF:
 
@@ -290,32 +299,34 @@ class TestPDFFormat(unittest.TestCase):
         self.assertEqual(xref.group(3), b"00001", "xref entry should use the object's generation")
         self.assertTrue(output[int(xref.group(2)):].startswith(b"5 1 obj"), "xref entry doesn't point to the object")
 
-
-    # Known issues that aren't fixed yet. Remove the decorator once they are.
-
-    @unittest.expectedFailure
     def test_pdf_patchEncryptExtraWhitespace(self):
-        '''Known issue: patching a PDF with extra whitespace in the /Encrypt reference'''
+        '''Check if PDFs with extra whitespace in the /Encrypt reference can be patched'''
 
-        pdf, _ = build_test_pdf(b"<</Size 6/Root 1 0 R/Info 2 0 R/Encrypt  5 0 R/ID[<aa><bb>]>>")
-        ret, output = self.patch_pdf(pdf)
+        for encrypt in [b"/Encrypt  5 0 R", b"/Encrypt 5  0  R", b"/Encrypt\t5\t0\tR", b"/Encrypt 5 0 R "]:
+            pdf, output = self.check_patched_trailer(
+                b"<</Size 6/Root 1 0 R/Info 2 0 R" + encrypt + b"/ID[<aa><bb>]>>",
+                b"<</Size 6/Root 1 0 R/Info 2 0 R/Encrypt 5 0 R/ID[<aa> <bb>]/Prev %d>>",
+                repr(encrypt))
+            self.assertIn(b"\r5 0 obj\r", output[len(pdf):], repr(encrypt) + ": encryption object written with the wrong number")
 
-        # Patching it correctly or refusing to patch are both fine, writing a broken object isn't.
-        if ret:
-            self.assertIn(b"\r5 0 obj\r", output[len(pdf):], "encryption object written with the wrong number")
-
-    @unittest.expectedFailure
     def test_pdf_patchTrailerAcrossLines(self):
-        '''Known issue: patching a PDF whose trailer dictionary is spread over several lines'''
+        '''Check if PDFs whose trailer dictionary is spread over several lines can be patched'''
 
-        for lines in [[b"<</Size 6/Root 1 0 R/Info 2 0 R", b"/Encrypt 5 0 R/ID[<aa><bb>]>>"],
-                      [b"<</Size 6/Root 1 0 R/Info 2 0 R/Encrypt 5 0 R/ID[<aa><bb>]", b">>"]]:
-            pdf, xref_offset = build_test_pdf(None, trailer_lines=lines)
-            ret, output = self.patch_pdf(pdf)
+        expected_trailer = b"<</Size 6/Root 1 0 R/Info 2 0 R/Encrypt 5 0 R/ID[<aa> <bb>]/Prev %d>>"
+        cases = [
+            ("/Encrypt on the next line", [b"<</Size 6/Root 1 0 R/Info 2 0 R", b"/Encrypt 5 0 R/ID[<aa><bb>]>>"]),
+            (">> on its own line",        [b"<</Size 6/Root 1 0 R/Info 2 0 R/Encrypt 5 0 R/ID[<aa><bb>]", b">>"]),
+            ("/Prev in front of >>",      [b"<</Size 6/Root 1 0 R/Info 2 0 R/Encrypt 5 0 R/ID[<aa><bb>]/Prev 9", b">>"]),
+            ("split /Encrypt reference",  [b"<</Size 6/Root 1 0 R/Info 2 0 R/Encrypt 5 0", b"R/ID[<aa><bb>]>>"]),
+            ("one key per line",          [b"<<", b"/Size 6", b"/Root 1 0 R", b"/Info 2 0 R", b"/Encrypt 5 0 R", b"/ID[<aa><bb>]", b">>"]),
+        ]
 
-            # Patching it correctly or refusing to patch are both fine, crashing or writing a broken trailer isn't.
-            if ret:
-                new_trailer, _ = self.get_appended_trailer(pdf, output)
-                self.assertEqual(new_trailer, b"<</Size 6/Root 1 0 R/Info 2 0 R/Encrypt 5 0 R/ID[<aa> <bb>]/Prev %d>>" % xref_offset,
-                                 "broken trailer")
+        for eol_name, eol in [("LF", b"\n"), ("CRLF", b"\r\n"), ("CR", b"\r")]:
+            for name, lines in cases:
+                self.check_patched_trailer(None, expected_trailer, "%s, %s" % (name, eol_name), trailer_lines=lines, eol=eol)
+
+            # The dictionary can also start on the line of the trailer keyword.
+            self.check_patched_trailer(
+                b"<</Size 6/Root 1 0 R/Info 2 0 R" + eol + b"/Encrypt 5 0 R/ID[<aa><bb>]>>", expected_trailer,
+                "dictionary starting on the keyword line, " + eol_name, trailer_on_keyword_line=True, eol=eol)
 

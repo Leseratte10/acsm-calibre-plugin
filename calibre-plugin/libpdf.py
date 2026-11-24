@@ -7,7 +7,7 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-import sys, os, zlib, base64, time, shutil
+import sys, os, zlib, base64, time, shutil, re
 
 class BackwardReader:
     """
@@ -78,14 +78,16 @@ def trim_encrypt_string(encrypt):
     i = 0
     bracket_count = 0
     start_index = None
-    while (i < strlen):
+    # Each check looks at two characters, so stop one character early.
+    while (i < strlen - 1):
         if string_list[i] == "<" and string_list[i+1] == "<":
             if start_index is None:
                 # First bracket we've found
                 start_index = i
             bracket_count += 1
 
-        if string_list[i] == ">" and string_list[i+1] == ">":
+        # Ignore ">>" in front of the dictionary.
+        if start_index is not None and string_list[i] == ">" and string_list[i+1] == ">":
             bracket_count -= 1
 
         if bracket_count == 0 and start_index is not None: 
@@ -93,7 +95,8 @@ def trim_encrypt_string(encrypt):
 
         i = i + 1
 
-    if start_index is None: 
+    if start_index is None or bracket_count != 0:
+        # No dictionary, or it isn't closed
         return ""
 
     len_to_use = i+2
@@ -182,6 +185,44 @@ def find_enc(filename_in):
     return None
 
 
+def find_trailer(filename_in):
+    """
+    Returns the trailer dictionary in front of the last startxref, which can be
+    spread over several lines. Returns None if there is no such trailer (e.g. with
+    a cross-reference stream) or if it has no /Encrypt entry.
+    """
+
+    lines = None    # Lines between "trailer" and "startxref", last one first
+    i = 0
+
+    with open(filename_in, "rb") as fl:
+        for line in BackwardReader(fl).readlines():
+            i = i + 1
+
+            if lines is None:
+                # Still looking for startxref
+                if line == "startxref":
+                    lines = []
+                elif i > 10:
+                    return None
+                continue
+
+            if "trailer" in line:
+                # The dictionary can start on the same line as the keyword.
+                lines.append(line[line.index("trailer") + len("trailer"):])
+                lines.reverse()
+                trailer = "\n".join(lines)
+                return trailer if "/Encrypt" in trailer else None
+
+            if "endobj" in line or i > 100:
+                # Something other than a trailer in front of startxref
+                return None
+
+            lines.append(line)
+
+    return None
+
+
 
 def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_bookid):
 
@@ -214,30 +255,26 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
 
 
 
-    r_encrypt_offs1 = None
-    r_encrypt_offs2 = None
+    encrypt = find_trailer(filename_in)
+    if encrypt is None:
+        # No trailer with /Encrypt in front of startxref (e.g. with a cross-reference
+        # stream), so use the last line that contains /Encrypt and /ID instead.
+        print("No trailer with /Encrypt in front of startxref, searching the file ...")
+        encrypt = find_enc(filename_in)
 
-    encrypt = None
-
-
-    encrypt = find_enc(filename_in)
     if encrypt is None:
         print("Error, enc not found")
         return False
 
-    line_split = encrypt.split('/')
-    for element in line_split:
-        if not element.startswith("Encrypt "):
-            continue
-
-        element_parts = element.split(' ')
-        r_encrypt_offs1 = element_parts[1]
-        r_encrypt_offs2 = element_parts[2]
-
-
-    if r_encrypt_offs1 is None or r_encrypt_offs2 is None:
+    # Object and generation number of the encryption dictionary, from "/Encrypt 5 0 R".
+    # There can be any whitespace between the parts, including line breaks.
+    encrypt_ref = re.search(r"/Encrypt\s+(\d+)\s+(\d+)\s+R", encrypt)
+    if encrypt_ref is None:
         print("Err: Didn't find encrypt offsets")
         return False
+
+    r_encrypt_offs1 = encrypt_ref.group(1)
+    r_encrypt_offs2 = encrypt_ref.group(2)
 
 
     # read EBX element:
@@ -256,6 +293,10 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
     print(ebx_elem)
 
     encrypt = trim_encrypt_string(encrypt)
+    if encrypt == "":
+        print("Err: Trailer dictionary is incomplete")
+        return False
+
     ebx_elem = update_ebx_with_keys(ebx_elem, adept_license_string, ebx_bookid)
 
     print("Updated EBX handler not logged due to sensitive data")
