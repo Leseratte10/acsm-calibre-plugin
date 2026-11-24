@@ -10,7 +10,8 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 import sys, os, zlib, base64, time
 
 class BackwardReader:
-    """Read a binary file backwards, line by line, supporting all three 
+    """
+    Read a binary file backwards, line by line, supporting all three 
     line endings (CR, LF, CRLF).
     """
 
@@ -65,28 +66,40 @@ class BackwardReader:
 
 
 
+
 def trim_encrypt_string(encrypt):
+    """
+    Removes leading or trailing junk data from the encrypt string. 
+    """
 
     string_list = list(encrypt)
     strlen = len(encrypt)
 
     i = 0
     bracket_count = 0
+    start_index = None
     while (i < strlen):
         if string_list[i] == "<" and string_list[i+1] == "<":
+            if start_index is None:
+                # First bracket we've found
+                start_index = i
             bracket_count += 1
 
         if string_list[i] == ">" and string_list[i+1] == ">":
             bracket_count -= 1
 
-        if bracket_count == 0: 
+        if bracket_count == 0 and start_index is not None: 
             break
 
         i = i + 1
 
+    if start_index is None: 
+        return ""
+
     len_to_use = i+2
 
-    return encrypt[0:len_to_use]
+    return encrypt[start_index:len_to_use]
+
 
 def cleanup_encrypt_element(element):
 

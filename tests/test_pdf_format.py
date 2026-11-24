@@ -35,7 +35,12 @@ class TestPDFFormat(unittest.TestCase):
         input = "<</Root 1 0 R/Info 1 0 R/Encrypt 1 0 R/ID[<1111><2222>]/Size 3>>AppendedData"
         output = "<</Root 1 0 R/Info 1 0 R/Encrypt 1 0 R/ID[<1111><2222>]/Size 3>>"
 
-        self.assertEqual(trim_encrypt_string(input), output, "PDF string trimming broken")
+        self.assertEqual(trim_encrypt_string(input), output, "trim didn't remove trailing junk")
+
+        input = "PrefixJunk123<</Root 1 0 R/Info 1 0 R/Encrypt 1 0 R/ID[<1111><2222>]/Size 3>>"
+        output = "<</Root 1 0 R/Info 1 0 R/Encrypt 1 0 R/ID[<1111><2222>]/Size 3>>"
+
+        self.assertEqual(trim_encrypt_string(input), output, "trim didn't remove leading junk")
 
     def test_pdf_cleanupEncrypt(self): 
         '''Check if PDF encryption string spacing code is working properly'''
