@@ -258,9 +258,9 @@ def finalize_write_config_Windows(data, key, buildID):
     content += "<activationInfo xmlns=\"http://ns.adobe.com/adept\">\n"
     content += '<adept:activationServiceInfo xmlns:adept="http://ns.adobe.com/adept">\n'
 
-    content += "<adept:authURL>%s</adept:authURL>" % (data["activationServiceInfo"]["authURL"])
-    content += "<adept:userInfoURL>%s</adept:userInfoURL>" % (data["activationServiceInfo"]["userInfoURL"])
-    content += "<adept:activationURL>%s</adept:activationURL>" % (data["activationServiceInfo"]["activationURL"])
+    content += "<adept:authURL>%s</adept:authURL>" % (xml_escape(data["activationServiceInfo"]["authURL"]))
+    content += "<adept:userInfoURL>%s</adept:userInfoURL>" % (xml_escape(data["activationServiceInfo"]["userInfoURL"]))
+    content += "<adept:activationURL>%s</adept:activationURL>" % (xml_escape(data["activationServiceInfo"]["activationURL"]))
     
     cert_key = data["activationServiceInfo"]["certificate"]
     if isinstance(cert_key, dict):

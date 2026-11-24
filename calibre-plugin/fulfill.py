@@ -11,7 +11,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
 
-import sys, os, time, shutil
+import sys, os, re, time, shutil
 
 import zipfile
 from lxml import etree
@@ -22,6 +22,32 @@ from acsm_input.libpdf import patch_drm_into_pdf
 
 
 #######################################################################
+
+
+# Names Windows reserves for devices, also with an extension like "CON.epub"
+WINDOWS_RESERVED_NAMES = ["CON", "PRN", "AUX", "NUL"] + ["COM%d" % i for i in range(1, 10)] + ["LPT%d" % i for i in range(1, 10)]
+
+
+def safe_file_name(title):
+    # type: (str|None) -> str
+    # Turns a book title into the name of a file in the current folder that works on
+    # Windows, macOS and Linux. Path separators, ":" (drive letters and NTFS streams) and
+    # the other characters Windows doesn't allow are replaced, reserved device names get a
+    # prefix, and long titles are shortened so that the name still fits into 255 bytes
+    # with the extension and the "tmp_" prefix.
+
+    name = re.sub(r'[\x00-\x1f<>:"/\\|?*]', "_", title or "")
+
+    # Windows drops dots and spaces at the end, and a dot at the start hides the file
+    name = name.strip(" .")
+
+    # At most 200 bytes of UTF-8, without cutting a character in half
+    name = name.encode("utf-8")[:200].decode("utf-8", "ignore").rstrip(" .")
+
+    if name.split(".")[0].strip().upper() in WINDOWS_RESERVED_NAMES:
+        name = "_" + name
+
+    return name or "Book"
 
 
 def download(replyData):
@@ -51,6 +77,9 @@ def download(replyData):
         book_name = metadata_node.find("./%s" % (adDC("title"))).text
     except: 
         book_name = "Book"
+
+    # The title becomes the file name
+    book_name = safe_file_name(book_name)
     
 
     # Download eBook: 
@@ -58,9 +87,6 @@ def download(replyData):
     print(download_url)
 
     filename_tmp = book_name + ".tmp"
-    
-    # Prevent Book names like "../../" from writing outside of the folder
-    filename_tmp = filename_tmp.replace("/", "").replace("\\", "")
 
     dl_start_time = int(time.time() * 1000)
     ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp, False)
@@ -84,7 +110,6 @@ def download(replyData):
         filetype = ".pdf"
 
     filename = book_name + filetype
-    filename = filename.replace("/", "").replace("\\", "")
     try: 
         shutil.move(filename_tmp, filename)
     except: 

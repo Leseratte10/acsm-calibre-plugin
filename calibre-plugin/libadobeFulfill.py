@@ -9,6 +9,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 from lxml import etree
 import base64
+from xml.sax.saxutils import escape as xml_escape
 
 from .libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
 from .libadobe import get_devkey_path, get_device_path, get_activation_xml_path
@@ -115,7 +116,7 @@ def buildInitLicenseServiceRequest(authURL, force_adobe):
     ret = ""
     ret += "<?xml version=\"1.0\"?>"
     ret += "<adept:licenseServiceRequest xmlns:adept=\"http://ns.adobe.com/adept\" identity=\"user\">"
-    ret += "<adept:operatorURL>%s</adept:operatorURL>" % (authURL)
+    ret += "<adept:operatorURL>%s</adept:operatorURL>" % (xml_escape(authURL))
     ret += addNonce()
     ret += "<adept:user>%s</adept:user>" % (user_uuid)
     ret += "</adept:licenseServiceRequest>"
@@ -403,7 +404,7 @@ def buildRights(license_token_node):
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     lic_token_url = license_token_node.find("./%s" % (adNS("licenseURL"))).text
 
-    ret += "<adept:licenseURL>%s</adept:licenseURL>\n" % lic_token_url
+    ret += "<adept:licenseURL>%s</adept:licenseURL>\n" % (xml_escape(lic_token_url))
 
     # Get cert for this license URL:
     activationxml = etree.parse(get_activation_xml_path())

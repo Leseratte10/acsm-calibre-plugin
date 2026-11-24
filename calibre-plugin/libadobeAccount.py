@@ -702,9 +702,9 @@ def exportProxyAuth(act_xml_path, activationToken):
     ret = "<?xml version=\"1.0\"?>"
     ret += "<activationInfo xmlns=\"http://ns.adobe.com/adept\">"
     ret += "<adept:activationServiceInfo xmlns:adept=\"http://ns.adobe.com/adept\">"
-    ret += "<adept:authURL>%s</adept:authURL>" % (rt_si_authURL)
-    ret += "<adept:userInfoURL>%s</adept:userInfoURL>" % (rt_si_userInfoURL)
-    ret += "<adept:activationURL>%s</adept:activationURL>" % (rt_si_activationURL)
+    ret += "<adept:authURL>%s</adept:authURL>" % (xml_escape(rt_si_authURL))
+    ret += "<adept:userInfoURL>%s</adept:userInfoURL>" % (xml_escape(rt_si_userInfoURL))
+    ret += "<adept:activationURL>%s</adept:activationURL>" % (xml_escape(rt_si_activationURL))
     if rt_si_certificate_ad is not None:
         ret += "<adept:certificate>%s</adept:certificate>" % (rt_si_certificate_ad)
     if rt_si_certificate_bb is not None:
