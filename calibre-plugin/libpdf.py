@@ -1,5 +1,5 @@
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -10,32 +10,41 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 import sys, os, zlib, base64, time
 
 class BackwardReader:
+    """Read a binary file backwards, line by line, supporting all three 
+    line endings (CR, LF, CRLF).
+    """
+
+    BLKSIZE = 4096
 
     def __init__(self, file):
         self.file = file
 
-
     def readlines(self):
-        BLKSIZE = 4096
+        CR = b"\r"
+        LF = b"\n"
+
         # Move reader to the end of file
         self.file.seek(0, os.SEEK_END)
-        if sys.version_info[0] >= 3:
-            buffer = bytearray()
-        else:
-            buffer = ""
+        current_pos = self.file.tell()   # start of the not-yet-read region
+        buffer = b""
 
         while True:
-            if sys.version_info[0] >= 3:
-                pos_newline = buffer.rfind(bytes([0x0a]))
-            else:
-                pos_newline = buffer.rfind("\n")
+            # Last line terminator in the buffer, either CR or LF
+            pos = max(buffer.rfind(LF), buffer.rfind(CR))
 
-            # Get the current position of the reader
-            current_pos = self.file.tell()
-            if pos_newline != -1:
-                # Newline is found
-                line = buffer[pos_newline+1:]
-                buffer = buffer[:pos_newline]
+            # An LF at the very start of the buffer might be the second half
+            # of a CRLF pair split across a block boundary, so we can't decide
+            # yet whether the byte before it is a CR. Read more first.
+            straddles = (pos == 0 and current_pos > 0
+                         and buffer[:1] == LF)
+
+            if pos != -1 and not straddles:
+                # Line terminator found
+                line = buffer[pos + 1:]
+                if pos > 0 and buffer[pos:pos + 1] == LF \
+                        and buffer[pos - 1:pos] == CR:
+                    pos -= 1          # CRLF: drop the CR as well
+                buffer = buffer[:pos]
                 if sys.version_info[0] >= 3:
                     yield line.decode("latin-1")
                 else:
@@ -43,19 +52,16 @@ class BackwardReader:
 
             elif current_pos:
                 # Need to fill the buffer
-                to_read = min(BLKSIZE, current_pos)
-                self.file.seek(current_pos-to_read, 0)
+                to_read = min(self.BLKSIZE, current_pos)
+                current_pos -= to_read
+                self.file.seek(current_pos, os.SEEK_SET)
                 buffer = self.file.read(to_read) + buffer
-                self.file.seek(current_pos-to_read, 0)
-                if current_pos == to_read:
-                    if sys.version_info[0] >= 3:
-                        buffer = bytes([0x0a]) + buffer
-                    else:
-                        buffer = "\n" + buffer
+                if current_pos == 0:
+                    # Sentinel so the first line of the file gets yielded
+                    buffer = LF + buffer
             else:
                 # Start of file
                 return
-
 
 
 

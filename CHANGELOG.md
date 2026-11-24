@@ -25,12 +25,12 @@
 - Don't return a broken PDF if adding the rights.xml failed.
 - fulfill.py: Fix a bug that could cause a malicious fulfillment server to cause the script to write files outside of the intended directory. 
 - Fix a bug in the PDF parser that would corrupt PDFs if their file size was an exact multiple of the buffer block size (4096 bytes).
+- Fix a bug in the PDF parser that would corrupt PDFs if they used multiple different line endings within their internal data structures.
 - Only use datetime.utcnow() when necessary (on older Python versions) since it's deprecated in Python 3.12 and will be removed from a future Python release.
 - Only add books to the loan list if the fulfillment notifications were successful.
 - Fix loan list accidentally hiding loans that had an invalid expiration date.
 - Allow building the plugin without Windows cross-compilers. If the WINE key extraction binaries are missing from the plugin, hide the "Import from WINE" button. 
 - Print an error and abort if the EPUB / PDF download aborts mid-file instead of silently leaving the corrupted file.
-
 
 ## 0.1.0 (perpetually in beta between 2022-2026, hasn't been released)
 
