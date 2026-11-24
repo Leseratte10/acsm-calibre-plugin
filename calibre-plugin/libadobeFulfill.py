@@ -913,16 +913,18 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
         try: 
             code, msg = sendRequestDocuRC(doc_send, url, False)
         except:
+            import traceback
+            exception_text = traceback.format_exc()
+
             if not critical:
                 print("There was an error during an optional fulfillment notification:")
-                import traceback
-                traceback.print_exc()
+                errmsg += "ERROR\n\n" + exception_text + "\n"
+                print(exception_text)
                 print("Continuing execution ...")
                 continue
             else:
                 print("Error during critical notification:")
-                import traceback
-                traceback.print_exc()
+                errmsg_crit += "ERROR\n\n" + exception_text + "\n"
                 continue
 
         try: 
