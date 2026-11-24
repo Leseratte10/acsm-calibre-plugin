@@ -22,6 +22,7 @@ from test_account_import import TestAccountImport
 from test_adobe import TestAdobe
 from test_pdf_format import TestPDFFormat
 from test_plugin_interface import TestPluginInterface
+from test_adobe_hashing import TestAdobeHashing
 
 last_test_class = None
 

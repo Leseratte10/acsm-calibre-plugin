@@ -836,7 +836,7 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
     
 
     errmsg = ""
-    errmsg_crit = ""
+    crit_errors = 0
 
     for element in notifiers:
 
@@ -924,7 +924,8 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
                 continue
             else:
                 print("Error during critical notification:")
-                errmsg_crit += "ERROR\n\n" + exception_text + "\n"
+                errmsg += "ERROR\n\n" + exception_text + "\n"
+                crit_errors += 1
                 continue
 
         try: 
@@ -940,7 +941,7 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
             print("Fulfillment notification error: %s" % (msg))
             errmsg += "ERROR\n" + url + "\n" + msg + "\n\n"
             if critical:
-                errmsg_crit += "ERROR\n" + url + "\n" + msg + "\n\n"
+                crit_errors += 1
 
         elif "<success" in msg: 
             print("Fulfillment notification successful.")
@@ -950,10 +951,10 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
             print("Weird Fulfillment Notification response: %s" % (msg))
             errmsg += "ERROR\n" + url + "\n" + msg + "\n\n"
             if critical:
-                errmsg_crit += "ERROR\n" + url + "\n" + msg + "\n\n"
+                crit_errors += 1
         
 
-    if errmsg_crit == "": 
+    if crit_errors == 0: 
         return True, ""
 
     return False, errmsg

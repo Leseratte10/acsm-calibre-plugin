@@ -706,45 +706,64 @@ def hash_node_ctx(node, hash_ctx):
 
     hash_do_append_tag(hash_ctx, ASN_CHILD)
 
-    if (node.text is not None):
-        # If there's raw text, hash that.
-
-        # This code block used to just be the following:
-        #   hash_do_append_tag(hash_ctx, ASN_TEXT)
-        #   hash_do_append_string(hash_ctx, node.text.strip())
-        # though that only works with text nodes < 0x7fff.
-        # While I doubt we'll ever encounter text nodes larger than 32k in
-        # this application, I want to implement the spec correctly.
-        # So there's a loop going over the text, hashing 32k chunks.
-
-        text = node.text.strip()
-
-        if isinstance(text, bytes):
-            text_bytes = text
-        else:
-            text_bytes = text.encode("utf-8")
-
-        text_bytes_len = len(text_bytes)
-
-        if text_bytes_len > 0:
-            done = 0
-            while True: 
-                hash_do_append_tag(hash_ctx, ASN_TEXT)
-                hashed_len = hash_do_append_string(hash_ctx, text_bytes[done:]) 
-                if hashed_len is None or hashed_len == 0:
-                    raise Exception("Error during hashing")
-
-                done += hashed_len
-                if done >= text_bytes_len:
-                    break
+    # lxml has no separate text nodes: the text in front of the first child is
+    # node.text, and the text after a child is that child's .tail.
+    text = node.text
 
     for child in node: 
-        # If there's child nodes, hash these as well.
+        if child.tag in (etree.Comment, etree.ProcessingInstruction):
+            # lxml also returns comments and processing instructions as children, with
+            # etree.Comment or etree.ProcessingInstruction as their .tag. They aren't
+            # hashed, and the text in front of and after them is one text node, as if
+            # they weren't in the XML at all.
+
+            # This line of code merges the text before the comment (from node.text)
+            # and the text after the comment (child.tail) together into one text node
+            # before hashing.
+            text = (text or "") + (child.tail or "")
+            continue
+
+        # Hash the text that lives in *front* of the first child node.
+        hash_text_node(hash_ctx, text)
+
+        # Hash all the child nodes.
         hash_node_ctx(child, hash_ctx)
 
+        # If there's text left after the child, either process it during the next loop 
+        # iteration (if there is one), or hash it separately after this loop.
+        text = child.tail
 
-
+    hash_text_node(hash_ctx, text)
     hash_do_append_tag(hash_ctx, ASN_END_TAG)
+
+
+def hash_text_node(hash_ctx, text):
+    # type: (SHA.SHA1Hash, str|None) -> None
+    # Hashes a text node, unless it's empty after trimming.
+
+    if text is None:
+        return
+
+    text = text.strip()
+
+    if isinstance(text, bytes):
+        text_bytes = text
+    else:
+        text_bytes = text.encode("utf-8")
+
+    text_bytes_len = len(text_bytes)
+
+    if text_bytes_len > 0:
+        done = 0
+        while True:
+            hash_do_append_tag(hash_ctx, ASN_TEXT)
+            hashed_len = hash_do_append_string(hash_ctx, text_bytes[done:])
+            if hashed_len is None or hashed_len == 0:
+                raise Exception("Error during hashing")
+
+            done += hashed_len
+            if done >= text_bytes_len:
+                break
 
 
 
