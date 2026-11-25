@@ -195,13 +195,14 @@ class ACSMInput(FileTypePlugin):
                 print("ADE sanity check: pkcs12 missing")
                 return False
 
-            try:  
-                from .libadobeFulfill import getDecryptedCert
-                if getDecryptedCert() is None:
-                    print("ADE sanity check: Can't decrypt pkcs12")
-                    return False
-            except: 
-                print("Skipping decryption check")
+            # Check the pkcs12 that fulfill() signs with first, like the settings dialog does: the
+            # ByteBooks one if the activation has a complete set of ByteBooks credentials, otherwise
+            # the Adobe one. An exception (e.g. a missing devicesalt) fails the check as well,
+            # because signing would fail, too.
+            from .libadobeFulfill import getDecryptedCert, is_bytebooks_account
+            if getDecryptedCert(None, is_bytebooks_account()) is None:
+                print("ADE sanity check: Can't decrypt pkcs12")
+                return False
 
             return True
         except: 

@@ -15,7 +15,7 @@ Helper library with code needed for Adobe stuff.
 '''
 
 from uuid import getnode
-import sys, os, hashlib, base64, platform, tempfile, stat
+import sys, os, hashlib, base64, platform, tempfile, stat, traceback
 import ssl
 try: 
     import urllib.request as ulib
@@ -670,6 +670,10 @@ def get_cert_from_pkcs12(_pkcs12, _key):
 
 
 def sign_node(node, prefer_bytebooks):
+    # type: (etree._Element, bool) -> str
+    # Returns the signature for the node in base64, or None if it can't be signed.
+    # All callers check for None, so a missing or broken devicesalt, activation.xml
+    # or pkcs12 has to return None here instead of raising an exception.
 
     sha_hash = hash_node(node)
     sha_hash = sha_hash.digest()
@@ -678,15 +682,19 @@ def sign_node(node, prefer_bytebooks):
 
     global devkey_bytes
 
-    if devkey_bytes is None: 
-        f = open(FILE_DEVICEKEY, "rb")
-        devkey_bytes = f.read()
-        f.close()
-
     # Get private key
 
+    try:
+        if devkey_bytes is None:
+            with open(FILE_DEVICEKEY, "rb") as f:
+                devkey_bytes = f.read()
 
-    activationxml = etree.parse(FILE_ACTIVATIONXML)
+        activationxml = etree.parse(FILE_ACTIVATIONXML)
+    except Exception:
+        print("Signing failed, can't read devicesalt or activation.xml:")
+        traceback.print_exc()
+        return None
+
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
     # If prefer_bytebooks is set, this function will first try to use the ByteBooks cert. 
@@ -708,27 +716,37 @@ def sign_node(node, prefer_bytebooks):
 
 
     if pkcs12adobe is None and pkcs12bb is None: 
+        print("Signing failed, activation.xml doesn't contain a pkcs12")
         return None
 
     if prefer_bytebooks:
         if pkcs12bb is not None: 
-            pkcs12 = pkcs12bb
+            pkcs12, vendor = pkcs12bb, "ByteBooks"
         else: 
-            pkcs12 = pkcs12adobe
+            pkcs12, vendor = pkcs12adobe, "Adobe"
     else: 
         if pkcs12adobe is not None: 
-            pkcs12 = pkcs12adobe
+            pkcs12, vendor = pkcs12adobe, "Adobe"
         else: 
-            pkcs12 = pkcs12bb
+            pkcs12, vendor = pkcs12bb, "ByteBooks"
 
 
-    my_pkcs12 = base64.b64decode(pkcs12)
-    my_priv_key, _, _ = keys.parse_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))
-    my_priv_key = my_priv_key.dump()
+    try:
+        my_pkcs12 = base64.b64decode(pkcs12)
+        my_priv_key, _, _ = keys.parse_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))
+        if my_priv_key is None:
+            raise ValueError("The pkcs12 doesn't contain a private key")
+        my_priv_key = my_priv_key.dump()
 
-    # textbook RSA with that private key
+        # textbook RSA with that private key
 
-    block = CustomRSA.encrypt_for_adobe_signature(my_priv_key, sha_hash)
+        block = CustomRSA.encrypt_for_adobe_signature(my_priv_key, sha_hash)
+    except Exception:
+        # A wrong device key, a corrupt pkcs12, or one that customcrypto can't read
+        print("Signing failed, can't use the %s pkcs12:" % (vendor))
+        traceback.print_exc()
+        return None
+
     signature = base64.b64encode(block).decode()
 
     # Debug
