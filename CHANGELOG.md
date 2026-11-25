@@ -3,7 +3,6 @@
 ## 0.1.1 (currently being worked on, not yet released)
 
 - Switch from Adobe to ByteBooks (#185): ByteBooks has taken over the ADE / ACS platform, so the plugin now emulates ByteBooks Digital Editions 5.0.76 and uses the ByteBooks activation server. New authorizations require a ByteBooks ID (fixes #153, #159).
-- Existing authorizations are automatically switched to the emulated BDE 5.0 version, since older ADE versions will no longer work reliably.
 - Replace `oscrypto` and `asn1crypto` with a built-in PKCS#12 implementation (#186) based on oscrypto, which uses PyCryptodome for the ciphers. This removes the need for OpenSSL and should fix a bunch of issues with loading the correct libraries on MacOS or in a Linux Flatpak (fixes #24, #63, #65, #67, #68, #85, #86, #92, #99, #100, #106, #107, #109, #110, #112, #113, #124, #127, #128, #130, #133, #139, #150 and #152).
 - Drop support for the environment variables `ACSM_LIBCRYPTO` and `ACSM_LIBSSL` since the plugin no longer uses libssl (obsoletes #95, fixes #153).
 - Validate TLS certificates for all requests to the ByteBooks activation server, using Calibre's bundled CA certificates in addition to the system ones. Requests to book distributors still ignore certificate errors (fixes #58, #97, #105).

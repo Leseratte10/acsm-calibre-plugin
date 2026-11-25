@@ -52,11 +52,22 @@ def createDeviceFile(randomSerial, useVersionIndex = 0):
     serial = makeSerial(randomSerial)
     fingerprint = makeFingerprint(serial)
 
+    write_file_atomically(get_device_path(), build_device_xml("standalone", serial, fingerprint, useVersionIndex))
+
+    return True
+
+
+def build_device_xml(device_type, serial, fingerprint, useVersionIndex = 0):
+    # type: (str, str, str, int) -> bytes
+    # Returns the content of device.xml. A new authorization (createDeviceFile) and the
+    # imports from Digital Editions all create it with this, so the files can't drift apart.
+    # Raises ValueError if a value contains characters that XML doesn't allow.
+
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     etree.register_namespace("adept", NSMAP["adept"])
 
     root = etree.Element(etree.QName(NSMAP["adept"], "deviceInfo"))
-    etree.SubElement(root, etree.QName(NSMAP["adept"], "deviceType")).text = "standalone"
+    etree.SubElement(root, etree.QName(NSMAP["adept"], "deviceType")).text = device_type
 
     # These three elements are not supposed to be sent to Adobe:
     etree.SubElement(root, etree.QName(NSMAP["adept"], "deviceClass")).text = "Desktop"
@@ -96,9 +107,7 @@ def createDeviceFile(randomSerial, useVersionIndex = 0):
 
     etree.SubElement(root, etree.QName(NSMAP["adept"], "fingerprint")).text = fingerprint
 
-    write_file_atomically(get_device_path(), b"<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False))
-
-    return True
+    return b"<?xml version=\"1.0\"?>\n" + etree.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=False)
 
 def getAuthMethodsAndCert():
     # Queries the /AuthenticationServiceInfo endpoint to get a list

@@ -9,8 +9,8 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 
 from lxml import etree
-import base64, traceback, warnings
-import os, locale, re, struct
+import base64, traceback
+import os, re, struct
 from xml.sax.saxutils import escape as xml_escape
 
 
@@ -28,8 +28,9 @@ class AES(object):
         return self._aes.decrypt(data)
 
 
-from .libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path, get_device_name, safe_xml_parser, write_files_atomically, remove_padding
-from .libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS, VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
+from .libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path, safe_xml_parser, write_files_atomically, remove_padding
+from .libadobe import VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
+from .libadobeAccount import build_device_xml
 
 
 # The C escapes in Wine's registry files, see decode_wine_registry_string()
@@ -319,6 +320,18 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
         traceback.print_exc()
         return False, "There has been an error while reading through the Registry."
 
+def vendor_elements(name, value):
+    # type: (str, str|dict) -> str
+    # The <adept:name> elements for an activation value: one per vendor with the ofByteBooks
+    # flag if the value is a dict ({True: ByteBooks, False: Adobe}), else one without it.
+    if isinstance(value, dict):
+        ret = ""
+        for flag in (True, False):
+            if flag in value:
+                ret += "<adept:%s ofByteBooks=\"%s\">%s</adept:%s>" % (name, "true" if flag else "false", xml_escape(value[flag]), name)
+        return ret
+    return "<adept:%s>%s</adept:%s>" % (name, xml_escape(value), name)
+
 def finalize_write_config_Windows(data, key, buildID, account_method=None):
     # Okay, finally got all the data that's needed - recreate all the files.
 
@@ -331,14 +344,7 @@ def finalize_write_config_Windows(data, key, buildID, account_method=None):
     content += "<adept:userInfoURL>%s</adept:userInfoURL>" % (xml_escape(data["activationServiceInfo"]["userInfoURL"]))
     content += "<adept:activationURL>%s</adept:activationURL>" % (xml_escape(data["activationServiceInfo"]["activationURL"]))
     
-    cert_key = data["activationServiceInfo"]["certificate"]
-    if isinstance(cert_key, dict):
-        if True in cert_key:
-            content += "<adept:certificate ofByteBooks=\"true\">%s</adept:certificate>" % (cert_key[True])
-        if False in cert_key:
-            content += "<adept:certificate ofByteBooks=\"false\">%s</adept:certificate>" % (cert_key[False])
-    else: 
-        content += "<adept:certificate>%s</adept:certificate>" % (cert_key)
+    content += vendor_elements("certificate", data["activationServiceInfo"]["certificate"])
 
     if "authenticationCertificate" in data["activationServiceInfo"]:
         authcert_key = data["activationServiceInfo"]["authenticationCertificate"]
@@ -349,13 +355,7 @@ def finalize_write_config_Windows(data, key, buildID, account_method=None):
         authcert_key = None
 
     if authcert_key is not None:
-        if isinstance(authcert_key, dict):
-            if True in authcert_key:
-                content += "<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>" % (authcert_key[True])
-            if False in authcert_key:
-                content += "<adept:authenticationCertificate ofByteBooks=\"false\">%s</adept:authenticationCertificate>" % (authcert_key[False])
-        else: 
-            content += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (authcert_key)
+        content += vendor_elements("authenticationCertificate", authcert_key)
 
     content += '</adept:activationServiceInfo>\n'
 
@@ -365,34 +365,10 @@ def finalize_write_config_Windows(data, key, buildID, account_method=None):
         content += "<adept:username method=\"%s\">%s</adept:username>" % (account_method or "AdobeID", xml_escape(data["credentials"]["username"]))
 
 
-    pkcs12_key = data["credentials"]["pkcs12"]
-    if isinstance(pkcs12_key, dict):
-        if True in pkcs12_key:
-            content += "<adept:pkcs12 ofByteBooks=\"true\">%s</adept:pkcs12>" % (pkcs12_key[True])
-        if False in pkcs12_key:
-            content += "<adept:pkcs12 ofByteBooks=\"false\">%s</adept:pkcs12>" % (pkcs12_key[False])
-    else: 
-        content += "<adept:pkcs12>%s</adept:pkcs12>" % (pkcs12_key)
-
-    licenseCertificate_key = data["credentials"]["licenseCertificate"]
-    if isinstance(licenseCertificate_key, dict):
-        if True in licenseCertificate_key:
-            content += "<adept:licenseCertificate ofByteBooks=\"true\">%s</adept:licenseCertificate>" % (licenseCertificate_key[True])
-        if False in licenseCertificate_key:
-            content += "<adept:licenseCertificate ofByteBooks=\"false\">%s</adept:licenseCertificate>" % (licenseCertificate_key[False])
-    else: 
-        content += "<adept:licenseCertificate>%s</adept:licenseCertificate>" % (licenseCertificate_key)
-    
+    content += vendor_elements("pkcs12", data["credentials"]["pkcs12"])
+    content += vendor_elements("licenseCertificate", data["credentials"]["licenseCertificate"])
     content += "<adept:privateLicenseKey>%s</adept:privateLicenseKey>" % (data["credentials"]["privateLicenseKey"])
-
-    authCertificate_key = data["credentials"]["authenticationCertificate"]
-    if isinstance(authCertificate_key, dict):
-        if True in authCertificate_key:
-            content += "<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>" % (authCertificate_key[True])
-        if False in authCertificate_key:
-            content += "<adept:authenticationCertificate ofByteBooks=\"false\">%s</adept:authenticationCertificate>" % (authCertificate_key[False])
-    else: 
-        content += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (authCertificate_key)
+    content += vendor_elements("authenticationCertificate", data["credentials"]["authenticationCertificate"])
 
     content += '</adept:credentials>\n'
 
@@ -405,44 +381,19 @@ def finalize_write_config_Windows(data, key, buildID, account_method=None):
     content += '</activationInfo>\n'
 
     # Re-create device.xml from scratch:
-
-    dev_content = '<?xml version="1.0"?>\n'
-    dev_content += '<adept:deviceInfo xmlns:adept="http://ns.adobe.com/adept">\n'
-    dev_content += "<adept:deviceType>%s</adept:deviceType>\n" % (data["activationToken"]["deviceType"])
-    dev_content += "<adept:deviceClass>%s</adept:deviceClass>\n" % ("Desktop")
-    dev_content += "<adept:deviceSerial>%s</adept:deviceSerial>\n" % (makeSerial(False))
-    dev_content += "<adept:deviceName>%s</adept:deviceName>\n" % (xml_escape(get_device_name()))
-
     version_idx = VAR_VER_BUILD_IDS.index(buildID)
-    hobbes_ver = VAR_VER_HOBBES_VERSIONS[version_idx]
-    clientOS = VAR_VER_OS_IDENTIFIERS[version_idx]
-
-    dev_content += "<adept:version name=\"hobbes\" value=\"%s\"/>\n" % (hobbes_ver)
-    dev_content += "<adept:version name=\"clientOS\" value=\"%s\"/>\n" % (clientOS)
-
-    language = None
-    try: 
-        with warnings.catch_warnings():
-            # Python claims that this is deprecated, but it has been un-deprecated later.
-            # Disable the warning.
-            warnings.filterwarnings("ignore", category=DeprecationWarning)
-            language = locale.getdefaultlocale()[0].split('_')[0]
-    except:
-        pass
-    if language is None or language == "": 
-        # Can sometimes happen on MacOS with default English language
-        language = "en"
-
-    dev_content += "<adept:version name=\"clientLocale\" value=\"%s\"/>\n" % (language)
-    dev_content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (data["activationToken"]["fingerprint"])
-    dev_content += "</adept:deviceInfo>"
+    serial = makeSerial(False)
+    try:
+        dev_content = build_device_xml(data["activationToken"]["deviceType"], serial, data["activationToken"]["fingerprint"], version_idx)
+    except ValueError as e:
+        return False, "The activation contains invalid data: %s" % (e)
 
     # Content prepared, now replace all three files together.
     try:
         write_files_atomically([
             (get_devkey_path(), key),
             (get_activation_xml_path(), content.encode("utf-8")),
-            (get_device_path(), dev_content.encode("utf-8")),
+            (get_device_path(), dev_content),
         ])
     except (IOError, OSError) as e:
         return False, "Can't write the account files: %s" % (e)
@@ -665,37 +616,12 @@ def recreateMacActivationFiles(path_to_activation, deviceKey, deviceFingerprint,
 
 
     # Re-create device.xml from scratch:
-
-    content = '<?xml version="1.0"?>\n'
-    content += '<adept:deviceInfo xmlns:adept="http://ns.adobe.com/adept">\n'
-    content += "<adept:deviceType>%s</adept:deviceType>\n" % (devtype)
-    content += "<adept:deviceClass>%s</adept:deviceClass>\n" % ("Desktop")
-    content += "<adept:deviceSerial>%s</adept:deviceSerial>\n" % (makeSerial(False))
-    content += "<adept:deviceName>%s</adept:deviceName>\n" % (xml_escape(get_device_name()))
-
     version_idx = VAR_VER_BUILD_IDS.index(buildIDtoEmulate)
-    hobbes_ver = VAR_VER_HOBBES_VERSIONS[version_idx]
-    clientOS = VAR_VER_OS_IDENTIFIERS[version_idx]
-
-    content += "<adept:version name=\"hobbes\" value=\"%s\"/>\n" % (hobbes_ver)
-    content += "<adept:version name=\"clientOS\" value=\"%s\"/>\n" % (clientOS)
-
-    language = None
-    try: 
-        with warnings.catch_warnings():
-            # Python claims that this is deprecated, but it has been un-deprecated later.
-            # Disable the warning.
-            warnings.filterwarnings("ignore", category=DeprecationWarning)
-            language = locale.getdefaultlocale()[0].split('_')[0]
-    except:
-        pass
-    if language is None or language == "": 
-        # Can sometimes happen on MacOS with default English language
-        language = "en"
-
-    content += "<adept:version name=\"clientLocale\" value=\"%s\"/>\n" % (language)
-    content += "<adept:fingerprint>%s</adept:fingerprint>\n" % (base64.b64encode(deviceFingerprint).decode("latin-1"))
-    content += "</adept:deviceInfo>"
+    serial = makeSerial(False)
+    try:
+        dev_content = build_device_xml(devtype, serial, base64.b64encode(deviceFingerprint).decode("latin-1"), version_idx)
+    except ValueError as e:
+        return False, "activation.dat contains invalid data: %s" % (e)
 
     # Content prepared, now replace all three files together. activation.xml is
     # activation.dat, byte for byte.
@@ -703,7 +629,7 @@ def recreateMacActivationFiles(path_to_activation, deviceKey, deviceFingerprint,
         write_files_atomically([
             (get_activation_xml_path(), activation_data),
             (get_devkey_path(), deviceKey),
-            (get_device_path(), content.encode("utf-8")),
+            (get_device_path(), dev_content),
         ])
     except (IOError, OSError) as e:
         return False, "Can't write the account files: %s" % (e)
