@@ -55,22 +55,20 @@ class TestAccountImport(unittest.TestCase):
         # Entries without the ofByteBooks flag count as Adobe, so they have to end up
         # next to the ByteBooks entry of the same name, no matter which one comes first.
 
-        libadobeImportAccount.persistent_data = dict()
-        libadobeImportAccount.handle_subkey("credentials", "pkcs12", "ADOBE", None, None, None, None)
-        libadobeImportAccount.handle_subkey("credentials", "pkcs12", "BB", None, None, True, None)
-        self.assertEqual(libadobeImportAccount.persistent_data, {"credentials": {"pkcs12": {False: "ADOBE", True: "BB"}}},
+        adobe = ("credentials", "pkcs12", "ADOBE", None, None)
+        bytebooks = ("credentials", "pkcs12", "BB", None, True)
+
+        data, method = libadobeImportAccount.collect_activation_values([adobe, bytebooks])
+        self.assertEqual(data, {"credentials": {"pkcs12": {False: "ADOBE", True: "BB"}}},
                          "Unflagged entry followed by ByteBooks entry imported incorrectly")
 
-        libadobeImportAccount.persistent_data = dict()
-        libadobeImportAccount.handle_subkey("credentials", "pkcs12", "BB", None, None, True, None)
-        libadobeImportAccount.handle_subkey("credentials", "pkcs12", "ADOBE", None, None, None, None)
-        self.assertEqual(libadobeImportAccount.persistent_data, {"credentials": {"pkcs12": {False: "ADOBE", True: "BB"}}},
+        data, method = libadobeImportAccount.collect_activation_values([bytebooks, adobe])
+        self.assertEqual(data, {"credentials": {"pkcs12": {False: "ADOBE", True: "BB"}}},
                          "ByteBooks entry followed by unflagged entry imported incorrectly")
 
         # Keys that never have a flag must stay plain values
-        libadobeImportAccount.persistent_data = dict()
-        libadobeImportAccount.handle_subkey("credentials", "user", "urn:uuid:1234", None, None, None, None)
-        self.assertEqual(libadobeImportAccount.persistent_data, {"credentials": {"user": "urn:uuid:1234"}},
+        data, method = libadobeImportAccount.collect_activation_values([("credentials", "user", "urn:uuid:1234", None, None)])
+        self.assertEqual(data, {"credentials": {"user": "urn:uuid:1234"}},
                          "Unflagged entry without ByteBooks counterpart imported incorrectly")
 
 
@@ -138,8 +136,23 @@ class TestAccountImport(unittest.TestCase):
 
             libadobe.update_account_path(account_dir)
 
+            # user.reg is read once, and not at all if the caller passes in what it has read
+            registry_reads = []
+            def counting_open(path, *args, **kwargs):
+                if os.path.basename(path) == "user.reg":
+                    registry_reads.append(path)
+                return open(path, *args, **kwargs)
+
             with patch("acsm_input.getEncryptionKeyLinux.GetMasterKey", return_value=bytes(bytearray([0x02] * 16))):
-                success, msg = libadobeImportAccount.importADEactivationLinuxWine(wine_prefix)
+                with patch.object(libadobeImportAccount, "open", counting_open, create=True):
+                    success, msg = libadobeImportAccount.importADEactivationLinuxWine(wine_prefix)
+                    self.assertTrue(success, "Wine import failed: %s" % (msg))
+                    self.assertEqual(len(registry_reads), 1, "user.reg was read %d times" % (len(registry_reads)))
+
+                    activations = libadobeImportAccount.read_wine_activations(wine_prefix)
+                    del registry_reads[:]
+                    success, msg = libadobeImportAccount.importADEactivationLinuxWine(wine_prefix, activations=activations)
+                    self.assertEqual(registry_reads, [], "user.reg was read although the activations were passed in")
 
             self.assertTrue(success, "Wine import failed: %s" % (msg))
 
@@ -166,6 +179,41 @@ class TestAccountImport(unittest.TestCase):
             libadobe.update_account_path("")
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_readWineActivations(self):
+        '''Check if a single pass over user.reg reads both the Adobe and the ByteBooks activation'''
+
+        import tempfile, shutil
+
+        reg = "WINE REGISTRY Version 2\n"
+        for vendor in ("Adobe", "ByteBooks"):
+            prefix = "Software\\\\%s\\\\Adept\\\\Activation\\\\" % (vendor)
+            reg += "\n[%s0001] 1700000000\n@=\"credentials\"\n" % (prefix)
+            reg += "\n[%s0001\\\\0000] 1700000000\n@=\"user\"\n\"value\"=\"urn:uuid:%s\"\n" % (prefix, vendor)
+            reg += "\n[%s0001\\\\0001] 1700000000\n@=\"username\"\n\"method\"=\"%sID\"\n\"value\"=\"user@%s.example\"\n" % (prefix, vendor, vendor)
+        reg += "\n[Software\\\\Wine] 1700000000\n@=\"unrelated\"\n\"value\"=\"ignored\"\n\n"
+
+        temp_dir = tempfile.mkdtemp()
+        try:
+            f = open(os.path.join(temp_dir, "user.reg"), "w")
+            f.write(reg)
+            f.close()
+
+            activations = libadobeImportAccount.read_wine_activations(temp_dir)
+            for is_bytebooks, vendor in ((False, "Adobe"), (True, "ByteBooks")):
+                self.assertEqual(activations[is_bytebooks], [
+                    ("credentials", "user", "urn:uuid:" + vendor, None, None),
+                    ("credentials", "username", "user@%s.example" % (vendor), vendor + "ID", None),
+                ], "%s activation read incorrectly" % (vendor))
+
+            # A registry without an activation has nothing for either vendor
+            f = open(os.path.join(temp_dir, "user.reg"), "w")
+            f.write("WINE REGISTRY Version 2\n\n[Software\\\\Wine] 1700000000\n@=\"unrelated\"\n\n")
+            f.close()
+            self.assertEqual(libadobeImportAccount.read_wine_activations(temp_dir), {False: None, True: None})
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
     def test_importWrongEncryptionKey(self):
         '''Check if the import fails if the encryption key doesn't decrypt the private license key'''
@@ -174,13 +222,121 @@ class TestAccountImport(unittest.TestCase):
         # the one of the other vendor) the import stored garbage as the key and reported success.
 
         fingerprint = base64.b64encode(bytes(bytearray([0x01] * 20))).decode("ascii")
-        libadobeImportAccount.persistent_data = {
-            "credentials": {"privateLicenseKey": encrypt_license_key(bytes(bytearray(32)), bytes(bytearray([0x02] * 16)), fingerprint)},
-            "activationToken": {"fingerprint": fingerprint},
-        }
-        success, msg = libadobeImportAccount.handle_subkey(None, None, None, bytes(bytearray([0x03] * 16)), None, None, None)
+        values = [
+            ("credentials", "privateLicenseKey", encrypt_license_key(bytes(bytearray(32)), bytes(bytearray([0x02] * 16)), fingerprint), None, None),
+            ("activationToken", "fingerprint", fingerprint, None, None),
+        ]
+        success, msg = libadobeImportAccount.import_registry_activation(values, bytes(bytearray([0x03] * 16)), libadobeImportAccount.VAR_VER_DEFAULT_BUILD_ID)
         self.assertFalse(success, "Import with the wrong encryption key should fail")
         self.assertIn("Could not decrypt the private license key", msg)
+
+    def test_importWindowsRegistry(self):
+        '''Check if the Windows import reads the activation from the registry'''
+
+        import tempfile, shutil, types
+
+        fingerprint = base64.b64encode(bytes(bytearray([0x01] * 20))).decode("ascii")
+        master_key = bytes(bytearray([0x02] * 16))
+        user = "urn:uuid:2bd57a81-6192-4a1b-8eb2-64e2d197f9fa"
+
+        # (registry key name, list of (name, value, method, ofByteBooks)), as ADE stores them in
+        # HKEY_CURRENT_USER\Software\ByteBooks\Adept\Activation: one key per value
+        activation = [
+            ("activationServiceInfo", [
+                ("authURL", "https://auth.example.com/adept", None, None),
+                ("userInfoURL", "https://userinfo.example.com/adept", None, None),
+                ("activationURL", "https://activate.example.com/adept", None, None),
+                ("certificate", "ASI_CERT_BB", None, "true"),
+                ("certificate", "ASI_CERT_ADOBE", None, None),
+                ("authenticationCertificate", "ASI_AUTH", None, None),
+            ]),
+            ("credentials", [
+                ("user", user, None, None),
+                ("username", "user@example.com", "AdobeID", None),
+                ("pkcs12", "P12_ADOBE", None, "false"),
+                ("pkcs12", "P12_BB", None, "true"),
+                ("licenseCertificate", "LIC", None, None),
+                ("privateLicenseKey", encrypt_license_key(bytes(bytearray(32)), master_key, fingerprint), None, None),
+                ("authenticationCertificate", "AUTH", None, None),
+            ]),
+            ("activationToken", [
+                ("device", "urn:uuid:83681cbb-b6df-44a3-a423-c2b37ba66e84", None, None),
+                ("fingerprint", fingerprint, None, None),
+                ("deviceType", "standalone", None, None),
+                ("activationURL", "https://activate.example.com/adept", None, None),
+                ("user", user, None, None),
+                ("signature", "SIGNATURE", None, None),
+            ]),
+        ]
+
+        # The registry as winreg sees it: key path -> (default value, other values)
+        root = "Software\\ByteBooks\\Adept\\Activation"
+        registry = {root: (None, {})}
+        for i, (parent, children) in enumerate(activation):
+            registry["%s\\%04d" % (root, i)] = (parent, {})
+            for j, (name, value, method, ofbytebooks) in enumerate(children):
+                values = {"value": value}
+                if method is not None:
+                    values["method"] = method
+                if ofbytebooks is not None:
+                    values["ofByteBooks"] = ofbytebooks
+                registry["%s\\%04d\\%04d" % (root, i, j)] = (name, values)
+
+        class FakeWinreg(object):
+            HKEY_CURRENT_USER = None
+
+            @staticmethod
+            def OpenKey(key, sub_key):
+                path = sub_key if key is None else key + "\\" + sub_key
+                if path not in registry:
+                    raise OSError("No such key: " + path)
+                return path
+
+            @staticmethod
+            def QueryValueEx(key, name):
+                default, values = registry[key]
+                if name is None:
+                    return default, 1
+                if name not in values:
+                    raise OSError("No such value: " + name)
+                return values[name], 1
+
+        # The import checks calibre.constants.iswindows, gets the key from getEncryptionKeyWindows
+        calibre = types.ModuleType("calibre")
+        calibre.constants = types.ModuleType("calibre.constants")
+        calibre.constants.iswindows = True
+        key_module = types.ModuleType("getEncryptionKeyWindows")
+        key_requests = []
+        key_module.GetMasterKey = lambda use_bytebooks: key_requests.append(use_bytebooks) or master_key
+        fake_modules = {"calibre": calibre, "calibre.constants": calibre.constants, "winreg": FakeWinreg,
+                        "_winreg": FakeWinreg, "acsm_input.getEncryptionKeyWindows": key_module}
+
+        temp_dir = tempfile.mkdtemp()
+        try:
+            libadobe.update_account_path(temp_dir)
+            with patch.dict(sys.modules, fake_modules):
+                success, msg = libadobeImportAccount.importADEactivationWindows()
+            self.assertTrue(success, "Windows import failed: %s" % (msg))
+            self.assertEqual(key_requests, [True], "Wrong device key requested for a ByteBooks activation")
+
+            adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+            activationxml = etree.parse(os.path.join(temp_dir, "activation.xml"))
+            asi = "./%s/" % (adNS("activationServiceInfo"))
+            cred = "./%s/" % (adNS("credentials"))
+
+            def entries(path):
+                return sorted((e.get("ofByteBooks"), e.text) for e in activationxml.findall(path))
+
+            self.assertEqual(entries(asi + adNS("certificate")), [("false", "ASI_CERT_ADOBE"), ("true", "ASI_CERT_BB")], "certificate imported incorrectly")
+            self.assertEqual(entries(cred + adNS("pkcs12")), [("false", "P12_ADOBE"), ("true", "P12_BB")], "pkcs12 imported incorrectly")
+            username = activationxml.find(cred + adNS("username"))
+            self.assertEqual((username.text, username.get("method")), ("user@example.com", "AdobeID"), "username imported incorrectly")
+            self.assertEqual(activationxml.find(cred + adNS("privateLicenseKey")).text, base64.b64encode(bytes(bytearray(32))).decode("ascii"),
+                             "privateLicenseKey decrypted incorrectly")
+
+        finally:
+            libadobe.update_account_path("")
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     def test_importWineRegistryEscapes(self):
         '''Check if the Wine import decodes the escapes in Wine's user.reg'''

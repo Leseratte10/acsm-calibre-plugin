@@ -682,27 +682,19 @@ class ConfigWidget(QWidget):
             return False
 
     def check_ADE_registry(self, wineprefix):
-        # Gets a path to a WINEPREFIX and returns True if this is useable. 
-        # Checks if the Wine registry contains an ADE activation.
+        # Gets a path to a WINEPREFIX and returns the activations in its Wine registry, as
+        # read_wine_activations() returns them, or None if it has no ADE or BDE activation.
 
         try: 
-            registry_file = open(os.path.join(wineprefix, "user.reg"))
-            while True: 
-                line = registry_file.readline()
-                if not line:
-                    break
-
-                if line.strip().startswith("[Software\\\\Adobe\\\\Adept\\\\Activation\\\\0000"):
-                    return True
-
-                if line.strip().startswith("[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\0000"):
-                    return True
-        
+            from .libadobeImportAccount import read_wine_activations
+            activations = read_wine_activations(wineprefix)
+            if activations[False] is not None or activations[True] is not None:
+                return activations
         except:
             print("Exception while validating WINEPREFIX:")
             print(traceback.format_exc())
 
-        return False
+        return None
 
     def import_activation_from_LinuxWine(self):
         # This will try to import the activation from Digital Editions on Linux / Wine ...
@@ -714,18 +706,27 @@ class ConfigWidget(QWidget):
 
         default_path = ""
 
+        # The activations read from each WINEPREFIX, so that its registry is only read once,
+        # even if it's checked for the default path, then checked again and imported.
+        activations = {}
+
+        def check_registry(wineprefix):
+            if wineprefix not in activations:
+                activations[wineprefix] = self.check_ADE_registry(wineprefix)
+            return activations[wineprefix]
+
         if (default_path == ""):
             # Check WINEPREFIX env variable
             env_wineprefix = os.getenv("WINEPREFIX", None)
             if (env_wineprefix is not None and os.path.isdir(env_wineprefix)):
-                if self.check_ADE_registry(env_wineprefix):
+                if check_registry(env_wineprefix):
                     default_path = env_wineprefix
 
         if (default_path == ""):
             # Use default path ".wine" in HOME dir
             home_wineprefix = os.path.join(os.path.expanduser("~"), ".wine")
             if (os.path.isdir(home_wineprefix)):
-                if self.check_ADE_registry(home_wineprefix):
+                if check_registry(home_wineprefix):
                     default_path = home_wineprefix
 
         
@@ -737,14 +738,14 @@ class ConfigWidget(QWidget):
         if (not os.path.isdir(text)):
             return error_dialog(None, "Import failed", "The WINEPREFIX path you entered doesn't seem to exist.", show=True, show_copy_button=False)
 
-        if (not self.check_ADE_registry(text)):
+        if (not check_registry(text)):
             return error_dialog(None, "Import failed", "The WINEPREFIX you entered doesn't seem to contain an authorized DE.", show=True, show_copy_button=False)
 
 
         from .libadobe import update_account_path
         from .libadobeImportAccount import importADEactivationLinuxWine
 
-        ret, msg = importADEactivationLinuxWine(text)
+        ret, msg = importADEactivationLinuxWine(text, activations=check_registry(text))
 
         if (ret):
             update_account_path(self.acsmprefs["path_to_account_data"])           

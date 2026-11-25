@@ -81,8 +81,84 @@ def decode_wine_registry_string(value):
     return struct.pack("<%dH" % len(units), *units).decode("utf-16-le", "replace")
 
 
-def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
-    # Similar to importADEactivationWindows - extracts the activation data from a Wine prefix
+class WineActivationTree(object):
+    # Collects the values of one activation tree in Wine's user.reg, see read_wine_activations()
+
+    def __init__(self, key_prefix):
+        self.key_prefix = key_prefix
+        self.values = None          # stays None if the registry has no key in this tree
+        self.in_tree = False
+        self.parent = self.name = self.value = self.ofbytebooks = self.method = None
+
+    def read_line(self, line):
+        if line.startswith("["):
+            # Start of a new registry key. Only collect values from keys inside this tree.
+            self.in_tree = line.startswith(self.key_prefix)
+            if self.in_tree and self.values is None:
+                self.values = []
+            return
+
+        if not self.in_tree:
+            return
+
+        if (line.lower().startswith("@=")):
+            self.name = decode_wine_registry_string(line.split('=', 1)[1].strip()[1:-1])
+
+        elif (line.lower().startswith('"value"=')):
+            self.value = decode_wine_registry_string(line.split('=', 1)[1].strip()[1:-1])
+
+        elif (line.lower().startswith('"ofbytebooks"=')):
+            # This attribute is a string, not an int.
+            val = decode_wine_registry_string(line.split('=', 1)[1].strip()[1:-1])
+            if str(val).lower() == "true" or val == True:
+                self.ofbytebooks = True
+            elif str(val).lower() == "false" or val == False:
+                self.ofbytebooks = False
+            else:
+                print("Warning: Invalid ofByteBooks value while importing.")
+                self.ofbytebooks = False
+
+        elif (line.lower().startswith('"method"=')):
+            self.method = decode_wine_registry_string(line.split('=', 1)[1].strip()[1:-1])
+
+        elif (len(line) == 0):
+            # Empty line - finalize this element. One without a value is a parent, like "credentials".
+            if self.value is None:
+                self.parent = self.name
+                self.in_tree = False
+            else:
+                self.values.append((self.parent, self.name, self.value, self.method, self.ofbytebooks))
+            self.name = self.value = self.ofbytebooks = self.method = None
+
+
+def read_wine_activations(wine_prefix_path):
+    # type: (str) -> dict
+    # Reads the Adobe and the ByteBooks activation from the registry of a Wine prefix, in a
+    # single pass over user.reg. Returns {False: Adobe, True: ByteBooks}, each None if the
+    # registry has no such activation, or else a list of its values as (parent, name, value,
+    # method, ofByteBooks) tuples for import_registry_activation().
+
+    trees = {
+        False: WineActivationTree("[Software\\\\Adobe\\\\Adept\\\\Activation\\\\"),
+        True: WineActivationTree("[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\"),
+    }
+
+    registry_file = open(os.path.join(wine_prefix_path, "user.reg"), "r")
+    try:
+        for line in registry_file:
+            line = line.strip()
+            for tree in trees.values():
+                tree.read_line(line)
+    finally:
+        registry_file.close()
+
+    return dict((is_bytebooks, tree.values) for is_bytebooks, tree in trees.items())
+
+
+def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID, activations=None):
+    # Similar to importADEactivationWindows - extracts the activation data from a Wine prefix.
+    # activations is what read_wine_activations() returned for this prefix, if the caller has
+    # already read the registry. Otherwise it's read here.
     try:
         from calibre.constants import islinux
         if not islinux:
@@ -91,20 +167,17 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
     except:
         pass
 
-    # Use the ByteBooks activation if there is one, otherwise the Adobe one
-    # (same rule as importADEactivationWindows). Only that tree gets imported,
-    # so the device key has to come from the same Digital Editions install.
     try:
-        root_is_bytebooks = False
-        registry_file = open(os.path.join(wine_prefix_path, "user.reg"), "r")
-        for line in registry_file:
-            if line.strip().startswith("[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\"):
-                root_is_bytebooks = True
-                break
-        registry_file.close()
+        if activations is None:
+            activations = read_wine_activations(wine_prefix_path)
     except:
         traceback.print_exc()
         return False, "There has been an error while reading through the Registry."
+
+    # Use the ByteBooks activation if there is one, otherwise the Adobe one
+    # (same rule as importADEactivationWindows). Only that tree gets imported,
+    # so the device key has to come from the same Digital Editions install.
+    root_is_bytebooks = activations[True] is not None
 
     # Get encryption key
     from .getEncryptionKeyLinux import GetMasterKey
@@ -121,84 +194,10 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
 
         return False, err
 
-    global persistent_data, account_method
-    persistent_data = dict()
-    account_method = None
+    try:
+        return import_registry_activation(activations[root_is_bytebooks] or [], master_key, buildIDtoEmulate)
 
-    # Loop through the registry:
-    try: 
-        if root_is_bytebooks:
-            activation_prefix = "[Software\\\\ByteBooks\\\\Adept\\\\Activation\\\\"
-        else: 
-            activation_prefix = "[Software\\\\Adobe\\\\Adept\\\\Activation\\\\"
-
-        registry_file = open(os.path.join(wine_prefix_path, "user.reg"), "r")
-        waiting_for_element = False
-        current_parent = None
-        current_name = None
-        current_value = None
-        current_ofbytebooks = None
-        current_method = None
-
-        while True: 
-            line = registry_file.readline()
-            if not line:
-                break
-            line = line.strip()
-
-            if line.startswith("["):
-                # Start of a new registry key. Only collect values from keys inside the
-                # activation tree picked above, and stop as soon as we leave it.
-                waiting_for_element = line.startswith(activation_prefix)
-                continue
-
-            if waiting_for_element:
-                if (line.lower().startswith("@=")): 
-                    current_name = decode_wine_registry_string(line.split('=', 1)[1].strip()[1:-1])
-                    continue
-                
-                if (line.lower().startswith('"value"=')): 
-                    current_value = decode_wine_registry_string(line.split('=', 1)[1].strip()[1:-1])
-                    continue
-
-                if (line.lower().startswith('"ofbytebooks"=')): 
-                    # This attribute is a string, not an int.
-                    val = decode_wine_registry_string(line.split('=', 1)[1].strip()[1:-1])
-                    if str(val).lower() == "true" or val == True:
-                        current_ofbytebooks = True
-                    elif str(val).lower() == "false" or val == False:
-                        current_ofbytebooks = False
-                    else:
-                        print("Warning: Invalid ofByteBooks value while importing.")
-                        current_ofbytebooks = False
-                    continue
-            
-                if (line.lower().startswith('"method"=')): 
-                    current_method = decode_wine_registry_string(line.split('=', 1)[1].strip()[1:-1])
-                    continue
-
-                if (len(line) == 0):
-                    # Empty line - finalize this element
-                    if current_value is None:
-                        current_parent = current_name
-                        current_name = None
-                        current_method = None
-                        current_ofbytebooks = None
-                        current_value = None
-                        waiting_for_element = False
-                        continue
-                    handle_subkey(current_parent, current_name, current_value, master_key, current_method, current_ofbytebooks, None)
-                    current_name = None
-                    current_value = None
-                    current_ofbytebooks = None
-                    current_method = None
-
-
-                                
-        registry_file.close()
-        return handle_subkey(None, None, None, master_key, None, None, buildIDtoEmulate)
-
-    except: 
+    except:
         # There was an error hunting through the registry. 
         traceback.print_exc()
         return False, "There has been an error while reading through the Registry."
@@ -248,9 +247,7 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
             return False, "Could not access ADE encryption key"
 
 
-    global persistent_data, account_method
-    persistent_data = dict()
-    account_method = None
+    values = []         # (parent, name, value, method, ofByteBooks) for import_registry_activation()
 
     i = 0
     while True:
@@ -286,7 +283,7 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
                 except:
                     ofbytebooks = None
 
-                handle_subkey(ParentKeyType, SubKeyType, value, master_key, method, ofbytebooks, None)
+                values.append((ParentKeyType, SubKeyType, value, method, ofbytebooks))
             except:
                 pass
 
@@ -294,12 +291,9 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
         
         i = i + 1
 
-    return handle_subkey(None, None, None, master_key, None, None, buildIDtoEmulate)
+    return import_registry_activation(values, master_key, buildIDtoEmulate)
 
-persistent_data = dict()
-account_method = None
-
-def finalize_write_config_Windows(data, key, buildID):
+def finalize_write_config_Windows(data, key, buildID, account_method=None):
     # Okay, finally got all the data that's needed - recreate all the files.
 
     # Create activation.xml
@@ -341,12 +335,8 @@ def finalize_write_config_Windows(data, key, buildID):
 
     content += '<adept:credentials xmlns:adept="http://ns.adobe.com/adept">'
     content += "<adept:user>%s</adept:user>" % (data["credentials"]["user"])
-    global account_method
     if "username" in data["credentials"]:
-        if account_method is None:
-            account_method = "AdobeID"
-    
-        content += "<adept:username method=\"%s\">%s</adept:username>" % (account_method, xml_escape(data["credentials"]["username"]))
+        content += "<adept:username method=\"%s\">%s</adept:username>" % (account_method or "AdobeID", xml_escape(data["credentials"]["username"]))
 
 
     pkcs12_key = data["credentials"]["pkcs12"]
@@ -433,46 +423,28 @@ def finalize_write_config_Windows(data, key, buildID):
 
     return True, "Done"
 
-def handle_subkey(parent, subkey, value, encryption_key, method, ofByteBooks, buildID):
+def collect_activation_values(values):
+    # type: (list) -> tuple
+    # Sorts the values of an activation, as (parent, name, value, method, ofByteBooks) tuples,
+    # into a dict of dicts: data[parent][name] is the value or, for a key that the registry
+    # has in a ByteBooks and an Adobe variant, a dict of both values with True and False as
+    # keys. Returns that dict and the account's login method.
 
-    if parent is None: 
-        # We're done collecting sub keys - decrypt the private key, then finalize config.
-        # The first 16 bytes of the fingerprint are used as IV for the privateLicenseKey
-        # Older versions of this decryption code, like in the DeDRM plugin, didn't 
-        # do that correctly. For DeDRM that doesn't matter as a wrong IV only causes
-        # the first 16 bytes to be corrupted, and these aren't used for eBook decryption anyways.
-        # For this plugin I want the exact correct data, so lets use the fingerprint as IV.
-        # See jhowell's post: https://www.mobileread.com/forums/showpost.php?p=4173908
+    data = dict()
+    account_method = None
 
-        iv = persistent_data["activationToken"]["fingerprint"]
-        iv = base64.b64decode(iv)[:16]
-        aes = AES(encryption_key, iv)
-
-        value = base64.b64decode(persistent_data["credentials"]["privateLicenseKey"])
-        try:
-            decrypted_key = remove_padding(aes.decrypt(value))
-        except ValueError:
-            return False, "Could not decrypt the private license key, the encryption key doesn't seem to match this activation."
-
-        persistent_data["credentials"]["privateLicenseKey"] = base64.b64encode(decrypted_key).decode("latin-1")
-
-
-        return finalize_write_config_Windows(persistent_data, encryption_key, buildID)
-    else: 
-        # collecting a single sub key by storing it in the global list "persistent_data"
-        global account_method
+    for parent, name, value, method, ofByteBooks in values:
         if method:
             account_method = method
 
-        # Not encrypted
-        if not parent in persistent_data:
-            persistent_data[parent] = dict()
+        if not parent in data:
+            data[parent] = dict()
 
-        stored_variants = subkey in persistent_data[parent] and isinstance(persistent_data[parent][subkey], dict)
+        stored_variants = name in data[parent] and isinstance(data[parent][name], dict)
 
         if ofByteBooks is None and not stored_variants:
             # Plain value, and no ByteBooks / Adobe variants of this key so far.
-            persistent_data[parent][subkey] = value
+            data[parent][name] = value
         else:
             # This key exists in a ByteBooks and an Adobe variant. An entry without the
             # ofByteBooks flag counts as Adobe (same as everywhere else in the plugin),
@@ -481,15 +453,43 @@ def handle_subkey(parent, subkey, value, encryption_key, method, ofByteBooks, bu
             if ofByteBooks is None:
                 ofByteBooks = False
 
-            if subkey not in persistent_data[parent]:
-                persistent_data[parent][subkey] = dict()
+            if name not in data[parent]:
+                data[parent][name] = dict()
             elif not stored_variants:
-                persistent_data[parent][subkey] = { False: persistent_data[parent][subkey] }
+                data[parent][name] = { False: data[parent][name] }
 
-            persistent_data[parent][subkey][ofByteBooks] = value
-    
+            data[parent][name][ofByteBooks] = value
 
-    return None
+    return data, account_method
+
+def import_registry_activation(values, encryption_key, buildID):
+    # type: (list, bytes, int) -> tuple
+    # Imports an activation that the Windows or the Wine import read from the registry, as a
+    # list of (parent, name, value, method, ofByteBooks) tuples: decrypts the private license
+    # key with the encryption key, then writes the account files.
+
+    data, account_method = collect_activation_values(values)
+
+    # The first 16 bytes of the fingerprint are used as IV for the privateLicenseKey
+    # Older versions of this decryption code, like in the DeDRM plugin, didn't
+    # do that correctly. For DeDRM that doesn't matter as a wrong IV only causes
+    # the first 16 bytes to be corrupted, and these aren't used for eBook decryption anyways.
+    # For this plugin I want the exact correct data, so lets use the fingerprint as IV.
+    # See jhowell's post: https://www.mobileread.com/forums/showpost.php?p=4173908
+
+    iv = data["activationToken"]["fingerprint"]
+    iv = base64.b64decode(iv)[:16]
+    aes = AES(encryption_key, iv)
+
+    value = base64.b64decode(data["credentials"]["privateLicenseKey"])
+    try:
+        decrypted_key = remove_padding(aes.decrypt(value))
+    except ValueError:
+        return False, "Could not decrypt the private license key, the encryption key doesn't seem to match this activation."
+
+    data["credentials"]["privateLicenseKey"] = base64.b64encode(decrypted_key).decode("latin-1")
+
+    return finalize_write_config_Windows(data, encryption_key, buildID, account_method)
 
 def getMacCredential(type):
 
