@@ -480,6 +480,22 @@ def fulfill(acsm_file, do_notify = False):
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     acsmxml = None
     
+    # Make sure there's an activation before reading the ACSM or contacting a server. The plugin
+    # checks that before it calls fulfill(), but fulfill.py doesn't, and the code below would
+    # raise an exception for missing or broken account files.
+    try:
+        activationxml = etree.parse(get_activation_xml_path())
+        etree.parse(get_device_path())
+        open(get_devkey_path(), "rb").close()
+    except:
+        return False, "Activation not found or invalid"
+
+    if activationxml.find("./%s" % (adNS("activationToken"))) is None:
+        return False, "Activation incomplete (activationToken missing)"
+
+    if not activationxml.findtext("./%s/%s" % (adNS("credentials"), adNS("pkcs12"))):
+        return False, "Activation incomplete (pkcs12 missing)"
+
     try: 
         acsmxml = etree.parse(acsm_file, parser=safe_xml_parser())
     except: 
