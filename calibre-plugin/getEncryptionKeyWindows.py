@@ -140,7 +140,11 @@ def GetMasterKey(use_bytebooks = True):
     
     # Get CPU vendor:
 
-    from . import cpuid
+    try: 
+        from . import cpuid
+    except ImportError:
+        import cpuid
+
     import struct, binascii
     cpu = cpuid.CPUID()
     _, b, c, d = cpu(0)
