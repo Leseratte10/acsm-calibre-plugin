@@ -899,11 +899,87 @@ class ConfigWidget(QWidget):
         return error_dialog(None, "Digital Editions activation failed", msg, det_msg=traceback.format_exc(), show=True, show_copy_button=True)
 
 
+    def create_authorization(self, vers_idx, acc_type, mail, passwd, authCert_bb = None, authCert_adobe = None):
+        # type: (int, str, str, str, str, str) -> bool
+        # Creates a new authorization: device key, device.xml, user, sign-in and activation.
+        # The steps run in a new folder next to the account folder, and the account files are
+        # only replaced once all of them worked, so a failed attempt (like a wrong password)
+        # leaves the current files as they are. Returns True on success. On failure, it has
+        # already shown an error dialog and returns False.
+
+        import tempfile, shutil
+        from .libadobe import createDeviceKeyFile, update_account_path, write_files_atomically
+        from .libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+        from .libadobeFulfill import getDecryptedCert, is_bytebooks_account
+
+        title = "Digital Editions activation failed"
+        account_folder = self.acsmprefs["path_to_account_data"]
+
+        try:
+            new_folder = tempfile.mkdtemp(prefix="new_authorization_", dir=os.path.dirname(os.path.abspath(account_folder)))
+        except Exception:
+            error_dialog(None, title, "Couldn't create a folder for the new authorization", det_msg=traceback.format_exc(), show=True, show_copy_button=True)
+            return False
+
+        # Once the server has activated the device, keep the new files if they can't be installed.
+        keep_new_folder = False
+
+        update_account_path(new_folder)
+        try:
+            createDeviceKeyFile()
+            createDeviceFile(False, vers_idx)
+            try:
+                success, resp = createUser(vers_idx, authCert_bb, authCert_adobe)
+            except Exception:
+                self.show_activation_server_error("while creating the user")
+                return False
+            if (success is False):
+                error_dialog(None, title, "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
+                return False
+
+            success, resp = signIn(acc_type, mail, passwd)
+            if (success is False):
+                error_dialog(None, title, "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
+                return False
+
+            success, resp = activateDevice(vers_idx, None)
+            if (success is False):
+                error_dialog(None, title, "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
+                return False
+
+            # Don't replace the current files with an authorization that can't be used.
+            if getDecryptedCert(None, is_bytebooks_account()) is None:
+                error_dialog(None, title, "The new authorization can't be decrypted (failed to decrypt pkcs12)", show=True, show_copy_button=True)
+                return False
+
+            keep_new_folder = True
+            files = []
+            for name in ("devicesalt", "device.xml", "activation.xml"):
+                with open(os.path.join(new_folder, name), "rb") as f:
+                    files.append((os.path.join(account_folder, name), f.read()))
+            write_files_atomically(files)
+            keep_new_folder = False
+
+            return True
+
+        except Exception:
+            msg = "Unexpected error while creating the authorization."
+            if keep_new_folder:
+                msg += "\n\nThe device has been activated, but the new authorization couldn't be saved. "
+                msg += "Its files are in " + new_folder
+            error_dialog(None, title, msg, det_msg=traceback.format_exc(), show=True, show_copy_button=True)
+            return False
+
+        finally:
+            update_account_path(account_folder)
+            if not keep_new_folder:
+                shutil.rmtree(new_folder, ignore_errors=True)
+
+
     def create_anon_auth(self): 
     
         try: 
-            from .libadobe import createDeviceKeyFile, update_account_path
-            from .libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+            from .libadobe import update_account_path
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -916,28 +992,17 @@ class ConfigWidget(QWidget):
         
         warning_dialog(None, "Warning", msg, show=True, show_copy_button=False)
                         
-        createDeviceKeyFile()
-        createDeviceFile(False, 0)
-        try:
-            success, resp = createUser(0, None, None)
-        except Exception:
-            return self.show_activation_server_error("while creating the user")
-        if (success is False):
-            return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
-
-        success, resp = signIn("anonymous", "", "")
-        if (success is False):
-            return error_dialog(None, "Digital Editions activation failed", "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
-
-        success, resp = activateDevice(0, None)
-        if (success is False):
-            return error_dialog(None, "Digital Editions activation failed", "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
+        if not self.create_authorization(0, "anonymous", "", ""):
+            return
 
         print("Authorized to anonymous account")
 
 
         # update display
         info_string, activated, mail = self.update_account_display()
+
+        if not activated:
+            return error_dialog(None, "Digital Editions activation failed", "That didn't work:\n" + info_string, show=True, show_copy_button=False)
 
         info_dialog(None, "Done", "Authorized to anonymous account.", show=True, show_copy_button=False)
 
@@ -1001,8 +1066,8 @@ class ConfigWidget(QWidget):
     def link_account(self):
 
         try: 
-            from .libadobe import createDeviceKeyFile, update_account_path
-            from .libadobeAccount import createDeviceFile, getAuthMethodsAndCert, createUser, signIn, activateDevice
+            from .libadobe import update_account_path
+            from .libadobeAccount import getAuthMethodsAndCert
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -1045,28 +1110,17 @@ class ConfigWidget(QWidget):
 
         vers_idx = 0
                 
-        createDeviceKeyFile()
-        createDeviceFile(False, vers_idx)
-        try:
-            success, resp = createUser(vers_idx, authCert_bb, authCert_adobe)
-        except Exception:
-            return self.show_activation_server_error("while creating the user")
-        if (success is False):
-            return error_dialog(None, "Digital Editions activation failed", "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
-
-        success, resp = signIn(acc_type, mail, passwd)
-        if (success is False):
-            return error_dialog(None, "Digital Editions activation failed", "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
-
-        success, resp = activateDevice(vers_idx, None)
-        if (success is False):
-            return error_dialog(None, "Digital Editions activation failed", "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
+        if not self.create_authorization(vers_idx, acc_type, mail, passwd, authCert_bb, authCert_adobe):
+            return
 
         print("Authorized to '" + acc_type + "' account " + mail)
 
 
         # update display
         info_string, activated, mail = self.update_account_display()
+
+        if not activated:
+            return error_dialog(None, "Digital Editions activation failed", "That didn't work:\n" + info_string, show=True, show_copy_button=False)
 
         info_dialog(None, "Done", "Authorized to '" + acc_item + "' account " + str(mail), show=True, show_copy_button=False)
 
