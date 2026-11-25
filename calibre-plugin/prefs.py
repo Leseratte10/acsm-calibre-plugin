@@ -111,7 +111,12 @@ class ACSMInput_Prefs():
         if not success:
             # We did not find an account folder. Creating it.
             if os.path.exists(self.__maindir):
-                os.mkdir(self.__accountdir)
+                try:
+                    os.mkdir(self.__accountdir)
+                except OSError:
+                    # Another Calibre process can create it at the same moment.
+                    if not os.path.isdir(self.__accountdir):
+                        raise
                 self.acsmprefs.defaults['path_to_account_data'] = self.__accountdir
                 success = True
 

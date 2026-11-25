@@ -139,7 +139,12 @@ class ACSMInput(FileTypePlugin):
             self.maindir = os.path.join(self.pluginsdir,"ACSMInput")
 
             if not os.path.exists(self.maindir):
-                os.mkdir(self.maindir)
+                try:
+                    os.mkdir(self.maindir)
+                except OSError:
+                    # Another Calibre process can create it at the same moment.
+                    if not os.path.isdir(self.maindir):
+                        raise
 
             
             # The module folder is no longer needed, so delete it if it is present. 
