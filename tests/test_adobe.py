@@ -77,6 +77,11 @@ class TestAdobe(unittest.TestCase):
         self.assertEqual(ctx.verify_mode, ssl.CERT_REQUIRED, "validate_tls=True doesn't require a certificate")
         self.assertTrue(ctx.check_hostname, "validate_tls=True doesn't check the hostname")
 
+        # Python 3.13 turns on its strict X.509 checks by default. The plugin turns them off.
+        strict = int(ssl.VERIFY_X509_STRICT)
+        self.assertFalse(int(ctx.verify_flags) & strict, "validate_tls=True uses the strict X.509 checks")
+
+
         ctx = libadobe.create_ssl_context(False)
         self.assertEqual(ctx.verify_mode, ssl.CERT_NONE, "validate_tls=False still requires a certificate")
         self.assertFalse(ctx.check_hostname, "validate_tls=False still checks the hostname")

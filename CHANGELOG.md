@@ -46,6 +46,7 @@
 - Print an error and abort if the EPUB / PDF download aborts mid-file instead of silently leaving the corrupted file.
 - Fix various encoding issues (UTF-8) with special characters in file paths, usernames, device names, ACSM files, etc.
 - Fix chained FileTypePlugins that rely on a customization string.
+- On Python 3.13+, disable `VERIFY_X509_STRICT` to ensure compatibility with weird server certificates.
 
 ## 0.1.0 (perpetually in beta between 2022-2026, hasn't been released)
 

@@ -375,6 +375,12 @@ def create_ssl_context(validate_tls):
     ctx = ssl.create_default_context()
 
     if validate_tls:
+        # Python 3.13 added VERIFY_X509_STRICT to the default context. It rejects certificate
+        # chains that browsers, ADE and older Python versions accept, for instance a certificate
+        # without an Authority Key Identifier or a CA whose basicConstraints aren't marked
+        # critical. Turn it off, so that every Python version accepts the same servers.
+        ctx.verify_flags &= ~ssl.VERIFY_X509_STRICT
+
         # Also trust the CA bundle that ships with Calibre. Windows only downloads root
         # certificates into its store when Windows itself needs one, so verification can
         # fail for a perfectly valid server certificate whose root Windows hasn't fetched yet.
