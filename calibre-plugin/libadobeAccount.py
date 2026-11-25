@@ -189,8 +189,10 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-    authURL = adobe_response_xml.find("./%s" % (adNS("authURL"))).text
-    userInfoURL = adobe_response_xml.find("./%s" % (adNS("userInfoURL"))).text
+    # findtext() returns None for a missing element, so an incomplete reply ends up in the
+    # check below instead of raising (which the GUI reports as a connection problem).
+    authURL = adobe_response_xml.findtext("./%s" % (adNS("authURL")))
+    userInfoURL = adobe_response_xml.findtext("./%s" % (adNS("userInfoURL")))
     try: 
         certificate_bb = adobe_response_xml.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
     except: 
@@ -203,7 +205,7 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
     except: 
         certificate_adobe = None
 
-    if (authURL is None or userInfoURL is None or certificate_bb is None):
+    if (not authURL or not userInfoURL or not certificate_bb):
         return False, "Error: Unexpected reply from activation service."
 
     etree.SubElement(activationServiceInfo, etree.QName(NSMAP["adept"], "authURL")).text = authURL
@@ -560,11 +562,26 @@ def signIn(account_type, username, passwd):
 
     # Got correct credentials
 
-    private_key_data_encrypted = credentialsXML.find("./%s" % (adNS("encryptedPrivateLicenseKey"))).text
-    private_key_data_encrypted = base64.b64decode(private_key_data_encrypted)
+    # The callers only handle a False return value, so check that the reply has everything
+    # that's used below, instead of raising an exception halfway through.
+    user_uuid = credentialsXML.findtext("./%s" % (adNS("user")))
+    private_key_data_encrypted = credentialsXML.findtext("./%s" % (adNS("encryptedPrivateLicenseKey")))
+    username_node = credentialsXML.find("./%s" % (adNS("username")))
+
+    missing = []
+    if not user_uuid:
+        missing.append("user")
+    if not private_key_data_encrypted:
+        missing.append("encryptedPrivateLicenseKey")
+    if account_type != "anonymous" and (username_node is None or not username_node.text):
+        missing.append("username")
+    if missing:
+        return False, "Incomplete response to login request, missing %s (please open a bug report)" % (", ".join(missing))
+
     try:
-        private_key_data = decrypt_with_device_key(private_key_data_encrypted)
-    except ValueError:
+        private_key_data = decrypt_with_device_key(base64.b64decode(private_key_data_encrypted))
+    except (TypeError, ValueError):
+        # Not base64 (that's a TypeError on Python 2), or not encrypted with the device key
         return False, "Could not decrypt the private license key in the login response (please open a bug report)"
 
 
@@ -596,13 +613,13 @@ def signIn(account_type, username, passwd):
     # Yeah, that's ugly, but I didn't get etree to work with the different Namespaces ...
 
     content += "<adept:credentials xmlns:adept=\"http://ns.adobe.com/adept\">\n"
-    content += "<adept:user>%s</adept:user>\n" % (credentialsXML.find("./%s" % (adNS("user"))).text)
+    content += "<adept:user>%s</adept:user>\n" % (user_uuid)
 
     username = ""
     if account_type != "anonymous": 
-        username = credentialsXML.find("./%s" % (adNS("username"))).text
+        username = username_node.text
         # TODO: Should we always write this? Windows does, MacOS doesn't.
-        content += "<adept:username method=\"%s\">%s</adept:username>\n" % (credentialsXML.find("./%s" % (adNS("username"))).get("method", account_type), xml_escape(username))
+        content += "<adept:username method=\"%s\">%s</adept:username>\n" % (username_node.get("method", account_type), xml_escape(username))
 
     if pkcs12_bb is not None:
         content += "<adept:pkcs12 ofByteBooks=\"true\">%s</adept:pkcs12>\n" % (pkcs12_bb)
