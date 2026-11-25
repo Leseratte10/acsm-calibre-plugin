@@ -298,8 +298,8 @@ def encryptLoginCredentials(username, password, authenticationCertificate):
     return crypted_msg
 
 
-def buildSignInRequestForAnonAuthConvert(username, password, authenticationCertificate):
-    # type: (str, str, str) -> str
+def buildSignInRequestForAnonAuthConvert(username, password, authenticationCertificate, use_bytebooks):
+    # type: (str, str, str, bool) -> str
 
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     etree.register_namespace("adept", NSMAP["adept"])
@@ -324,7 +324,7 @@ def buildSignInRequestForAnonAuthConvert(username, password, authenticationCerti
     # that matches the UUID in the <adept:user> tag.
 
     etree.SubElement(root, etree.QName(NSMAP["adept"], "user")).text = user_uuid
-    signature = sign_node(root, True)
+    signature = sign_node(root, use_bytebooks)
     if signature is None: 
         return None
     etree.SubElement(root, etree.QName(NSMAP["adept"], "signature")).text = signature
@@ -378,23 +378,40 @@ def convertAnonAuthToAccount(username, passwd):
     # This is intended for cases where people install ADE, use an anonymous auth, 
     # buy a couple books, and then decide to get a fresh AdobeID.
 
+    from .libadobeFulfill import is_bytebooks_account
+
     # Get authenticationCertificate
     try: 
         activationxml = etree.parse(get_activation_xml_path())
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag) 
-        authenticationCertificate = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
+
+        # Link with the certificate and key of the registration's type, chosen the same way
+        # as for fulfillments: ByteBooks if the activation has a complete set of ByteBooks
+        # credentials, otherwise Adobe. Anonymous activations from older versions of the
+        # plugin or from ADE only have Adobe credentials, without the ofByteBooks flag.
+        use_bytebooks = is_bytebooks_account()
+
+        if use_bytebooks:
+            authenticationCertificate = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
+        else:
+            authenticationCertificate = next(
+                    c.text for c in activationxml.findall("./%s/%s" % (adNS("activationServiceInfo"), adNS("authenticationCertificate")))
+                    if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
+                )
     except: 
         return False, "Missing authenticationCertificate"
 
-    if authenticationCertificate == "":
+    if not authenticationCertificate:
         return False, "Empty authenticationCertificate"
 
-    linkRequest = buildSignInRequestForAnonAuthConvert(username, passwd, authenticationCertificate)
+    linkRequest = buildSignInRequestForAnonAuthConvert(username, passwd, authenticationCertificate, use_bytebooks)
 
     if linkRequest is None: 
         return False, "Signing failed"
 
-    signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/AddSignInDirect?ofByteBooks=1"
+    signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/AddSignInDirect"
+    if use_bytebooks:
+        signInURL += "?ofByteBooks=1"
     linkResponse = sendRequestDocu(linkRequest, signInURL, True)
     if linkResponse is None: 
         return False, "Error while calling AddSignInDirect"
