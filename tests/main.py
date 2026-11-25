@@ -21,6 +21,7 @@ import unittest
 # These four imports are all used, they import all the test classes.
 from test_account_import import TestAccountImport
 from test_adobe import TestAdobe
+from test_adobe_pkcs12 import TestAdobePKCS12
 from test_pdf_format import TestPDFFormat
 from test_plugin_interface import TestPluginInterface
 from test_adobe_hashing import TestAdobeHashing
