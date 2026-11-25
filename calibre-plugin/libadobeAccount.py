@@ -692,10 +692,13 @@ def exportProxyAuth(act_xml_path, activationToken):
 
     try: 
         license_cert_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("licenseCertificate"))).text
-        auth_cert_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("authenticationCertificate"))).text
     except AttributeError:
         # When old activation.xmls are loaded by the new plugin.
         license_cert_bb = None
+
+    try:
+        auth_cert_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("authenticationCertificate"))).text
+    except AttributeError:
         auth_cert_bb = None
 
     try: 
@@ -703,13 +706,15 @@ def exportProxyAuth(act_xml_path, activationToken):
                 c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("licenseCertificate")))
                 if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
             )
+    except:
+        license_cert_adobe = None
 
+    try:
         auth_cert_adobe = next(
                 c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("authenticationCertificate")))
                 if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
             )
     except: 
-        license_cert_adobe = None
         auth_cert_adobe = None
 
 
