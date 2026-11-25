@@ -320,14 +320,22 @@ def finalize_write_config_Windows(data, key, buildID):
     else: 
         content += "<adept:certificate>%s</adept:certificate>" % (cert_key)
 
-    authcert_key = data["activationServiceInfo"]["authenticationCertificate"]
-    if isinstance(authcert_key, dict):
-        if True in authcert_key:
-            content += "<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>" % (authcert_key[True])
-        if False in authcert_key:
-            content += "<adept:authenticationCertificate ofByteBooks=\"false\">%s</adept:authenticationCertificate>" % (authcert_key[False])
+    if "authenticationCertificate" in data["activationServiceInfo"]:
+        authcert_key = data["activationServiceInfo"]["authenticationCertificate"]
+    elif "authenticationCertificate" in data["credentials"]:
+        # Not sure what that's needed for, I think this cert is always identical ...
+        authcert_key = data["credentials"]["authenticationCertificate"]
     else: 
-        content += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (authcert_key)
+        authcert_key = None
+
+    if authcert_key is not None:
+        if isinstance(authcert_key, dict):
+            if True in authcert_key:
+                content += "<adept:authenticationCertificate ofByteBooks=\"true\">%s</adept:authenticationCertificate>" % (authcert_key[True])
+            if False in authcert_key:
+                content += "<adept:authenticationCertificate ofByteBooks=\"false\">%s</adept:authenticationCertificate>" % (authcert_key[False])
+        else: 
+            content += "<adept:authenticationCertificate>%s</adept:authenticationCertificate>" % (authcert_key)
 
     content += '</adept:activationServiceInfo>\n'
 

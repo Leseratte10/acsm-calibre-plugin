@@ -643,6 +643,7 @@ class ConfigWidget(QWidget):
         try: 
             from .libadobe import update_account_path
             from .libadobeAccount import getAccountUUID
+            from .libadobeFulfill import is_bytebooks_account
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -651,12 +652,14 @@ class ConfigWidget(QWidget):
 
         update_account_path(self.acsmprefs["path_to_account_data"])
 
+        prefix = "adobe" if not is_bytebooks_account() else "bytebooks"
+        
         try: 
             account_uuid = getAccountUUID()
-            export_filename = "bytebooks_account_backup_uuid_" + account_uuid + ".zip"
+            export_filename = prefix + "_account_backup_uuid_" + account_uuid + ".zip"
         except:
             account_uuid = None
-            export_filename = "bytebooks_account_backup.zip"
+            export_filename = prefix + "_account_backup.zip"
 
         filters = [("ZIP", ["zip"])]
         filename = choose_save_file(self, "Export activation files", _("Export activation files"), 
