@@ -174,10 +174,12 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
         traceback.print_exc()
         return False, "There has been an error while reading through the Registry."
 
-    # Use the ByteBooks activation if there is one, otherwise the Adobe one
-    # (same rule as importADEactivationWindows). Only that tree gets imported,
-    # so the device key has to come from the same Digital Editions install.
-    root_is_bytebooks = activations[True] is not None
+    # Use the ByteBooks activation if it's complete, otherwise the Adobe one (same rule
+    # as importADEactivationWindows). Only that tree gets imported, so the device key
+    # has to come from the same Digital Editions install.
+    root_is_bytebooks, error = choose_activation(activations)
+    if root_is_bytebooks is None:
+        return False, error
 
     # Get encryption key
     from .getEncryptionKeyLinux import GetMasterKey
@@ -195,12 +197,75 @@ def importADEactivationLinuxWine(wine_prefix_path, buildIDtoEmulate=VAR_VER_DEFA
         return False, err
 
     try:
-        return import_registry_activation(activations[root_is_bytebooks] or [], master_key, buildIDtoEmulate)
+        return import_registry_activation(activations[root_is_bytebooks], master_key, buildIDtoEmulate)
 
     except:
         # There was an error hunting through the registry. 
         traceback.print_exc()
         return False, "There has been an error while reading through the Registry."
+
+def read_windows_activation(winreg, key_path):
+    # type: (object, str) -> list
+    # Reads the activation in HKEY_CURRENT_USER\<key_path>, where ADE keeps every value in a key of
+    # its own: the default value of Activation\0001 is a parent like "credentials", and the key
+    # Activation\0001\0002 has the name of its third value as default value, and the value itself
+    # in "value". Returns None if there is no such key, or else a list of (parent, name, value,
+    # method, ofByteBooks) tuples for import_registry_activation(). Keys without a name or a value
+    # are left out, choose_activation() then finds out if anything that's needed is missing.
+
+    try:
+        activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path)
+    except:
+        return None
+
+    values = []
+    i = 0
+    while True:
+        try:
+            activation_parent = winreg.OpenKey(activation_root, "%04d" % (i))
+        except:
+            break
+        i = i + 1
+
+        try:
+            ParentKeyType = winreg.QueryValueEx(activation_parent, None)[0]
+        except:
+            continue
+
+        j = 0
+        while True:
+            try:
+                activation_child = winreg.OpenKey(activation_parent, "%04d" % (j))
+            except:
+                break
+            j = j + 1
+
+            try:
+                SubKeyType = winreg.QueryValueEx(activation_child, None)[0]
+                value = winreg.QueryValueEx(activation_child, 'value')[0]
+            except:
+                continue
+
+            try:
+                method = winreg.QueryValueEx(activation_child, 'method')[0]
+            except:
+                method = None
+
+            try:
+                val = winreg.QueryValueEx(activation_child, 'ofByteBooks')[0]
+                if str(val).lower() == "true" or val == True:
+                    ofbytebooks = True
+                elif str(val).lower() == "false" or val == False:
+                    ofbytebooks = False
+                else:
+                    print("Warning: Invalid ofByteBooks value while importing: " + str(val))
+                    ofbytebooks = False
+            except:
+                ofbytebooks = None
+
+            values.append((ParentKeyType, SubKeyType, value, method, ofbytebooks))
+
+    return values
 
 def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
     # Tries to import the system activation from Adobe Digital Editions on Windows into the plugin
@@ -222,18 +287,19 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
     except ImportError:
         import _winreg as winreg
 
-    root_is_bytebooks = None
-    try: 
-        winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\ByteBooks\Adept\Activation\0000')
-        activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\ByteBooks\Adept\Activation')
-        root_is_bytebooks = True
-    except: 
-        try: 
-            winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Adobe\Adept\Activation\0000')
-            activation_root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Adobe\Adept\Activation')
-            root_is_bytebooks = False
-        except: 
-            return False, "Could not locate ADE activation"
+    try:
+        activations = {
+            False: read_windows_activation(winreg, r'Software\Adobe\Adept\Activation'),
+            True: read_windows_activation(winreg, r'Software\ByteBooks\Adept\Activation'),
+        }
+    except:
+        traceback.print_exc()
+        return False, "There has been an error while reading through the Registry."
+
+    # Use the ByteBooks activation if it's complete, otherwise the Adobe one
+    root_is_bytebooks, error = choose_activation(activations)
+    if root_is_bytebooks is None:
+        return False, error
 
     # Get encryption key:
     from .getEncryptionKeyWindows import GetMasterKey
@@ -246,52 +312,12 @@ def importADEactivationWindows(buildIDtoEmulate=VAR_VER_DEFAULT_BUILD_ID):
         else:
             return False, "Could not access ADE encryption key"
 
-
-    values = []         # (parent, name, value, method, ofByteBooks) for import_registry_activation()
-
-    i = 0
-    while True:
-        try: 
-            activation_parent = winreg.OpenKey(activation_root, "%04d" % (i))
-        except: 
-            break
-
-        ParentKeyType = winreg.QueryValueEx(activation_parent, None)[0]
-        j = 0
-        while True:
-            try: 
-                activation_child = winreg.OpenKey(activation_parent, "%04d" % (j))
-            except:
-                break
-
-            SubKeyType = winreg.QueryValueEx(activation_child, None)[0]
-            try: 
-                value = winreg.QueryValueEx(activation_child, 'value')[0]
-                try: 
-                    method = winreg.QueryValueEx(activation_child, 'method')[0]
-                except:
-                    method = None
-                try: 
-                    val = winreg.QueryValueEx(activation_child, 'ofByteBooks')[0]
-                    if str(val).lower() == "true" or val == True:
-                        ofbytebooks = True
-                    elif str(val).lower() == "false" or val == False:
-                        ofbytebooks = False
-                    else:
-                        print("Warning: Invalid ofByteBooks value while importing: " + str(val))
-                        ofbytebooks = False
-                except:
-                    ofbytebooks = None
-
-                values.append((ParentKeyType, SubKeyType, value, method, ofbytebooks))
-            except:
-                pass
-
-            j = j + 1
-        
-        i = i + 1
-
-    return import_registry_activation(values, master_key, buildIDtoEmulate)
+    try:
+        return import_registry_activation(activations[root_is_bytebooks], master_key, buildIDtoEmulate)
+    except:
+        # There was an error in the values from the registry
+        traceback.print_exc()
+        return False, "There has been an error while reading through the Registry."
 
 def finalize_write_config_Windows(data, key, buildID, account_method=None):
     # Okay, finally got all the data that's needed - recreate all the files.
@@ -461,6 +487,40 @@ def collect_activation_values(values):
             data[parent][name][ofByteBooks] = value
 
     return data, account_method
+
+# The values that finalize_write_config_Windows() needs from an activation
+REQUIRED_ACTIVATION_VALUES = [
+    ("activationServiceInfo", "authURL"), ("activationServiceInfo", "userInfoURL"),
+    ("activationServiceInfo", "activationURL"), ("activationServiceInfo", "certificate"),
+    ("credentials", "user"), ("credentials", "pkcs12"), ("credentials", "licenseCertificate"),
+    ("credentials", "privateLicenseKey"), ("credentials", "authenticationCertificate"),
+    ("activationToken", "device"), ("activationToken", "fingerprint"), ("activationToken", "deviceType"),
+    ("activationToken", "activationURL"), ("activationToken", "user"), ("activationToken", "signature"),
+]
+
+def choose_activation(activations):
+    # type: (dict) -> tuple
+    # Picks the activation to import from {False: Adobe, True: ByteBooks}, each None or a list
+    # of its values (as read_wine_activations() and read_windows_activation() return them):
+    # the ByteBooks one if it has all the values the import needs, otherwise the Adobe one.
+    # Returns (True or False, None), or (None, an error message) if neither one is complete.
+
+    missing = {}
+    for is_bytebooks in (True, False):
+        if activations[is_bytebooks] is not None:
+            data = collect_activation_values(activations[is_bytebooks])[0]
+            missing[is_bytebooks] = ["%s/%s" % (parent, name) for parent, name in REQUIRED_ACTIVATION_VALUES
+                                     if name not in data.get(parent, {})]
+            if not missing[is_bytebooks]:
+                return is_bytebooks, None
+
+    if not missing:
+        return None, "Could not locate an ADE or BDE activation"
+
+    # Report what the preferred activation lacks
+    is_bytebooks = True in missing
+    return None, "The %s activation is incomplete, it lacks %s" % (
+        "BDE" if is_bytebooks else "ADE", ", ".join(missing[is_bytebooks]))
 
 def import_registry_activation(values, encryption_key, buildID):
     # type: (list, bytes, int) -> tuple

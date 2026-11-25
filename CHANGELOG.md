@@ -25,6 +25,7 @@
   - Write XML files atomically if possible, to reduce the chance of corrupting an activation.
   - Make importing an activation through WINE more resilient.
   - Don't crash if WINE can't be started, add 2m timeout for the WINE process.
+  - Show an error message instead of a traceback if the Windows registry contains a broken activation.
 - Fix a bug where importing a corrupted activation backup ZIP would claim the import was successful. 
 - Make the plugin more resilient to a server sending junk data. 
 - Fix a bug where authorizing an eReader over USB failed on Calibre 3. 

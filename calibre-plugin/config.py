@@ -683,12 +683,13 @@ class ConfigWidget(QWidget):
 
     def check_ADE_registry(self, wineprefix):
         # Gets a path to a WINEPREFIX and returns the activations in its Wine registry, as
-        # read_wine_activations() returns them, or None if it has no ADE or BDE activation.
+        # read_wine_activations() returns them, or None if it has no complete ADE or BDE
+        # activation (the same check as in the import, see choose_activation()).
 
         try: 
-            from .libadobeImportAccount import read_wine_activations
+            from .libadobeImportAccount import read_wine_activations, choose_activation
             activations = read_wine_activations(wineprefix)
-            if activations[False] is not None or activations[True] is not None:
+            if choose_activation(activations)[0] is not None:
                 return activations
         except:
             print("Exception while validating WINEPREFIX:")
