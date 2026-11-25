@@ -58,6 +58,10 @@ VAR_HTTP_TIMEOUT = 30
 # (URLError is a subclass of these, so catch it first if it needs separate handling.)
 HTTP_CONNECTION_ERRORS = (IOError, OSError, ulibhttp.HTTPException)
 
+# sendHTTPRequest_DL2FILE returns this instead of an HTTP status code if it can't write the
+# download to the output file (no permission, disk full, ...). Network errors are 900.
+DOWNLOAD_FILE_ERROR = 901
+
 FILE_DEVICEKEY = "devicesalt"
 FILE_DEVICEXML = "device.xml"
 FILE_ACTIVATIONXML = "activation.xml"
@@ -407,6 +411,8 @@ def create_ssl_context(validate_tls):
 
 def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
     # type: (str, str, bool) -> int
+    # Returns 200, the HTTP status code of an error reply, 900 for network errors (no
+    # connection, timeout, incomplete download), or DOWNLOAD_FILE_ERROR.
 
     headers = {
         "Accept": "*/*",
@@ -426,26 +432,37 @@ def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
         except: 
             cl = None
         
-        with open(outputfile, "wb") as f:
-            received = 0
-            chunksize = 16 * 1024
-            while True:
-                chunk = handler.read(chunksize)
-                if not chunk:
-                    break
-                f.write(chunk)
-                received += len(chunk)
+        # Errors from the output file (no permission, disk full, ...) are local problems,
+        # so they're reported separately instead of as network errors.
+        try:
+            with open(outputfile, "wb") as f:
+                received = 0
+                chunksize = 16 * 1024
+                while True:
+                    try:
+                        chunk = handler.read(chunksize)
+                    except HTTP_CONNECTION_ERRORS as err:
+                        # The connection broke during the download.
+                        print("Download failed: %s" % (err))
+                        return 900
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    received += len(chunk)
+        except EnvironmentError as err:
+            print("Can't save the download to %s: %s" % (outputfile, err))
+            return DOWNLOAD_FILE_ERROR
 
-            if cl is not None and received != cl: 
-                print("Download aborted after %d out of %d bytes." % (received, cl))
-                return 900
+        if cl is not None and received != cl:
+            print("Download aborted after %d out of %d bytes." % (received, cl))
+            return 900
 
     except uliberror.HTTPError as err: 
         # This happens with HTTP 500 and related errors.
         return err.code
 
     except HTTP_CONNECTION_ERRORS as err:
-        # Server not reachable, timeout, or the connection broke during the download.
+        # Server not reachable, or no reply (timeout, dropped connection).
         print("Download failed: %s" % (err))
         return 900
 

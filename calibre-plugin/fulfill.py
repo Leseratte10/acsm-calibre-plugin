@@ -16,7 +16,7 @@ import sys, os, re, time, shutil
 import zipfile
 from lxml import etree
 
-from acsm_input.libadobe import sendHTTPRequest_DL2FILE, safe_xml_parser
+from acsm_input.libadobe import sendHTTPRequest_DL2FILE, safe_xml_parser, DOWNLOAD_FILE_ERROR
 from acsm_input.libadobeFulfill import buildRights, fulfill
 from acsm_input.libpdf import patch_drm_into_pdf
 
@@ -92,6 +92,10 @@ def download(replyData):
     ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp, False)
     dl_end_time = int(time.time() * 1000)
     print("Download took %d milliseconds" % (dl_end_time - dl_start_time))
+
+    if (ret == DOWNLOAD_FILE_ERROR):
+        print("Couldn't save the downloaded book")
+        return False
 
     if (ret != 200):
         print("Download failed with error %d" % (ret))

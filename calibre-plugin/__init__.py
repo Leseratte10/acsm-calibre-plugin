@@ -218,7 +218,7 @@ class ACSMInput(FileTypePlugin):
         # type: (str) -> str
 
 
-        from .libadobe import sendHTTPRequest_DL2FILE, safe_xml_parser
+        from .libadobe import sendHTTPRequest_DL2FILE, safe_xml_parser, DOWNLOAD_FILE_ERROR
         from .libadobeFulfill import buildRights
         from .libpdf import patch_drm_into_pdf
 
@@ -255,6 +255,10 @@ class ACSMInput(FileTypePlugin):
         dl_end_time = int(time.time() * 1000)
 
         print("Download took %d ms (HTTP %d)" % (dl_end_time - dl_start_time, ret))
+
+        if (ret == DOWNLOAD_FILE_ERROR):
+            print("{0} v{1}: Couldn't save the downloaded book".format(PLUGIN_NAME, PLUGIN_VERSION))
+            return None
 
         if (ret != 200):
             print("{0} v{1}: Download failed with error {2}".format(PLUGIN_NAME, PLUGIN_VERSION, ret))
