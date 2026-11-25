@@ -391,55 +391,57 @@ class ACSMInput(FileTypePlugin):
                     delete_src_file = acsmprefs["delete_acsm_after_fulfill"]
 
                     try: 
-                        from calibre.customize.ui import _initialized_plugins, is_disabled
+                        from calibre.customize.ui import _initialized_plugins, is_disabled, plugin_customization
                         from calibre.customize import FileTypePlugin
 
+                        # Original file for plugins is supposed to be the file as imported by the user, before any plugins ran.
+                        # In our case, this would be the ACSM. 
+                        # That breaks a bunch of plugins, though, so we treat the fulfilled EPUB/PDF as the original file.
                         original_file_for_plugins = rpl
 
                         oo, oe = sys.stdout, sys.stderr
 
                         for plugin in _initialized_plugins:
-
-                            #print("{0} v{1}: Plugin '{2}' has prio {3}".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name, plugin.priority))
-
-                            # Check if this is a FileTypePlugin
                             if not isinstance(plugin, FileTypePlugin):
-                                #print("{0} v{1}: Plugin '{2}' is no FileTypePlugin, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
                                 continue
 
-                            # Check if it's disabled
                             if is_disabled(plugin):
-                                #print("{0} v{1}: Plugin '{2}' is disabled, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
                                 continue
 
                             if plugin.name == self.name:
-                                #print("{0} v{1}: Plugin '{2}' is me - skipping".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
                                 continue
 
-                            # Check if it's supposed to run on import:
                             if not plugin.on_import:
-                                #print("{0} v{1}: Plugin '{2}' isn't supposed to run during import, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
                                 continue
 
                             # Check filetype
-                            # If neither the book file extension nor "*" is in the plugin,
+                            # If neither the book file extension (epub/pdf) nor "*" is in the plugin,
                             # don't execute it.
                             my_file_type = os.path.splitext(rpl)[-1].lower().replace('.', '')
                             if (not my_file_type in plugin.file_types):
-                                #print("{0} v{1}: Plugin '{2}' doesn't support {3} files, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name, my_file_type))
                                 continue
 
+                            # If the plugin says it handles acsm files or anything, don't run it manually.
+                            # Calibre will deal with that.
                             if ("acsm" in plugin.file_types or "*" in plugin.file_types):
-                                #print("{0} v{1}: Plugin '{2}' would run anyways, skipping ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name, my_file_type))
                                 continue
 
                             print("{0} v{1}: Executing plugin {2} ...".format(PLUGIN_NAME, PLUGIN_VERSION, plugin.name))
 
-                            plugin.original_path_to_file = original_file_for_plugins
-
                             try: 
                                 plugin_ret = None
-                                plugin_ret = plugin.run(rpl)
+                                # Set up the plugin's customization string
+                                plugin.site_customization = plugin_customization(plugin)
+                                try: 
+                                    plugin.original_path_to_file = original_file_for_plugins
+                                except:
+                                    pass
+                                
+                                with plugin:
+                                    # This 'with' statement appends the plugin's ZIP to its path, 
+                                    # so it can import internal modules.
+                                    plugin_ret = plugin.run(rpl)
+
                             except: 
                                 delete_src_file = False
                                 print("{0} v{1}: Running file type plugin failed with traceback:".format(PLUGIN_NAME, PLUGIN_VERSION))
