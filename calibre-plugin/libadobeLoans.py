@@ -39,3 +39,23 @@ def remove_overdue_books_from_list(loan_list):
             templist.append(book)
         
     return templist
+
+
+def is_loan_mine(book):
+    # type: (dict) -> bool
+    # Returns whether the loan record belongs to the account of the current activation.
+    # Only the account that borrowed a book can return it, because the return request
+    # is signed with that account's key. If the loan record has no user, or there's no
+    # valid activation, this returns True, so the return is still attempted.
+
+    from .libadobeAccount import getAccountUUID
+
+    def bare_uuid(uuid):
+        uuid = uuid.strip().lower()
+        return uuid[len("urn:uuid:"):] if uuid.startswith("urn:uuid:") else uuid
+
+    try:
+        return bare_uuid(book["user"]) == bare_uuid(getAccountUUID())
+    except (KeyError, TypeError, AttributeError):
+        # No user in the loan record, or no account UUID
+        return True

@@ -43,6 +43,7 @@
 - Only use datetime.utcnow() when necessary (on older Python versions) since it's deprecated in Python 3.12 and will be removed from a future Python release.
 - Only add books to the loan list if the fulfillment notifications were successful.
 - Fix loan list accidentally hiding loans that had an invalid expiration date.
+- Return proper error message when trying to return a book not loaned to the current account.
 - Allow building the plugin without Windows cross-compilers. If the WINE key extraction binaries are missing from the plugin, hide the "Import from WINE" button. 
 - Print an error and abort if the EPUB / PDF download aborts mid-file instead of silently leaving the corrupted file.
 - Fix various encoding issues (UTF-8) with special characters in file paths, usernames, device names, ACSM files, etc.

@@ -1242,6 +1242,8 @@ class RentedBooksDialog(QDialog):
 
         try: 
             from .libadobeFulfill import tryReturnBook
+            from .libadobeAccount import getAccountUUID
+            from .libadobeLoans import is_loan_mine
         except: 
             print("{0} v{1}: Error while importing book return stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
@@ -1254,6 +1256,16 @@ class RentedBooksDialog(QDialog):
 
         if ret_book is None: 
             return
+
+        # The return request is signed with the current account's key, so the server
+        # only accepts it for books that this account borrowed.
+        if not is_loan_mine(ret_book):
+            account_uuid = getAccountUUID()
+            print("Not returning book: it was loaned by %s, but the current account is urn:uuid:%s" % (ret_book["user"], account_uuid))
+            return info_dialog(None, "Book not returned",
+                    "This book was loaned by a different account. You can only return books that were loaned by the account you're currently authorized with.",
+                    det_msg="Loaned by: %s\nCurrent account: urn:uuid:%s" % (ret_book["user"], account_uuid),
+                    show=True, show_copy_button=False)
 
         ret, msg = tryReturnBook(ret_book)
 
