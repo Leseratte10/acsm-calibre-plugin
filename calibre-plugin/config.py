@@ -1239,39 +1239,16 @@ class RentedBooksDialog(QDialog):
 
         self.resize(self.sizeHint())
 
-    def td_format(self, td_object):
-        seconds = int(td_object.total_seconds())
-        periods = [
-            ('y',        60*60*24*365),
-            ('M',        60*60*24*30),
-            ('d',        60*60*24),
-            ('h',        60*60),
-            ('m',        60),
-            ('s',        1)
-        ]
-
-        strings=[]
-        tick = 0
-        for period_name, period_seconds in periods:
-            if seconds > period_seconds:
-                period_value , seconds = divmod(seconds, period_seconds)
-                strings.append("%s%s" % (period_value, period_name))
-                tick += 1
-            if tick >= 2:
-                break
-
-        return " ".join(strings)
-
     def populate_list(self):
         self.listy.clear()
 
-        from .libadobeLoans import get_remaining_loan_time
+        from .libadobeLoans import get_remaining_loan_time, td_format
 
         for book in self.acsmprefs["list_of_rented_books"]:
 
             remaining = get_remaining_loan_time(book)
             if remaining is not None:
-                info = "(" + self.td_format(remaining) + " remaining)"
+                info = "(" + td_format(remaining) + " remaining)"
             else:
                 # Invalid book timestamp
                 info = "(unknown time remaining)"

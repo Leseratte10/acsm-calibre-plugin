@@ -27,6 +27,37 @@ def get_remaining_loan_time(book):
     return timestamp - currenttime
 
 
+def td_format(td_object):
+    # type: (datetime.timedelta) -> str
+    # Formats the time left on a loan with its two largest units, like "2d 3h". Less than
+    # a second, or a loan that has just run out, is "0s".
+    seconds = int(td_object.total_seconds())
+    periods = [
+        ('y',        60*60*24*365),
+        ('M',        60*60*24*30),
+        ('d',        60*60*24),
+        ('h',        60*60),
+        ('m',        60),
+        ('s',        1)
+    ]
+
+    strings=[]
+    tick = 0
+    for period_name, period_seconds in periods:
+        # >= so that exactly one day is "1d", not "24h"
+        if seconds >= period_seconds:
+            period_value , seconds = divmod(seconds, period_seconds)
+            strings.append("%s%s" % (period_value, period_name))
+            tick += 1
+        if tick >= 2:
+            break
+
+    if not strings:
+        return "0s"
+
+    return " ".join(strings)
+
+
 def remove_overdue_books_from_list(loan_list):
     # Delete rented books that are overdue: 
     templist = []

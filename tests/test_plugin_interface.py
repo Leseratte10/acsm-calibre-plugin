@@ -90,6 +90,32 @@ class TestPluginInterface(unittest.TestCase):
         self.assertEqual(libadobeLoans.remove_overdue_books_from_list(book_not_expired), book_not_expired)
         self.assertEqual(libadobeLoans.remove_overdue_books_from_list(book_expired), [])
 
+    def test_loanTimeRemainingFormat(self):
+        '''Check if the time left on a loan is formatted correctly'''
+
+        from datetime import timedelta
+
+        cases = [
+            # Exactly one unit used to be shown in the next smaller unit ("24h")
+            (timedelta(days=365), "1y"),
+            (timedelta(days=30), "1M"),
+            (timedelta(days=1), "1d"),
+            (timedelta(hours=1), "1h"),
+            (timedelta(minutes=1), "1m"),
+            (timedelta(seconds=1), "1s"),
+            # Less than a second used to be an empty string, so "( remaining)"
+            (timedelta(seconds=0.5), "0s"),
+            (timedelta(0), "0s"),
+            (timedelta(seconds=-5), "0s"),
+            # The two largest units
+            (timedelta(days=2, hours=3, minutes=4), "2d 3h"),
+            (timedelta(hours=23, minutes=59, seconds=59), "23h 59m"),
+            (timedelta(days=400), "1y 1M"),
+        ]
+
+        for td, expected in cases:
+            self.assertEqual(libadobeLoans.td_format(td), expected, "Wrong format for %r" % (td))
+
 
     def test_loanReturnFulfillmentID(self): 
         '''Check if proper ID is used for the loan token'''
