@@ -3,10 +3,8 @@ PKCS#12 parsing, reduced from oscrypto._asymmetric._parse_pkcs12 and the
 asn1crypto pkcs12, cms, keys and algos structures it relies on.
 """
 
-import binascii
 import hashlib
 import hmac
-from collections import OrderedDict
 
 from . import _asn1
 from ._cipher import decrypt
@@ -48,18 +46,6 @@ _PKCS8_SHROUDED_KEY_BAG = '1.2.840.113549.1.12.10.1.2'
 _CERT_BAG = '1.2.840.113549.1.12.10.1.3'
 _SAFE_CONTENTS_BAG = '1.2.840.113549.1.12.10.1.6'
 _X509_CERT = '1.2.840.113549.1.9.22.1'
-
-_RSA = '1.2.840.113549.1.1.1'
-_DSA = '1.2.840.10040.4.1'
-_EC = '1.2.840.10045.2.1'
-
-# asn1crypto names, used in the EC fingerprint. Other curves use the dotted OID,
-# which only changes the order oscrypto would pick among several matching keys.
-_CURVE_NAMES = {
-    '1.2.840.10045.3.1.7': 'secp256r1',
-    '1.3.132.0.34': 'secp384r1',
-    '1.3.132.0.35': 'secp521r1',
-}
 
 _MAC_DIGESTS = {
     '1.3.14.3.2.26': 'sha1',
@@ -130,10 +116,13 @@ def parse_pkcs12(data, password=None):
 
     :return:
         A three-element tuple of:
-         1. A PrivateKeyInfo object, or None
-         2. A Certificate object, or None
-         3. A list of zero or more Certificate objects that are "extra"
-            certificates, possibly intermediates from the cert chain
+         1. The first PrivateKeyInfo object in the file, or None
+         2. The first Certificate object in the file, or None
+         3. A list of the other Certificate objects, in file order
+
+        Keys and certificates are not matched up, unlike in oscrypto: Adobe
+        and ByteBooks files have one of each, and OpenSSL writes the key's
+        certificate first.
     """
 
     if not isinstance(data, bytes):
@@ -152,8 +141,8 @@ def parse_pkcs12(data, password=None):
     if len(pfx) > 2:
         _verify_mac(pfx[2], auth_safe_content, password)
 
-    certs = OrderedDict()  # file order, which plain dicts only keep from Python 3.7
-    private_keys = {}
+    certs = []
+    private_keys = []
 
     for content_info in _asn1.load(auth_safe_content).seq():
         content_info = content_info.seq(2)
@@ -169,13 +158,7 @@ def parse_pkcs12(data, password=None):
             raise ValueError('Public-key-based PKCS12 files are not currently supported')
         _parse_safe_contents(_asn1.load(safe_contents), certs, private_keys, password)
 
-    # Same choice as oscrypto: the key and certificate with the lowest common
-    # fingerprint, or else the lowest of each. The extra certificates stay in
-    # file order, where oscrypto sorts them by subject if nothing matched.
-    common = set(private_keys) & set(certs)
-    key = private_keys[min(common or private_keys)] if private_keys else None
-    cert = certs.pop(min(common or certs)) if certs else None
-    return (key, cert, list(certs.values()))
+    return (private_keys[0] if private_keys else None, certs[0] if certs else None, certs[1:])
 
 
 def _verify_mac(mac_data, content, password):
@@ -204,21 +187,27 @@ def _parse_safe_contents(safe_contents, certs, private_keys, password):
         if bag_id == _CERT_BAG:
             cert_bag = bag_value.seq(2)
             if cert_bag[0].oid() == _X509_CERT:
-                cert = _asn1.load(cert_bag[1].explicit(0).octets())
-                certs[_cert_fingerprint(cert)] = Certificate(cert.raw)
+                certs.append(Certificate(_asn1.load(cert_bag[1].explicit(0).octets()).raw))
 
         elif bag_id == _KEY_BAG:
-            private_keys[_key_fingerprint(bag_value)] = PrivateKeyInfo(bag_value.raw)
+            private_keys.append(_private_key_info(bag_value))
 
         elif bag_id == _PKCS8_SHROUDED_KEY_BAG:
             encrypted_key_info = bag_value.seq(2)
             key = _asn1.load(_decrypt(encrypted_key_info[0], encrypted_key_info[1].octets(), password))
-            private_keys[_key_fingerprint(key)] = PrivateKeyInfo(key.raw)
+            private_keys.append(_private_key_info(key))
 
         elif bag_id == _SAFE_CONTENTS_BAG:
             _parse_safe_contents(bag_value, certs, private_keys, password)
 
         # CRL bags and secret bags are ignored
+
+
+def _private_key_info(private_key_info):
+    # The version, algorithm and key fields. Checking for them rejects what a wrong
+    # password decrypts to when the file has no MAC and the padding happens to fit.
+    private_key_info.seq(3)
+    return PrivateKeyInfo(private_key_info.raw)
 
 
 def _decrypt(algorithm, data, password):
@@ -290,78 +279,3 @@ def _algorithm(algorithm_identifier):
     """Returns the OID and the parameters (None when absent) of an AlgorithmIdentifier"""
     fields = algorithm_identifier.seq(1)
     return fields[0].oid(), (fields[1] if len(fields) > 1 else None)
-
-
-def _dsa_params(params):
-    if params is None:
-        raise ValueError('DSA key is missing its p, q and g parameters')
-    return [value.int() for value in params.seq(3)[:3]]
-
-
-def _curve(params):
-    if params is not None and params.cls == 0 and params.tag == 6:
-        oid = params.oid()
-        return _CURVE_NAMES.get(oid, oid).encode('ascii')
-    # Specified or implicit curves - only needs to be consistent between key and cert
-    return binascii.hexlify(params.raw if params is not None else b'')
-
-
-def _fingerprint(algorithm, params, public_key):
-    """
-    The same correlation hash as oscrypto._asymmetric._fingerprint
-
-    :param public_key:
-        For RSA a (modulus, exponent) tuple, for DSA the public integer and
-        for EC the encoded point
-    """
-
-    if algorithm == _RSA:
-        to_hash = ('%d:%d' % public_key).encode('ascii')
-    elif algorithm == _DSA:
-        to_hash = ('%d:%d:%d:%d' % tuple(_dsa_params(params) + [public_key])).encode('ascii')
-    else:
-        to_hash = _curve(params) + b':' + public_key
-    return hashlib.sha256(to_hash).digest()
-
-
-def _key_fingerprint(private_key_info):
-    fields = private_key_info.seq(3)
-    algorithm, params = _algorithm(fields[1])
-    private_key = _asn1.load(fields[2].octets())
-
-    if algorithm == _RSA:
-        rsa = private_key.seq(3)
-        return _fingerprint(algorithm, params, (rsa[1].int(), rsa[2].int()))
-
-    if algorithm == _DSA:
-        p, _, g = _dsa_params(params)
-        return _fingerprint(algorithm, params, pow(g, private_key.int(), p))
-
-    if algorithm == _EC:
-        for field in private_key.seq(2)[2:]:
-            if field.is_context(1):
-                return _fingerprint(algorithm, params, field.explicit(1).bits())
-        # oscrypto fails on these too
-        raise ValueError('EC private keys without an embedded public key are not supported')
-
-    raise ValueError('Unsupported private key algorithm %s' % algorithm)
-
-
-def _cert_fingerprint(certificate):
-    fields = certificate.seq(1)[0].seq(6)
-    if fields[0].is_context(0):  # explicit version field
-        fields = fields[1:]
-    if len(fields) < 6:
-        raise ValueError('Invalid X.509 certificate')
-    public_key_info = fields[5].seq(2)
-    algorithm, params = _algorithm(public_key_info[0])
-    public_key = public_key_info[1].bits()
-
-    if algorithm == _RSA:
-        rsa = _asn1.load(public_key).seq(2)
-        return _fingerprint(algorithm, params, (rsa[0].int(), rsa[1].int()))
-    if algorithm == _DSA:
-        return _fingerprint(algorithm, params, _asn1.load(public_key).int())
-    if algorithm == _EC:
-        return _fingerprint(algorithm, params, public_key)
-    raise ValueError('Unsupported certificate public key algorithm %s' % algorithm)

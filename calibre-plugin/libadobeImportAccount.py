@@ -28,7 +28,7 @@ class AES(object):
         return self._aes.decrypt(data)
 
 
-from .libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path, get_device_name, safe_xml_parser, write_files_atomically
+from .libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path, get_device_name, safe_xml_parser, write_files_atomically, remove_padding
 from .libadobe import VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS, VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
 
 
@@ -441,10 +441,10 @@ def handle_subkey(parent, subkey, value, encryption_key, method, ofByteBooks, bu
         aes = AES(encryption_key, iv)
 
         value = base64.b64decode(persistent_data["credentials"]["privateLicenseKey"])
-        decrypted_key = bytearray(aes.decrypt(value))
-
-        # Remove padding
-        decrypted_key = bytes(decrypted_key[:-decrypted_key[-1]])
+        try:
+            decrypted_key = remove_padding(aes.decrypt(value))
+        except ValueError:
+            return False, "Could not decrypt the private license key, the encryption key doesn't seem to match this activation."
 
         persistent_data["credentials"]["privateLicenseKey"] = base64.b64encode(decrypted_key).decode("latin-1")
 

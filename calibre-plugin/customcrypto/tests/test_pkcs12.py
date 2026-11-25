@@ -1,8 +1,8 @@
+import base64
 import os
 import unittest
 
 from customcrypto import keys
-from customcrypto.asymmetric import dump_certificate, dump_private_key
 
 from ._unittest_compat import TestCase
 
@@ -14,6 +14,11 @@ UNICODE_PASSWORD = u'p\xe4ssw\xf6rd\u20ac'.encode('utf-8')
 def read(name):
     with open(os.path.join(FIXTURES, name), 'rb') as f:
         return f.read()
+
+
+def read_pem(name):
+    """The DER bytes of a PEM file with a single block"""
+    return base64.b64decode(b''.join(line for line in read(name).splitlines() if not line.startswith(b'-----')))
 
 
 # Expected (key, cert, extra certs) for the fixtures. The test-*.p12 files and
@@ -167,8 +172,8 @@ class ParsePkcs12Tests(TestCase):
         key_name, cert_name, extra_names = expected
         self.assertIsInstance(key, keys.PrivateKeyInfo)
         self.assertIsInstance(cert, keys.Certificate)
-        self.assertEqual(read(key_name), dump_private_key(key, None, 'der'))
-        self.assertEqual(read(cert_name), dump_certificate(cert, encoding='der'))
+        self.assertEqual(read(key_name), key.dump())
+        self.assertEqual(read(cert_name), cert.dump())
         self.assertEqual([read(name) for name in extra_names], [c.dump() for c in extra])
 
     def test_files(self):
@@ -181,8 +186,8 @@ class ParsePkcs12Tests(TestCase):
         mock_p12_password = PASSWORD
 
         privkey, cert, _ = keys.parse_pkcs12(mock_p12_data, mock_p12_password)
-        cert = dump_certificate(cert, encoding="der")
-        privkey = dump_private_key(privkey, None, "der")
+        cert = cert.dump()
+        privkey = privkey.dump()
 
         self.assertEqual(read('test-der.crt'), cert)
         self.assertEqual(read('test-pkcs8-der.key'), privkey)
@@ -190,29 +195,28 @@ class ParsePkcs12Tests(TestCase):
     def test_certs_only(self):
         key, cert, extra = keys.parse_pkcs12(read('openssl-certs-only.p12'), PASSWORD)
         self.assertIsNone(key)
-        # Without a key, the certificate with the lowest fingerprint is picked, as in oscrypto
-        self.assertEqual(read('test-inter-der.crt'), cert.dump())
-        self.assertEqual([read('test-third-der.crt'), read('test-der.crt')], [c.dump() for c in extra])
-        with self.assertRaises(TypeError):
-            dump_private_key(key, None, 'der')
+        # The first certificate in the file, then the others in file order
+        self.assertEqual(read('test-third-der.crt'), cert.dump())
+        self.assertEqual([read('test-inter-der.crt'), read('test-der.crt')], [c.dump() for c in extra])
+
 
     def test_several_pairs(self):
-        # As in oscrypto, the pair with the lowest fingerprint wins wherever it is in
-        # the file. The fingerprints of these fixtures sort test < test-third.
+        # The first key and the first certificate in the file are picked, so the
+        # pair that comes first wins
         pairs = [('test-pkcs8-der.key', 'test-der.crt'), ('test-third-pkcs8-der.key', 'test-third-der.crt')]
-        expected = ('test-pkcs8-der.key', 'test-der.crt', ['test-third-der.crt', 'test-inter-der.crt'])
         for order in (pairs, pairs[::-1]):
             bags = [bag(1, read(key)) for key, _ in order] + [cert_bag(read(cert)) for _, cert in order]
             data = pfx([bags + [cert_bag(read('test-inter-der.crt'))]])
+            expected = (order[0][0], order[0][1], [order[1][1], 'test-inter-der.crt'])
             with self.subTest(first=order[0][0]):
                 self.assertResult(keys.parse_pkcs12(data, None), expected)
 
     def test_no_matching_pair(self):
-        # Then the lowest key and the lowest certificate are picked. These sort
-        # test < test-third for the keys and test-dsa < test-inter for the certificates.
+        # Keys and certificates are not matched up, so the first of each is picked
+        # even when they do not belong together
         data = pfx([[bag(1, read('test-third-pkcs8-der.key')), bag(1, read('test-pkcs8-der.key')),
                      cert_bag(read('test-inter-der.crt')), cert_bag(read('test-dsa-der.crt'))]])
-        expected = ('test-pkcs8-der.key', 'test-dsa-der.crt', ['test-inter-der.crt'])
+        expected = ('test-third-pkcs8-der.key', 'test-inter-der.crt', ['test-dsa-der.crt'])
         self.assertResult(keys.parse_pkcs12(data, None), expected)
 
     def test_ber_outer_layers(self):
@@ -307,14 +311,22 @@ class ParsePkcs12Tests(TestCase):
             keys.parse_pkcs12(enveloped, PASSWORD)
 
     def test_unsupported(self):
-        for filename, message in (
-            ('openssl-pbmac1.p12', 'Unsupported PKCS12 MAC algorithm'),
-            ('openssl-ec-nopub.p12', 'EC private keys without an embedded public key'),
-            ('openssl-ed25519.p12', 'Unsupported certificate public key algorithm 1.3.101.112'),
-        ):
-            with self.subTest(filename=filename):
-                with self.assertRaisesRegex(ValueError, message):
-                    keys.parse_pkcs12(read(filename), PASSWORD)
+        with self.assertRaisesRegex(ValueError, 'Unsupported PKCS12 MAC algorithm'):
+            keys.parse_pkcs12(read('openssl-pbmac1.p12'), PASSWORD)
+
+    def test_other_key_algorithms(self):
+        # Keys and certificates are returned as they are, whatever their algorithm.
+        # oscrypto fails on both of these files.
+        key, cert, extra = keys.parse_pkcs12(read('openssl-ed25519.p12'), PASSWORD)
+        self.assertEqual(read_pem('ed25519.key'), key.dump())
+        self.assertEqual(read_pem('ed25519.crt'), cert.dump())
+        self.assertEqual([], extra)
+
+        # An EC key stored without its public key, as Java writes them
+        key, cert, extra = keys.parse_pkcs12(read('openssl-ec-nopub.p12'), PASSWORD)
+        self.assertIsInstance(key, keys.PrivateKeyInfo)
+        self.assertEqual(read('ec-prime256v1-der.crt'), cert.dump())
+        self.assertEqual([], extra)
 
 
 class DumpTests(TestCase):
@@ -323,22 +335,10 @@ class DumpTests(TestCase):
         self.key, self.cert, _ = keys.parse_pkcs12(read('openssl-default.p12'), PASSWORD)
 
     def test_dump_certificate(self):
-        self.assertEqual(read('test-der.crt'), dump_certificate(self.cert, 'der'))
-        with self.assertRaisesRegex(ValueError, 'encoding must be "der"'):
-            dump_certificate(self.cert, 'pem')
-        with self.assertRaises(TypeError):
-            dump_certificate(self.key, 'der')
-        with self.assertRaises(TypeError):
-            dump_certificate(read('test-der.crt'), 'der')
+        self.assertEqual(read('test-der.crt'), self.cert.dump())
 
     def test_dump_private_key(self):
-        self.assertEqual(read('test-pkcs8-der.key'), dump_private_key(self.key, None, 'der'))
-        with self.assertRaisesRegex(ValueError, 'encoding must be "der"'):
-            dump_private_key(self.key, None, 'pem')
-        with self.assertRaisesRegex(ValueError, 'passphrase must be None'):
-            dump_private_key(self.key, 'secret', 'der')
-        with self.assertRaises(TypeError):
-            dump_private_key(self.cert, None, 'der')
+        self.assertEqual(read('test-pkcs8-der.key'), self.key.dump())
 
 
 if __name__ == '__main__':

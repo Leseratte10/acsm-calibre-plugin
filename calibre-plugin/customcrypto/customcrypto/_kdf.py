@@ -1,7 +1,9 @@
 """
 Password-based key derivation used by PKCS#12 files.
 
-pkcs12_kdf is derived from oscrypto._pkcs12. PBKDF2 comes straight from
+pkcs12_kdf is derived from oscrypto._pkcs12. PyCryptodome has no PKCS#12 KDF,
+and its PBKDF1 cannot do the hashing pkcs12_kdf needs: it requires an 8 byte
+salt and returns at most one digest. PBKDF2 comes straight from
 hashlib.pbkdf2_hmac, so it is not reimplemented here.
 """
 

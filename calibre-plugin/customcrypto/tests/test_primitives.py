@@ -2,12 +2,14 @@ import binascii
 import unittest
 
 from customcrypto import _cipher
-from customcrypto._compat import int_to_bytes
 from customcrypto._kdf import pkcs12_kdf
 
 from ._unittest_compat import TestCase
 
-PLAINTEXT = 0x00112233445566778899AABBCCDDEEFF
+PLAINTEXT = binascii.unhexlify('00112233445566778899AABBCCDDEEFF')
+DES_KEY = binascii.unhexlify('133457799BBCDFF1')
+DES_PLAINTEXT = binascii.unhexlify('0123456789ABCDEF')
+DES_CIPHERTEXT = binascii.unhexlify('85E813540F0AB405')
 
 
 def zeros(length):
@@ -18,33 +20,47 @@ def counting(length):
     return bytes(bytearray(range(length)))
 
 
+def decrypt_block(cipher, key, block):
+    """Decrypts a single block in ECB mode, with the cipher setup that decrypt() uses"""
+    module, key, options = _cipher._block_cipher(cipher, key)
+    return module.new(key, module.MODE_ECB, **options).decrypt(block)
+
+
 class CipherTests(TestCase):
 
     def test_aes_fips197(self):
         # FIPS 197 appendix C
         for key_length, ciphertext in (
-            (16, 0x69C4E0D86A7B0430D8CDB78070B4C55A),
-            (24, 0xDDA97CA4864CDFE06EAF70A0EC0D7191),
-            (32, 0x8EA2B7CA516745BFEAFC49904B496089),
+            (16, '69C4E0D86A7B0430D8CDB78070B4C55A'),
+            (24, 'DDA97CA4864CDFE06EAF70A0EC0D7191'),
+            (32, '8EA2B7CA516745BFEAFC49904B496089'),
         ):
             with self.subTest(key_length=key_length):
-                self.assertEqual(PLAINTEXT, _cipher._aes(counting(key_length))(ciphertext))
+                self.assertEqual(PLAINTEXT, decrypt_block('aes', counting(key_length), binascii.unhexlify(ciphertext)))
 
     def test_des(self):
-        self.assertEqual(0x0123456789ABCDEF, _cipher._des(binascii.unhexlify('133457799BBCDFF1'))(0x85E813540F0AB405))
+        self.assertEqual(DES_PLAINTEXT, decrypt_block('des', DES_KEY, DES_CIPHERTEXT))
 
-    def test_tripledes_with_one_key_is_des(self):
-        key = binascii.unhexlify('133457799BBCDFF1')
-        self.assertEqual(0x0123456789ABCDEF, _cipher._des(key * 3)(0x85E813540F0AB405))
+    def test_tripledes_reducing_to_des(self):
+        # Keys where two of the three DES keys are the same, also when only their
+        # parity bits differ. PyCryptodome refuses them, OpenSSL decrypts them as
+        # single DES with the remaining key.
+        other = binascii.unhexlify('0E329232EA6D0D73')
+        other_parity = bytes(bytearray(b ^ 1 for b in bytearray(other)))
+        for key in (DES_KEY * 3, DES_KEY * 2, other * 2 + DES_KEY, DES_KEY + other * 2, other + other_parity + DES_KEY):
+            with self.subTest(key=binascii.hexlify(key)):
+                self.assertEqual(DES_PLAINTEXT, decrypt_block('tripledes', key, DES_CIPHERTEXT))
 
     def test_rc2_rfc2268(self):
+        # The vectors where the effective key length is the key length, as in OpenSSL
         for key, plaintext, ciphertext in (
-            ('ffffffffffffffff', 0xFFFFFFFFFFFFFFFF, 0x278B27E42E2F0D49),
-            ('3000000000000000', 0x1000000000000001, 0x30649EDF9BE7D2C2),
-            ('88bca90e90875a7f0f79c384627bafb2', 0, 0x2269552AB0F85CA6),
+            ('ffffffffffffffff', 'ffffffffffffffff', '278b27e42e2f0d49'),
+            ('3000000000000000', '1000000000000001', '30649edf9be7d2c2'),
+            ('88bca90e90875a7f0f79c384627bafb2', '0000000000000000', '2269552ab0f85ca6'),
         ):
             with self.subTest(key=key):
-                self.assertEqual(plaintext, _cipher._rc2(binascii.unhexlify(key))(ciphertext))
+                self.assertEqual(binascii.unhexlify(plaintext),
+                                 decrypt_block('rc2', binascii.unhexlify(key), binascii.unhexlify(ciphertext)))
 
     def test_rc4_rfc6229(self):
         keystream = binascii.unhexlify('b2396305f03dc027ccc3524a0a1118a8')
@@ -53,7 +69,7 @@ class CipherTests(TestCase):
     def test_cbc_and_padding(self):
         key = counting(16)
         ciphertext = zeros(16)
-        decrypted = int_to_bytes(_cipher._aes(key)(0), 16)
+        decrypted = decrypt_block('aes', key, ciphertext)
 
         def iv_for(plaintext):
             # With a decrypt-only cipher, choose the IV that turns the block into plaintext

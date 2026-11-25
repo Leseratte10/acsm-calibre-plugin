@@ -72,7 +72,7 @@ for curve in prime256v1 secp384r1 secp521r1; do
     fi
     openssl pkcs8 -topk8 -nocrypt -outform DER -in ec-$curve.key -out ec-$curve-pkcs8-der.key
     openssl x509 -in ec-$curve.crt -outform DER -out ec-$curve-der.crt
-    # An RSA certificate is added so the key has to be matched to the right one
+    # An RSA certificate is added, which has to come back as an extra certificate
     p12 openssl-ec-$curve.p12 -inkey ec-$curve.key -in ec-$curve.crt -certfile test.crt -passout pass:$PASS
 done
 openssl ec -in ec-prime256v1.key -no_public -out ec-nopub.tmp 2>/dev/null

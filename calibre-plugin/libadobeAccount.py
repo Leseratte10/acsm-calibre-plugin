@@ -545,7 +545,10 @@ def signIn(account_type, username, passwd):
 
     private_key_data_encrypted = credentialsXML.find("./%s" % (adNS("encryptedPrivateLicenseKey"))).text
     private_key_data_encrypted = base64.b64decode(private_key_data_encrypted)
-    private_key_data = decrypt_with_device_key(private_key_data_encrypted)
+    try:
+        private_key_data = decrypt_with_device_key(private_key_data_encrypted)
+    except ValueError:
+        return False, "Could not decrypt the private license key in the login response (please open a bug report)"
 
 
 

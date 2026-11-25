@@ -22,11 +22,23 @@ else:
     from mock import patch
 from lxml import etree
 
+try:
+    from Cryptodome.Cipher import AES
+except ImportError:
+    from Crypto.Cipher import AES               # type: ignore
 
 
 from acsm_input import libadobe             # type: ignore
 from acsm_input import libadobeFulfill      # type: ignore
 from acsm_input import libadobeImportAccount    # type: ignore
+
+
+def encrypt_license_key(key, master_key, fingerprint):
+    '''Encrypts a privateLicenseKey the way ADE stores it in the registry: AES-CBC with the
+    master key, the first 16 bytes of the fingerprint as IV, and PKCS#7 padding'''
+    pad = 16 - len(key) % 16
+    aes = AES.new(master_key, AES.MODE_CBC, base64.b64decode(fingerprint)[:16])
+    return base64.b64encode(aes.encrypt(key + bytes(bytearray([pad] * pad)))).decode("ascii")
 
 
 class TestAccountImport(unittest.TestCase):
@@ -68,7 +80,7 @@ class TestAccountImport(unittest.TestCase):
         import tempfile, shutil
 
         fingerprint = base64.b64encode(bytes(bytearray([0x01] * 20))).decode("ascii")
-        private_license_key = base64.b64encode(bytes(bytearray(32))).decode("ascii")
+        private_license_key = encrypt_license_key(bytes(bytearray(32)), bytes(bytearray([0x02] * 16)), fingerprint)
 
         # (registry key name, list of (name, value, ofByteBooks flag or None))
         activation = [
@@ -147,11 +159,28 @@ class TestAccountImport(unittest.TestCase):
             self.assertEqual(entries(cred + adNS("authenticationCertificate")), [("false", "AUTH_ADOBE"), ("true", "AUTH_BB")], "authenticationCertificate imported incorrectly")
 
             self.assertEqual(libadobeFulfill.getAvailableCertTypes(), (True, True), "Imported activation doesn't contain both certificate sets")
+            self.assertEqual(activationxml.find(cred + adNS("privateLicenseKey")).text, base64.b64encode(bytes(bytearray(32))).decode("ascii"),
+                             "privateLicenseKey decrypted incorrectly")
 
         finally:
             libadobe.update_account_path("")
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+
+    def test_importWrongEncryptionKey(self):
+        '''Check if the import fails if the encryption key doesn't decrypt the private license key'''
+
+        # The padding used to be removed without checking it, so with the wrong key (for instance
+        # the one of the other vendor) the import stored garbage as the key and reported success.
+
+        fingerprint = base64.b64encode(bytes(bytearray([0x01] * 20))).decode("ascii")
+        libadobeImportAccount.persistent_data = {
+            "credentials": {"privateLicenseKey": encrypt_license_key(bytes(bytearray(32)), bytes(bytearray([0x02] * 16)), fingerprint)},
+            "activationToken": {"fingerprint": fingerprint},
+        }
+        success, msg = libadobeImportAccount.handle_subkey(None, None, None, bytes(bytearray([0x03] * 16)), None, None, None)
+        self.assertFalse(success, "Import with the wrong encryption key should fail")
+        self.assertIn("Could not decrypt the private license key", msg)
 
     def test_importWineRegistryEscapes(self):
         '''Check if the Wine import decodes the escapes in Wine's user.reg'''
@@ -178,7 +207,7 @@ class TestAccountImport(unittest.TestCase):
 
         # A whole import, with a username and method that contain escapes
         fingerprint = base64.b64encode(bytes(bytearray([0x01] * 20))).decode("ascii")
-        private_license_key = base64.b64encode(bytes(bytearray(32))).decode("ascii")
+        private_license_key = encrypt_license_key(bytes(bytearray(32)), bytes(bytearray([0x02] * 16)), fingerprint)
 
         # (registry key name, list of (name, value, method or None)), values escaped like in user.reg
         activation = [

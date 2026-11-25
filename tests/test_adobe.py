@@ -296,6 +296,17 @@ class TestAdobe(unittest.TestCase):
 
         self.assertEqual(mock_result, expected_result, "devkey decryption returned invalid result")
 
+    def test_removePadding(self):
+        '''Check if the PKCS#7 padding is checked before it's removed, like in customcrypto'''
+
+        self.assertEqual(libadobe.remove_padding(b"hello" + b"\x0b" * 11), b"hello")
+        self.assertEqual(libadobe.remove_padding(b"\x10" * 16), b"")
+
+        # Garbage from a wrong key: an empty result, a padding byte that doesn't match,
+        # a padding length of 0, and one larger than the AES block size
+        for data in (b"", b"hello" + b"\x0a" + b"\x0b" * 10, b"hello" + b"\x0b" * 10 + b"\x00", b"\x11" * 16):
+            self.assertRaises(ValueError, libadobe.remove_padding, data)
+
     @freeze_time("2021-12-18 22:07:15.988961")
     def test_verifyNonceCalculation(self): 
         '''Check if the nonce calculation is correct, at a given date/time'''
@@ -392,17 +403,15 @@ class TestAdobe(unittest.TestCase):
     def __internal_pkcs12_extract_with_customcrypto(self, cert_b64, password): 
         try: 
             from customcrypto.customcrypto import keys
-            from customcrypto.customcrypto.asymmetric import dump_certificate, dump_private_key
         except ModuleNotFoundError:
             try: 
                 from customcrypto import keys
-                from customcrypto.asymmetric import dump_certificate, dump_private_key
             except ModuleNotFoundError:
                 return self.skipTest("customcrypto not found")
 
         privkey, cert, _ = keys.parse_pkcs12(base64.b64decode(cert_b64), password)
-        cert = dump_certificate(cert, encoding="der")
-        privkey = dump_private_key(privkey, None, "der")
+        cert = cert.dump()
+        privkey = privkey.dump()
 
         # privkey now is in PKCS#8 format. That's a wrapper around the actual PKCS#1 key. 
         # See https://tls.mbed.org/kb/cryptography/asn1-key-structures-in-der-and-pem for details.

@@ -45,7 +45,6 @@ except ImportError:
 from .customRSA import CustomRSA
 
 from .customcrypto.customcrypto import keys
-from .customcrypto.customcrypto.asymmetric import dump_certificate, dump_private_key
 
 
 VAR_ACS_SERVER_HTTPS = "https://activate.dtsbytebooks.com/adept"
@@ -582,7 +581,19 @@ def encrypt_with_device_key(data):
     res = iv + encrypted
     return res
 
-def decrypt_with_device_key(data): 
+def remove_padding(data):
+    # type: (bytes) -> bytes
+    # Removes the PKCS#7 padding after AES-CBC decryption, with the same checks as
+    # customcrypto, so a wrong key raises ValueError instead of returning garbage.
+    # Not Crypto.Util.Padding.unpad(), which PyCrypto 2.6 (in Calibre 3) doesn't have.
+
+    data = bytearray(data)
+    pad = data[-1] if data else 0
+    if not 1 <= pad <= 16 or data[-pad:] != bytearray([pad]) * pad:
+        raise ValueError("Decryption failed - invalid padding, the key may be incorrect")
+    return bytes(data[:-pad])
+
+def decrypt_with_device_key(data):
 
     if isinstance(data, str):
         # Python2 
@@ -595,12 +606,7 @@ def decrypt_with_device_key(data):
         f.close()
 
     cip = AES.new(devkey_bytes, AES.MODE_CBC, data[:16])
-    decrypted = bytearray(cip.decrypt(data[16:]))
-
-    # Remove padding
-    decrypted = decrypted[:-decrypted[-1]]
-
-    return decrypted
+    return remove_padding(cip.decrypt(data[16:]))
 
 
 def addNonce(): 
@@ -652,7 +658,7 @@ def addNonce():
 def get_cert_from_pkcs12(_pkcs12, _key):
 
     _, cert, _ = keys.parse_pkcs12(_pkcs12, _key)
-    return dump_certificate(cert, encoding="der")
+    return cert.dump()
 
 
 
@@ -712,7 +718,7 @@ def sign_node(node, prefer_bytebooks):
 
     my_pkcs12 = base64.b64decode(pkcs12)
     my_priv_key, _, _ = keys.parse_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))
-    my_priv_key = dump_private_key(my_priv_key, None, "der")
+    my_priv_key = my_priv_key.dump()
 
     # textbook RSA with that private key
 

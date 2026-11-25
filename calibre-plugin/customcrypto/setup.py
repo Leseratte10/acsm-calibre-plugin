@@ -9,8 +9,8 @@ with io.open(os.path.join(here, 'readme.md'), encoding='utf-8') as f:
 
 setup(
     name='customcrypto',
-    version='1.0.0',
-    description='Pure-Python PKCS#12 key and certificate extraction, stripped down from oscrypto and asn1crypto',
+    version='0.0.1',
+    description='PKCS#12 key and certificate extraction with PyCryptodome, stripped down from oscrypto and asn1crypto',
     long_description=long_description,
     long_description_content_type='text/markdown',
     license='MIT',
@@ -22,6 +22,9 @@ setup(
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
+    ],
+    install_requires=[
+        "pycryptodome"
     ],
     options={'bdist_wheel': {'universal': True}},
 )

@@ -1,19 +1,19 @@
 # customcrypto
 
-A pure-Python subset of [oscrypto](https://github.com/wbond/oscrypto) and
+A subset of [oscrypto](https://github.com/wbond/oscrypto) and
 [asn1crypto](https://github.com/wbond/asn1crypto) to handle Adobe's PKCS12 files.
+The ciphers come from [PyCryptodome](https://www.pycryptodome.org), imported as
+`Cryptodome` or `Crypto`, or from PyCrypto 2.6, which Calibre 3 bundles.
 
 
 ```python
 from customcrypto import keys
-from customcrypto.asymmetric import dump_certificate, dump_private_key
 
 privkey, cert, _ = keys.parse_pkcs12(mock_p12_data, mock_p12_password)
-cert = dump_certificate(cert, encoding="der")
-privkey = dump_private_key(privkey, None, "der")
+cert = cert.dump()
+privkey = privkey.dump()
 ```
 
-This is the same code as with oscrypto, apart from the package name in the imports.
 
 ## What is left
 
@@ -26,7 +26,10 @@ Supported encryption is the same set oscrypto handles:
 - PKCS#5 PBES1 with MD5 or SHA-1 and DES or RC2-64
 - MACs with SHA-1/224/256/384/512, or no MAC
 
-Supported key types are RSA, DSA and EC.
+`parse_pkcs12()` returns the first private key and the first certificate in the
+file, plus the other certificates. They come back as they are, whatever their
+algorithm. Keys and certificates are not matched up, since the files this is
+for have one of each.
 
 ## Tests
 

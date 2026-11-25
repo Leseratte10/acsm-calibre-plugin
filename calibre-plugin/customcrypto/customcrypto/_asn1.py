@@ -91,13 +91,6 @@ class Element(object):
             return self.contents
         return b''.join(chunk.octets() for chunk in self.children())
 
-    def bits(self):
-        """Value of a BIT STRING that holds whole bytes (keys and EC points)"""
-        self._expect(3, 'BIT STRING')
-        if self.constructed or self.contents[:1] != b'\x00':
-            raise ValueError('Unsupported ASN.1 BIT STRING encoding')
-        return self.contents[1:]
-
 
 def load(data):
     """Parses the first ASN.1 element in data (trailing bytes are ignored, as in asn1crypto)"""

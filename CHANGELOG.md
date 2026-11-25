@@ -4,7 +4,7 @@
 
 - Switch from Adobe to ByteBooks (#185): ByteBooks has taken over the ADE / ACS platform, so the plugin now emulates ByteBooks Digital Editions 5.0.76 and uses the ByteBooks activation server. New authorizations require a ByteBooks ID (fixes #153, #159).
 - Existing authorizations are automatically switched to the emulated BDE 5.0 version, since older ADE versions will no longer work reliably.
-- Replace `oscrypto` and `asn1crypto` with a built-in pure-Python PKCS#12 implementation (#186) based on oscrypto. This removes the need for OpenSSL and should fix a bunch of issues with loading the correct libraries on MacOS or in a Linux Flatpak (fixes #24, #63, #65, #67, #68, #85, #86, #92, #99, #100, #106, #107, #109, #110, #112, #113, #124, #127, #128, #130, #133, #139, #150 and #152).
+- Replace `oscrypto` and `asn1crypto` with a built-in PKCS#12 implementation (#186) based on oscrypto, which uses PyCryptodome for the ciphers. This removes the need for OpenSSL and should fix a bunch of issues with loading the correct libraries on MacOS or in a Linux Flatpak (fixes #24, #63, #65, #67, #68, #85, #86, #92, #99, #100, #106, #107, #109, #110, #112, #113, #124, #127, #128, #130, #133, #139, #150 and #152).
 - Drop support for the environment variables `ACSM_LIBCRYPTO` and `ACSM_LIBSSL` since the plugin no longer uses libssl (obsoletes #95, fixes #153).
 - Validate TLS certificates for all requests to the ByteBooks activation server, using Calibre's bundled CA certificates in addition to the system ones. Requests to book distributors still ignore certificate errors (fixes #58, #97, #105).
 - Add a 30 second timeout to all HTTP requests to prevent Calibre from hanging indefinitely.
@@ -18,10 +18,12 @@
   - Make sure XXEs are disabled when parsing untrusted XML files.
 - Fix several bugs in the activation import from ADE / BDE:
   - Data from a previous (failed) import attempt no longer ends up in the next one.
-  - Remove the padding from the decrypted private license key.
+  - Remove the padding from the decrypted private license key, and fail the import if the padding is invalid (for instance with a wrong encryption key) instead of storing a broken key.
   - Reload the device key after import if it changed.
   - When importing from a Wine prefix, the plugin no longer modifies Calibre's process environment. 
   - Fix corrupted device fingerprint after a MacOS import.
+  - Write XML files atomically if possible, to reduce the chance of corrupting an activation.
+  - Make importing an activation through WINE more resilient.
 - Fix a bug where importing a corrupted activation backup ZIP would claim the import was successful. 
 - Make the plugin more resilient to a server sending junk data. 
 - Fix a bug where authorizing an eReader over USB failed on Calibre 3. 
