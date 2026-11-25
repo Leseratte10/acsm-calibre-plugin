@@ -116,11 +116,13 @@ class ACSMInput(FileTypePlugin):
 
             
             if singleinstance("__acsm_rename_old_plugin"):
-                # If the old DeACSM plugin still exists, rename it to BAK or something so it doesn't load.
+                # If the old DeACSM plugin still exists, rename it to BAK so it doesn't load.
+                # Delete the old BAK file if it already exists.
                 if os.path.exists(os.path.join(self.pluginsdir, "DeACSM.zip")):
+                    if os.path.exists(os.path.join(self.pluginsdir, "DeACSM.BAK")):
+                        os.remove(os.path.join(self.pluginsdir, "DeACSM.BAK"))
                     os.rename(os.path.join(self.pluginsdir, "DeACSM.zip"), os.path.join(self.pluginsdir, "DeACSM.BAK"))
                     
-            
             try: 
                 # Make sure the GUI extension is loaded:
                 self.init_embedded_plugins()    

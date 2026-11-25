@@ -289,11 +289,13 @@ class TestAccountImport(unittest.TestCase):
             from io import StringIO
 
         class MockProcess(object):
-            def __init__(self, stdout, returncode):
-                self.stdout = stdout
+            # GetMasterKey passes files for the helper's output, so write into those
+            def __init__(self, stdout, returncode, popen_args):
+                popen_args["stdout"].write(stdout)
+                popen_args["stderr"].write(b"Using the Adobe device key\n")
                 self.returncode = returncode
-            def communicate(self):
-                return self.stdout, b"Using the Adobe device key\n"
+            def poll(self):
+                return self.returncode
 
         key = bytes(bytearray(range(16)))
         cases = [
@@ -314,11 +316,61 @@ class TestAccountImport(unittest.TestCase):
                 old_stdout, old_stderr = sys.stdout, sys.stderr
                 sys.stdout, sys.stderr = StringIO(), StringIO()
                 try:
-                    with patch("subprocess.Popen", return_value=MockProcess(stdout, returncode)):
+                    with patch("subprocess.Popen", side_effect=lambda cmd, **popen_args: MockProcess(stdout, returncode, popen_args)):
                         master_key = getEncryptionKeyLinux.GetMasterKey(wine_prefix)
                 finally:
                     sys.stdout, sys.stderr = old_stdout, old_stderr
                 self.assertEqual(master_key, expected, "Wrong result for %s" % (label))
+        finally:
+            shutil.rmtree(wine_prefix)
+
+    def test_wineHelperFailuresAreHandled(self):
+        '''Check if GetMasterKey returns None if WINE can't be started or the helper hangs'''
+
+        # A missing wine binary (as in a Flatpak) made Popen raise, so the import showed a
+        # traceback instead of an error message, and a WINE that hung froze Calibre's GUI.
+
+        import tempfile, shutil, errno
+        from acsm_input import getEncryptionKeyLinux      # type: ignore
+
+        try:
+            # Python 2: print() writes byte strings there, which io.StringIO doesn't accept.
+            from StringIO import StringIO  # type: ignore
+        except ImportError:
+            from io import StringIO
+
+        class HangingProcess(object):
+            def __init__(self):
+                self.returncode = None
+                self.killed = False
+            def poll(self):
+                return self.returncode
+            def kill(self):
+                self.killed = True
+                self.returncode = -9
+            def wait(self):
+                return self.returncode
+
+        hanging = HangingProcess()
+        cases = [
+            ("no wine binary", patch("subprocess.Popen", side_effect=OSError(errno.ENOENT, "No such file or directory"))),
+            ("an unexpected error", patch("subprocess.Popen", side_effect=RuntimeError("Something went wrong"))),
+            ("a helper that hangs", patch("subprocess.Popen", return_value=hanging)),
+        ]
+
+        wine_prefix = tempfile.mkdtemp()
+        try:
+            for label, popen in cases:
+                # GetMasterKey logs every step, keep that out of the test output.
+                old_stdout, old_stderr = sys.stdout, sys.stderr
+                sys.stdout, sys.stderr = StringIO(), StringIO()
+                try:
+                    with popen, patch.object(getEncryptionKeyLinux, "WINE_TIMEOUT", 0.3):
+                        master_key = getEncryptionKeyLinux.GetMasterKey(wine_prefix)
+                finally:
+                    sys.stdout, sys.stderr = old_stdout, old_stderr
+                self.assertIsNone(master_key, "Wrong result for %s" % (label))
+            self.assertTrue(hanging.killed, "The helper that hangs wasn't killed")
         finally:
             shutil.rmtree(wine_prefix)
 

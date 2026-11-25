@@ -12,11 +12,26 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 
 import binascii, traceback
 
+# How long the key helper may run in WINE. Starting WINE can take half a minute or more when
+# it updates the prefix, and it may show dialogs that wait for the user. But Calibre waits for
+# the helper on its GUI thread, so a WINE that hangs must not freeze it forever.
+WINE_TIMEOUT = 120      # seconds
+
 def GetMasterKey(wineprefix, use_bytebooks = None):
     # use_bytebooks: True / False makes the helper decrypt the ByteBooks / Adobe device key,
     # so it matches the activation that's being imported. None keeps the old behaviour
     # (ByteBooks if BDE has a device key, otherwise Adobe).
-    import subprocess, os, re, shutil, tempfile
+    # Returns the 16-byte device key, or None if that fails. It never raises, so that the
+    # import can show its error message instead of a traceback.
+    try:
+        return _get_master_key(wineprefix, use_bytebooks)
+    except Exception:
+        print("Failed to extract encryption key from WINE:")
+        traceback.print_exc()
+        return None
+
+def _get_master_key(wineprefix, use_bytebooks):
+    import subprocess, os, re, shutil, tempfile, time
 
     verbose_logging = False
     try: 
@@ -96,8 +111,31 @@ def GetMasterKey(wineprefix, use_bytebooks = None):
         helper_cmd.append("bytebooks" if use_bytebooks else "adobe")
 
     try:
-        proc = subprocess.Popen(helper_cmd, shell=False, cwd=helper_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env_dict)
-        prog_stdout, prog_stderr = proc.communicate()
+        # The output goes to temporary files instead of pipes, so waiting for the helper can't
+        # block on them: a full pipe stalls the helper, and processes that WINE starts in the
+        # background can keep a pipe open after the helper has exited.
+        with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+            try:
+                proc = subprocess.Popen(helper_cmd, shell=False, cwd=helper_dir, stdout=stdout_file, stderr=stderr_file, env=env_dict)
+            except OSError as e:
+                # Usually because wine isn't installed, or Calibre can't see it (as in a Flatpak)
+                print("Failed to run WINE: {}".format(e))
+                return None
+
+            # Popen.communicate() and wait() have no timeout on Python 2
+            deadline = time.time() + WINE_TIMEOUT
+            while proc.poll() is None:
+                if time.time() > deadline:
+                    print("WINE didn't finish within {} seconds, giving up.".format(WINE_TIMEOUT))
+                    proc.kill()
+                    proc.wait()
+                    return None
+                time.sleep(0.1)
+
+            stdout_file.seek(0)
+            prog_stdout = stdout_file.read()
+            stderr_file.seek(0)
+            prog_stderr = stderr_file.read()
     finally:
         shutil.rmtree(helper_dir, ignore_errors=True)
 
