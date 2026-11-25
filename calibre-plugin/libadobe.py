@@ -64,6 +64,10 @@ FILE_ACTIVATIONXML = "activation.xml"
 
 
 # Lists of different ADE "versions" we know about
+# This is kinda redundant at the moment since there's only one version we emulate, 
+# but all the code to handle multiple versions is still there, so when ByteBooks
+# releases a new version, this should be easy to adapt. 
+
 VAR_VER_SUPP_CONFIG_NAMES = [ "BDE 5.0.76" ]
 VAR_VER_SUPP_VERSIONS = [ "com.dtsbytebooks.digitaleditions.exe v5.0.76" ]
 VAR_VER_HOBBES_VERSIONS = [ "12.5.4.HOBBES_VERSION_BUILD_NUMBER_X" ] 

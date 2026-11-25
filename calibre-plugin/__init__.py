@@ -52,9 +52,13 @@ try:
 except:
     from .singleinstance_helper import SingleInstance
 
-import os, shutil, traceback, sys, time
+import os, shutil, traceback, sys, time, threading
 import zipfile
 from lxml import etree
+
+# On MacOS, SingleInstance doesn't keep two threads of the same process apart (prefs.py
+# has the same problem), so run() also holds this thread lock while it fulfills a book.
+_run_thread_lock = threading.RLock()
 
 class ACSMInput(FileTypePlugin):
     name                        = PLUGIN_NAME
@@ -328,14 +332,20 @@ class ACSMInput(FileTypePlugin):
             pass
 
         while True:
-            with SingleInstance("__acsm_plugin_execute_run_acsm_file") as si:
-                if si:
-                    return self.run_single(path_to_ebook)
-                else:
-                    counter += 1
-                    if (counter % 100 == 0):
-                        print("Thread {0} still waiting for lock, attempt {1}".format(thread_id, counter))
-                    time.sleep(0.1)
+            # Poll both locks, so a thread that has to wait keeps logging below.
+            # (Python 2's acquire() has no timeout.)
+            if _run_thread_lock.acquire(False):
+                try:
+                    with SingleInstance("__acsm_plugin_execute_run_acsm_file") as si:
+                        if si:
+                            return self.run_single(path_to_ebook)
+                finally:
+                    _run_thread_lock.release()
+
+            counter += 1
+            if (counter % 100 == 0):
+                print("Thread {0} still waiting for lock, attempt {1}".format(thread_id, counter))
+            time.sleep(0.1)
 
 
 
