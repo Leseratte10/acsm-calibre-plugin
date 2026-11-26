@@ -12,7 +12,7 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-import os, traceback
+import os, traceback, threading
 from PyQt5.QtGui import QKeySequence
 
 from lxml import etree
@@ -48,6 +48,92 @@ from .keyextractDecryptor import are_wine_binaries_available
 if sys.version_info[0] == 2:
     class FileNotFoundError(Exception):
         pass
+
+
+class BusyDialog(QDialog):
+    # A dialog with a message and a busy indicator that run() shows while it waits for work
+    # in the background. It can't be closed, because that work can't be stopped.
+    #
+    # A handler that makes several requests in a row can use one BusyDialog and call run()
+    # for each of them. The user then sees a single dialog whose message changes.
+
+    def __init__(self, parent):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle(PLUGIN_NAME)
+        self.setModal(True)
+        layout = QVBoxLayout(self)
+        self.label = QtGui.QLabel(self)
+        layout.addWidget(self.label)
+        busy = QtGui.QProgressBar(self)
+        busy.setRange(0, 0)     # no known end, so Qt shows a busy indicator
+        # Wide enough for the messages, so the dialog keeps its size when they change. On the
+        # dialog itself, a minimum width would also keep a longer message from widening it.
+        busy.setMinimumWidth(300)
+        layout.addWidget(busy)
+
+        self.hide_timer = QtCore.QTimer(self)     # see the end of run()
+        self.hide_timer.setSingleShot(True)
+        self.hide_timer.timeout.connect(self.hide)
+
+    def run(self, message, function, *args):
+        # Calls function(*args) and returns what it returns, or raises what it raises, like a
+        # normal call. But it runs in a separate thread, while this one (Calibre's GUI thread)
+        # shows the dialog with the message and keeps handling events. So Calibre doesn't
+        # freeze or show "Not responding" during network requests, and as the dialog is modal,
+        # the user can't start anything else in the meantime.
+        #
+        # Only the GUI thread may use Qt widgets, so function must not show dialogs or change
+        # the settings window. The handlers show their dialogs before or after this call.
+
+        self.hide_timer.stop()      # busy again, so the dialog stays open
+        self.label.setText(message)
+        if not self.isVisible():
+            self.show()
+
+        result = {}
+
+        def work():
+            try:
+                result["value"] = function(*args)
+            except BaseException as e:
+                result["error"] = e
+
+        worker = threading.Thread(target=work, name="ACSM Input background work")
+        worker.daemon = True    # don't keep Calibre from exiting
+
+        loop = QtCore.QEventLoop()
+        timer = QtCore.QTimer()
+        timer.timeout.connect(lambda: worker.is_alive() or loop.quit())
+
+        worker.start()
+        timer.start(50)
+        loop.exec_()            # handles events until the timer sees that the thread is done
+        timer.stop()
+
+        # Don't hide the dialog yet, but the next time the GUI thread handles events: when
+        # the handler shows another dialog (like an error message) or is done. So if the
+        # handler calls run() again right away, the dialog stays open.
+        self.hide_timer.start(0)
+
+        if "error" in result:
+            raise result["error"]
+        return result["value"]
+
+    def reject(self):
+        # Esc would close the dialog
+        pass
+
+    def closeEvent(self, event):
+        event.ignore()
+
+
+def run_in_background(parent, message, function, *args):
+    # BusyDialog.run() with a dialog of its own, for a handler that makes a single request
+    busy = BusyDialog(parent)
+    try:
+        return busy.run(message, function, *args)
+    finally:
+        busy.deleteLater()
 
 
 class ConfigWidget(QWidget):
@@ -440,7 +526,7 @@ class ConfigWidget(QWidget):
 
 
             # Activate the target device with that version.
-            ret, data = activateDevice(v_idx, dev_xml_tree)
+            ret, data = run_in_background(self, "Authorizing the eReader ...", activateDevice, v_idx, dev_xml_tree)
 
             if not ret: 
                 return error_dialog(None, "Authorize eReader", "Couldn't activate device, server returned error.", show=True, det_msg=data, show_copy_button=False)
@@ -924,12 +1010,15 @@ class ConfigWidget(QWidget):
         # Once the server has activated the device, keep the new files if they can't be installed.
         keep_new_folder = False
 
+        # One dialog for all requests, so the user sees its message change from step to step
+        busy = BusyDialog(self)
+
         update_account_path(new_folder)
         try:
             createDeviceKeyFile()
             createDeviceFile(False, vers_idx)
             try:
-                success, resp = createUser(vers_idx, authCert_bb, authCert_adobe)
+                success, resp = busy.run("Creating the user ...", createUser, vers_idx, authCert_bb, authCert_adobe)
             except Exception:
                 self.show_activation_server_error("while creating the user")
                 return False
@@ -937,12 +1026,12 @@ class ConfigWidget(QWidget):
                 error_dialog(None, title, "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
                 return False
 
-            success, resp = signIn(acc_type, mail, passwd)
+            success, resp = busy.run("Signing in ...", signIn, acc_type, mail, passwd)
             if (success is False):
                 error_dialog(None, title, "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
                 return False
 
-            success, resp = activateDevice(vers_idx, None)
+            success, resp = busy.run("Activating the device ...", activateDevice, vers_idx, None)
             if (success is False):
                 error_dialog(None, title, "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
                 return False
@@ -974,6 +1063,7 @@ class ConfigWidget(QWidget):
             update_account_path(account_folder)
             if not keep_new_folder:
                 shutil.rmtree(new_folder, ignore_errors=True)
+            busy.deleteLater()
 
 
     def create_anon_auth(self): 
@@ -1047,7 +1137,7 @@ class ConfigWidget(QWidget):
         if (not ok or passwd is None or len(passwd) == 0):
             return
 
-        success, message = convertAnonAuthToAccount(mail, passwd)
+        success, message = run_in_background(self, "Linking the anonymous authorization ...", convertAnonAuthToAccount, mail, passwd)
 
         if (success):
             # update display
@@ -1077,7 +1167,7 @@ class ConfigWidget(QWidget):
 
         # Get account types
         try:
-            types, authCert_bb, authCert_adobe = getAuthMethodsAndCert()
+            types, authCert_bb, authCert_adobe = run_in_background(self, "Loading the list of ID providers ...", getAuthMethodsAndCert)
         except Exception:
             return self.show_activation_server_error("while loading the list of ID providers")
                 
@@ -1298,7 +1388,7 @@ class RentedBooksDialog(QDialog):
                     det_msg="Loaned by: %s\nCurrent account: urn:uuid:%s" % (ret_book["user"], account_uuid),
                     show=True, show_copy_button=False)
 
-        ret, msg = tryReturnBook(ret_book)
+        ret, msg = run_in_background(self, "Returning the book ...", tryReturnBook, ret_book)
 
         if (ret):
             print("Book successfully returned.")

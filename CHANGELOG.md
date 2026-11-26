@@ -50,6 +50,7 @@
 - On Python 3.13+, disable `VERIFY_X509_STRICT` to ensure compatibility with weird server certificates.
 - Fix issue when fulfilling multiple ACSM files at once on MacOS, because the SingleInstance class works differently on MacOS.
 - Fix crash if two threads try to create the config folder at the same time.
+- Prevent Calibre from hanging (too much work on the GUI thread) when logging in / creating an anonymous authorization.
 
 ## 0.1.0 (perpetually in beta between 2022-2026, hasn't been released)
 
