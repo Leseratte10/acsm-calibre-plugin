@@ -124,32 +124,39 @@ class TestAdobeHashing(unittest.TestCase):
     def test_hash_node_ultralong(self): 
         '''Check if XML hashing works with long values'''
 
-        # If an XML text element is longer than 32k bytes, the hashing works differently. 
-        # Make sure that that works, even though it's not going to show up in practice anywhere ...
+        # Warning: 
+        # ACS (the server) and ADE (the client) hash ultralong values (> 0x7FFF) completely different. 
+        # This means that ADE will not be able to sign an XML in the way the server expects it, if it
+        # contains text nodes longer than 0x7FFF or attribute values longer than 0xFFFF. 
+        # The plugin (and this test case) implement the hashing algorithm the ACS server implements, 
+        # even though it differs from ADE, to be compatible with as many ACSM files as possible. 
+        # For more information see the warning comments in libadobe.py hash_text_node() and
+        # hash_do_append_string().
+        
 
-        mock_xml_str = """
+        # XML text elements get split into 0x7FFF chunks.
+        mock_xml_str_text = """
         <adept:notification xmlns:adept="http://ns.adobe.com/adept">
-        <adept:user>urn:uuid:6e5393e0-ff13-4ae8-8f6c-6654182ac7d5</adept:user>
-        <adept:device>urn:uuid:51abfbaf-f0e8-474d-b031-626c5224f90f</adept:device>
         <adept:testCodeForACSMInput>{}</adept:testCodeForACSMInput>
-        <adept:nonce>eVr2pi26AAAAAAAA</adept:nonce>
-        <adept:expiration>2022-08-03T09:16:22Z</adept:expiration>
-            <body xmlns="http://ns.adobe.com/adept">
-                <fulfillment>6ccfbc7a-349b-40ad-82d8-d7a4c717ca13-00000271</fulfillment>
-                <transaction>237493726-1749302749327354-Wed Aug 03 09:16:22 UTC 2022</transaction>
-                <user>urn:uuid:6e5393e0-ff13-4ae8-8f6c-6654182ac7d5</user>
-                <fulfilled>true</fulfilled>
-                <returned>true</returned>
-                <hmac>CB3Ql1FAJD957t5n749q5ZO8IzU=</hmac>
-            </body>
         </adept:notification>
         """.format("A"*70000)
 
-
-        mock_xml_obj = etree.fromstring(mock_xml_str)
+        mock_xml_obj = etree.fromstring(mock_xml_str_text)
         sha_hash = libadobe.hash_node(mock_xml_obj).hexdigest().lower()
+        self.assertEqual(sha_hash, "9aea16fae05cc4487153d0bdd07eda8c8974f32e", "Invalid ultralong text hash")
 
-        self.assertEqual(sha_hash, "7f62c1c1db2e1c965fd8403a4e768735a5848689", "Invalid SHA hash for node signing (ultralong)")
+        # XML attribute values limit the length to two bytes (0xFFFF) but still 
+        # include the full string in the hash.
+
+        mock_xml_str_text = """
+        <adept:notification xmlns:adept="http://ns.adobe.com/adept">
+        <adept:testCodeForACSMInput dummy="{}"></adept:testCodeForACSMInput>
+        </adept:notification>
+        """.format("A"*70000)
+
+        mock_xml_obj = etree.fromstring(mock_xml_str_text)
+        sha_hash = libadobe.hash_node(mock_xml_obj).hexdigest().lower()
+        self.assertEqual(sha_hash, "a1824db08ec72fc8a03a0bed5fcfdc88e27a157f", "Invalid ultralong attribute value hash")
 
 
     def test_hash_node_attributeSortOrder(self): 

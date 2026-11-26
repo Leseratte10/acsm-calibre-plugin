@@ -810,9 +810,11 @@ def attribute_sort_key(attribute):
     # with "" for "no namespace" (which then always comes first), and compare their UTF-8 bytes. 
     # Comparing bytes instead of strings also keeps the order correct on Python 2 builds that 
     # store unicode strings as UTF-16, where characters outside the BMP would sort wrongly.
+    #
+    # In C this would be a simple memcmp.
 
     q_attribute = etree.QName(attribute)
-    namespace = "" if q_attribute.namespace is None else q_attribute.namespace
+    namespace = q_attribute.namespace or ""
 
     return (namespace.encode("utf-8"), q_attribute.localname.encode("utf-8"))
 
@@ -829,31 +831,19 @@ def hash_node_ctx(node, hash_ctx):
             print("Warning: Found hmac or signature node in unexpected namespace " + str(qtag.namespace))
 
     hash_do_append_tag(hash_ctx, ASN_NS_TAG)
-
-    if qtag.namespace is None: 
-        hash_do_append_string(hash_ctx, "")
-    else:
-        hash_do_append_string(hash_ctx, qtag.namespace)
+    hash_do_append_string(hash_ctx, qtag.namespace or "")
     hash_do_append_string(hash_ctx, qtag.localname)
 
 
     # Attributes need to be sorted, see attribute_sort_key() for the exact order.
-    attrKeys = sorted(node.keys(), key=attribute_sort_key)
-
-    for attribute in attrKeys: 
-        # Hash all the attributes
-        hash_do_append_tag(hash_ctx, ASN_ATTRIBUTE)
-
-        # Check for element namespace and hash that, if present:
+    for attribute in sorted(node.keys(), key=attribute_sort_key): 
         q_attribute = etree.QName(attribute)
 
-        # Hash element namespace (usually "")
-        # If namespace is none, use "". Else, use namespace.
-        hash_do_append_string(hash_ctx, "" if q_attribute.namespace is None else q_attribute.namespace)
-
-        # Hash (local) name and value
+        hash_do_append_tag(hash_ctx, ASN_ATTRIBUTE)
+        hash_do_append_string(hash_ctx, q_attribute.namespace or "")
         hash_do_append_string(hash_ctx, q_attribute.localname)
         hash_do_append_string(hash_ctx, node.get(attribute))
+
 
     hash_do_append_tag(hash_ctx, ASN_CHILD)
 
@@ -876,8 +866,7 @@ def hash_node_ctx(node, hash_ctx):
 
         if child.tag is etree.Entity:
             # A reference to an entity that a DOCTYPE defines (&name;), which the safe
-            # parser doesn't resolve. The server would hash its replacement text, which
-            # isn't in the tree.
+            # parser doesn't resolve and the server doesn't support.
             raise ValueError("Can't hash XML that contains the entity reference %s" % (child.text))
 
         # Hash the text that lives in *front* of the first child node.
@@ -901,8 +890,19 @@ def hash_text_node(hash_ctx, text):
     if text is None:
         return
 
-    # Trim like the server does, see JAVA_WHITESPACE. Python's strip() would also remove
-    # the non-breaking spaces which the server keeps.
+    # Caution, server-client mismatch:
+    # The server (ACS) strips any character in JAVA_WHITESPACE, because it runs in Java and 
+    # just calls String.strip().
+    # The client (ADE) is written in C and only strips isspace() in the C locale, meaning, 
+    # only the bytes \x20, \t, \n, \x0b, \x0c, \r.
+    # This means that an official ADE client would be unable to sign a request in a way
+    # the server would accept it, if this request contains any whitespace that is included
+    # in JAVA_WHITESPACE but not in isspace(). 
+
+    # A client that behaves 100% like ADE would need to use isspace(). 
+    # A client that is supposed to work with as many ACSM files as possible would need to 
+    # use JAVA_WHITESPACE, which is what this code implements.
+
     text = text.strip(JAVA_WHITESPACE)
 
     if isinstance(text, bytes):
@@ -913,45 +913,52 @@ def hash_text_node(hash_ctx, text):
     text_bytes_len = len(text_bytes)
 
     if text_bytes_len > 0:
-        done = 0
+        offset = 0
         while True:
+            # Caution, another server-client mismatch:
+            # The server (ACS) splits a text node into multiple text nodes, each with their own ASN_TEXT
+            # identifier, as soon as a text node is longer than 0x7FFF. 
+            # The client (ADE) doesn't, it just sends the lower two bytes of the full string length, then
+            # the full string. 
+            # This means that an official ADE client would be unable to sign a request in a way the server
+            # would accept it, if it contains a node whose text content is longer than 0x7FFF. 
+            # If the text node we want to hash is longer than 0x7FFF, split it up into multiple text nodes. 
+            #
+            # Since we want to be as compatible with as many ACSM files as possible, we use the rule the 
+            # server accepts, which splits longer strings into chunks. 
             hash_do_append_tag(hash_ctx, ASN_TEXT)
-            hashed_len = hash_do_append_string(hash_ctx, text_bytes[done:])
-            if hashed_len is None or hashed_len == 0:
-                raise Exception("Error during hashing")
 
-            done += hashed_len
-            if done >= text_bytes_len:
+            len_to_hash = min(0x7FFF, text_bytes_len)
+            hash_do_append_string(hash_ctx, text_bytes[offset:offset+len_to_hash])
+
+            offset += len_to_hash
+            if offset >= text_bytes_len:
                 break
 
 
 
 def hash_do_append_string(hash_ctx, data):
-    # type: (SHA.SHA1Hash, str|bytes) -> None|int
+    # type: (SHA.SHA1Hash, str|bytes) -> None
 
     if (isinstance(data, bytes)):
         str_bytes = data
     else:
         str_bytes = data.encode("utf-8")
 
-        if len(str_bytes) > 0x7fff:
-            # Trying to hash string longer than 0x7FFF, can't safely split.
-            # This should never occur as long strings get handed into this function as bytes.
-            return None
-    
-
     length = len(str_bytes)
 
-    if length >= 0x7fff:
-        length = 0x7fff
-
-    len_upper = int(length / 256)
+    # Only the two lower bytes of the length
+    # If the string is longer than 0xFFFF, 
+    # we still only use these two bytes here, but we do hash the full string.
+    # Note: This rule only applies to attributes or values or similar, it does
+    # NOT apply to text nodes. For those, see hash_text_node.
+    len_upper = int((length // 256) & 0xFF)
     len_lower = int(length & 0xFF)
 
     hash_do_append_raw_bytes(hash_ctx, [len_upper, len_lower])
-    hash_do_append_raw_bytes(hash_ctx, str_bytes[:length])
+    hash_do_append_raw_bytes(hash_ctx, str_bytes)
 
-    return length
+    return
 
 def hash_do_append_tag(hash_ctx, tag):
     # type: (SHA.SHA1Hash, int) -> None

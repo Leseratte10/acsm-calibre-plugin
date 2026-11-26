@@ -10,9 +10,10 @@
 - Fixes bug that causes the loan list to not update correctly when multiple threads accessed it simultaneously (fixes #37 and #178).
 - Fix several bugs regarding XML loading and XML node hashing: 
   - Fix XML hashing used for request signatures by adding bytewise sorting of XML attributes. 
-  - Fix XML hashing for nodes with less than 32k UTF-8 characters but more than 32k bytes.
+  - Fix XML hashing for strings less than 0x7FFF UTF-8 characters but more than 0x7FFF bytes.
   - Fix XML hashing for nodes that contain comments or processing instructions.
   - Fix XML hashing for nodes that contain certain nonstandard whitespace characters.
+  - Fix XML hashing for nodes that contain an attribute value longer than 0xFFFF bytes.
   - Fix XML corruption when using an E-Mail address that contains non-ASCII characters.
   - Make sure XXEs are disabled when parsing untrusted XML files.
   - Fix crash when entity elements are present in an ACSM file (should never happen with valid ACSM files).
