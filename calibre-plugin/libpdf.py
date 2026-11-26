@@ -21,48 +21,46 @@ class BackwardReader:
         self.file = file
 
     def readlines(self):
-        CR = b"\r"
-        LF = b"\n"
-
         # Move reader to the end of file
         self.file.seek(0, os.SEEK_END)
         current_pos = self.file.tell()   # start of the not-yet-read region
-        buffer = b""
 
-        while True:
-            # Last line terminator in the buffer, either CR or LF
-            pos = max(buffer.rfind(LF), buffer.rfind(CR))
+        # Pieces of the line the reader is in, last piece first. They are joined
+        # once the line is complete, so a line that spans many blocks isn't
+        # copied and searched again for every block.
+        pieces = []
+        after_lf = False   # whether the data after current_pos starts with LF
 
-            # An LF at the very start of the buffer might be the second half
-            # of a CRLF pair split across a block boundary, so we can't decide
-            # yet whether the byte before it is a CR. Read more first.
-            straddles = (pos == 0 and current_pos > 0
-                         and buffer[:1] == LF)
+        while current_pos:
+            to_read = min(self.BLKSIZE, current_pos)
+            current_pos -= to_read
+            self.file.seek(current_pos, os.SEEK_SET)
+            block = self.file.read(to_read)
+            if sys.version_info[0] >= 3:
+                # Latin-1 has one character per byte, so a block can be decoded on its own
+                block = block.decode("latin-1")
 
-            if pos != -1 and not straddles:
-                # Line terminator found
-                line = buffer[pos + 1:]
-                if pos > 0 and buffer[pos:pos + 1] == LF \
-                        and buffer[pos - 1:pos] == CR:
-                    pos -= 1          # CRLF: drop the CR as well
-                buffer = buffer[:pos]
-                if sys.version_info[0] >= 3:
-                    yield line.decode("latin-1")
-                else:
+            if after_lf and block.endswith("\r"):
+                # The CR of a CRLF that is split across two blocks. The LF
+                # already counted as the line ending.
+                block = block[:-1]
+            after_lf = block.startswith("\n")
+
+            lines = re.split("\r\n|\r|\n", block)
+            # The end of the block belongs to the line the reader is in
+            pieces.append(lines.pop())
+            if lines:
+                # The block has a line ending, so that line is complete, and so
+                # are the lines between the line endings of the block
+                yield "".join(reversed(pieces))
+                for line in reversed(lines[1:]):
                     yield line
+                # The reader is now in the line in front of the first line ending
+                pieces = [lines[0]]
 
-            elif current_pos:
-                # Need to fill the buffer
-                to_read = min(self.BLKSIZE, current_pos)
-                current_pos -= to_read
-                self.file.seek(current_pos, os.SEEK_SET)
-                buffer = self.file.read(to_read) + buffer
-                if current_pos == 0:
-                    # Sentinel so the first line of the file gets yielded
-                    buffer = LF + buffer
-            else:
-                # Start of file
-                return
+        if pieces:
+            # The first line of the file, unless the file is empty
+            yield "".join(reversed(pieces))
 
 
 
