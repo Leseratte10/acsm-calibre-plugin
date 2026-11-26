@@ -580,3 +580,39 @@ class TestAdobeRequests(unittest.TestCase):
                 quietly(libadobe.send_adept, "https://example.com/adept", None, True)
             self.assertLess(time.time() - start, 2, "send_adept didn't give up at the time limit")
         self.assertIn("no complete reply within", str(cm.exception))
+
+    def test_httpOnlyURLs(self):
+        """Check if the request functions only open HTTP and HTTPS URLs, not local files or other schemes"""
+
+        local_file = os.path.join(self.account_dir, "local.xml")
+        with open(local_file, "w") as f:
+            f.write('<success xmlns="http://ns.adobe.com/adept"/>')
+        output_file = os.path.join(self.account_dir, "download.bin")
+
+        # Real URLs that urllib would open without a network
+        for url in ["file://" + local_file, "data:text/plain,PK"]:
+            if url.startswith("file:"):
+                with self.assertRaises(libadobe.RequestError, msg=url):
+                    quietly(libadobe.send_adept, url, "<x/>", False)
+            self.assertEqual(quietly(libadobe.sendHTTPRequest_DL2FILE, url, output_file, False), 900, url)
+            self.assertFalse(os.path.exists(output_file), url + ": file was downloaded")
+
+        # Other ways to write such URLs. urllib isn't called for them at all.
+        rejected = ["FILE://" + local_file, "  file://" + local_file, "<URL:file://" + local_file + ">",
+                    "file:" + local_file, "ftp://example.com/book.epub", "data:text/plain,PK"]
+        with patch.object(libadobe.ulib, "urlopen", side_effect=IOError("no network in tests")) as urlopen:
+            for url in rejected:
+                self.assertEqual(quietly(libadobe.sendHTTPRequest_DL2FILE, url, output_file, False), 900, url)
+                if "://" in url:
+                    # send_adept adds "http://" to URLs without it
+                    with self.assertRaises(libadobe.RequestError, msg=url):
+                        quietly(libadobe.send_adept, url, "<x/>", False)
+            self.assertFalse(urlopen.called, "urlopen was called for a URL that isn't HTTP(S)")
+
+            # HTTP and HTTPS URLs are still requested
+            for url in ["http://example.com/a", "HTTPS://example.com/a", " https://example.com/a\n"]:
+                urlopen.reset_mock()
+                self.assertEqual(quietly(libadobe.sendHTTPRequest_DL2FILE, url, output_file, False), 900, url)
+                with self.assertRaises(libadobe.RequestError, msg=url):
+                    quietly(libadobe.send_adept, url, "<x/>", False)
+                self.assertEqual(urlopen.call_count, 2, url + ": wasn't requested")

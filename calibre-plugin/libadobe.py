@@ -436,10 +436,23 @@ def create_ssl_context(validate_tls):
     return ctx
 
 
+def is_http_url(url):
+    # type: (str) -> bool
+    # urllib also opens file:, ftp: and data: URLs, but ADE only uses HTTP and HTTPS. URLs
+    # from an ACSM file or a server reply must not make the plugin read local files.
+    # urllib ignores whitespace around the URL, and so does this check.
+    return url.strip().lower().startswith(("http://", "https://"))
+
+
 def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
     # type: (str, str, bool) -> int
     # Returns 200, the HTTP status code of an error reply, 900 for network errors (no
-    # connection, timeout, incomplete download), or DOWNLOAD_FILE_ERROR.
+    # connection, timeout, incomplete download) and URLs that aren't HTTP or HTTPS,
+    # or DOWNLOAD_FILE_ERROR.
+
+    if not is_http_url(URL):
+        print("Download failed: %s is not an HTTP or HTTPS URL" % (URL))
+        return 900
 
     headers = {
         "Accept": "*/*",
@@ -509,9 +522,9 @@ def send_adept(url, document, validate_tls, allow_no_content = False):
     # Sends an ADEPT request: a POST with the XML document, or a GET if document is None.
     # Returns the root element of the reply, which can be an ADEPT <error>. With
     # allow_no_content, an empty reply with HTTP status 204 returns None instead.
-    # Raises RequestError for everything else: a URL that can't be used, no connection,
-    # a timeout, a certificate that isn't valid (with validate_tls), an HTTP error, a
-    # reply that isn't XML, or no reply within VAR_HTTP_REQUEST_TIME_LIMIT seconds.
+    # Raises RequestError for everything else: a URL that can't be used or isn't HTTP(S),
+    # no connection, a timeout, a certificate that isn't valid (with validate_tls), an HTTP
+    # error, a reply that isn't XML, or no reply within VAR_HTTP_REQUEST_TIME_LIMIT seconds.
 
     headers = {
         "Accept": "*/*",
@@ -531,6 +544,9 @@ def send_adept(url, document, validate_tls, allow_no_content = False):
     if not "://" in url:
         print("Provider is using malformed URL %s, fixing." % (url))
         url = "http://" + url
+
+    if not is_http_url(url):
+        raise RequestError("Request to %s failed: not an HTTP or HTTPS URL" % (url))
 
     # The request runs in a thread of its own, so it can be given up after the time limit.
     # That thread is then left to finish (or hang) on its own, its result is ignored.
