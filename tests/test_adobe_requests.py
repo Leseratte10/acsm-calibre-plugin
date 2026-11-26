@@ -311,10 +311,10 @@ class TestAdobeRequests(unittest.TestCase):
 
         # (credentials in the activation, server replies, result, requests)
         cases = [
-            ({}, [SUCCESS, SUCCESS], (None, False), [self.AUTH_BYTEBOOKS, self.INIT_BYTEBOOKS]),
+            ({}, [SUCCESS, SUCCESS], (None, True), [self.AUTH_BYTEBOOKS, self.INIT_BYTEBOOKS]),
             # An operator that doesn't accept the ByteBooks certificates
-            ({}, [INVALID_CERTIFICATE, SUCCESS, SUCCESS], (None, True), [self.AUTH_BYTEBOOKS, self.AUTH_ADOBE, self.INIT_ADOBE]),
-            ({"bytebooks": False, "adobe_flag": False}, [SUCCESS, SUCCESS], (None, True), [self.AUTH_ADOBE, self.INIT_ADOBE]),
+            ({}, [INVALID_CERTIFICATE, SUCCESS, SUCCESS], (None, False), [self.AUTH_BYTEBOOKS, self.AUTH_ADOBE, self.INIT_ADOBE]),
+            ({"bytebooks": False, "adobe_flag": False}, [SUCCESS, SUCCESS], (None, False), [self.AUTH_ADOBE, self.INIT_ADOBE]),
         ]
 
         for credentials, replies, expected_result, expected_requests in cases:
@@ -345,10 +345,10 @@ class TestAdobeRequests(unittest.TestCase):
 
         for credentials, replies, expected_requests in cases:
             self.write_activation(**credentials)
-            (error, use_adobe), server = self.operator_auth(*replies)
+            (error, use_bytebooks), server = self.operator_auth(*replies)
 
             self.assertIsNotNone(error, "No error for %r, %r" % (credentials, replies))
-            self.assertIsNone(use_adobe, "Returned a certificate type for %r, %r" % (credentials, replies))
+            self.assertIsNone(use_bytebooks, "Returned a certificate type for %r, %r" % (credentials, replies))
             self.assertEqual(self.sent(server), expected_requests, "Wrong requests for %r, %r" % (credentials, replies))
 
 
@@ -360,17 +360,17 @@ class TestAdobeRequests(unittest.TestCase):
         fulfill_adobe = (OPERATOR + "/Fulfill", "Adobe")
 
         # (credentials in the activation, server replies, requests,
-        #  use_adobe for the license download, or None if fulfill fails)
+        #  use_bytebooks for the license download, or None if fulfill fails)
         cases = [
-            ({}, [fulfillment_reply()], [fulfill_bytebooks], False),
+            ({}, [fulfillment_reply()], [fulfill_bytebooks], True),
             # An operator that doesn't accept the ByteBooks certificates
-            ({}, [INVALID_CERTIFICATE, fulfillment_reply()], [fulfill_bytebooks, fulfill_adobe], True),
-            ({"bytebooks": False, "adobe_flag": False}, [fulfillment_reply()], [fulfill_adobe], True),
+            ({}, [INVALID_CERTIFICATE, fulfillment_reply()], [fulfill_bytebooks, fulfill_adobe], False),
+            ({"bytebooks": False, "adobe_flag": False}, [fulfillment_reply()], [fulfill_adobe], False),
             # No Adobe credentials to fall back to
             ({"adobe": False}, [INVALID_CERTIFICATE], [fulfill_bytebooks], None),
         ]
 
-        for credentials, replies, expected_requests, use_adobe in cases:
+        for credentials, replies, expected_requests, use_bytebooks in cases:
             # Already authenticated to the operator, so fulfill doesn't know which certificate it accepts
             self.write_activation(operators=[OPERATOR + "/Fulfill"], **credentials)
             server = FakeServer(*replies)
@@ -380,12 +380,12 @@ class TestAdobeRequests(unittest.TestCase):
                 success, reply = quietly(libadobeFulfill.fulfill, os.path.join(self.account_dir, "book.acsm"))
 
             self.assertEqual(self.sent(server), expected_requests, "Wrong requests for %r, %r" % (credentials, replies))
-            if use_adobe is None:
+            if use_bytebooks is None:
                 self.assertFalse(success, "No error for %r, %r" % (credentials, replies))
                 self.assertEqual(license_downloads, [], "Downloaded a license after an error")
             else:
                 self.assertTrue(success, "Fulfillment failed for %r, %r: %s" % (credentials, replies, reply))
-                self.assertEqual(license_downloads, [(LICENSE_URL, OPERATOR, use_adobe)], "Wrong license download for %r, %r" % (credentials, replies))
+                self.assertEqual(license_downloads, [(LICENSE_URL, OPERATOR, use_bytebooks)], "Wrong license download for %r, %r" % (credentials, replies))
 
 
     def test_fulfillmentNotification(self):

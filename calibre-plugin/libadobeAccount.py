@@ -357,7 +357,7 @@ def convertAnonAuthToAccount(username, passwd):
     # This is intended for cases where people install ADE, use an anonymous auth, 
     # buy a couple books, and then decide to get a fresh AdobeID.
 
-    from .libadobeFulfill import is_bytebooks_account
+    from .libadobeFulfill import is_bytebooks_account, add_vendor_flag
 
     # Get authenticationCertificate
     try: 
@@ -383,8 +383,7 @@ def convertAnonAuthToAccount(username, passwd):
         return False, "Signing failed"
 
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/AddSignInDirect"
-    if use_bytebooks:
-        signInURL += "?ofByteBooks=1"
+    signInURL = add_vendor_flag(signInURL, use_bytebooks)
     linkResponse = sendRequestDocu(linkRequest, signInURL, True)
     if linkResponse is None: 
         return False, "Error while calling AddSignInDirect"
