@@ -43,9 +43,9 @@ In 2026, ByteBooks (by Wipro Connected Services) has taken over operation of the
 
 If you're migrating from an existing AdobeID, make sure to select the checkbox that says "I have an existing Adobe account to migrate" so that all your eBook licenses will be migrated to the new account. 
 
-Also, according to the [ByteBooks Transition FAQ](https://dtsbytebooks.com/products/digital-edition/faq), all current versions of ADE and also all previous versions of my Calibre plugin (including the 0.1.0 beta) will stop working after December 2026. 
+Also, according to the [ByteBooks Transition FAQ](https://dtsbytebooks.com/products/digital-edition/faq), all current versions of ADE and also all previous versions of my Calibre plugin (including the 0.1.0 beta) will stop working after June 2027. 
 
-I will be providing a new updated version of my Calibre plugin before this cutoff date that will continue to be compatible with ByteBooks from 2027 onward. This change will require you to wipe the old plugin, reinstall the new updated plugin once it is available, and re-login into your ByteBooks ID account.
+I will be providing a new updated version of my Calibre plugin long before this cutoff date that will continue to be compatible with ByteBooks after June 2027 onward. This change will require you to wipe the old plugin, reinstall the new updated plugin once it is available, and re-login into your ByteBooks ID account.
 
 
 ## Setup
