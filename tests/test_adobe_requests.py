@@ -276,6 +276,14 @@ class TestAdobeRequests(unittest.TestCase):
             libadobe.update_account_path(self.account_dir)      # forget the device key of the last case
             self.assertIsNone(quietly(libadobe.sign_node, node, True), "Signed with %s" % (problem))
 
+        # A node that can't be hashed, with a valid account
+        self.write_file("activation.xml", activation_xml())
+        self.write_file("devicesalt", DEVICE_KEY)
+        libadobe.update_account_path(self.account_dir)
+        node = etree.fromstring('<!DOCTYPE test [<!ENTITY e "x">]><adept:test xmlns:adept="http://ns.adobe.com/adept">&e;</adept:test>',
+                                parser=libadobe.safe_xml_parser())
+        self.assertIsNone(quietly(libadobe.sign_node, node, True), "Signed a node with an entity reference")
+
 
     def test_getDecryptedCert(self):
         '''Check if getDecryptedCert returns the certificate of the preferred vendor'''
@@ -384,6 +392,35 @@ class TestAdobeRequests(unittest.TestCase):
             else:
                 self.assertTrue(success, "Fulfillment failed for %r, %r: %s" % (credentials, replies, reply))
                 self.assertEqual(license_downloads, [(LICENSE_URL, OPERATOR, use_bytebooks)], "Wrong license download for %r, %r" % (credentials, replies))
+
+
+    def test_fulfillDoctype(self):
+        '''Check if fulfill handles an ACSM with a DOCTYPE, and rejects one with entity references'''
+
+        self.write_activation(operators=[OPERATOR + "/Fulfill"])
+        header = '<?xml version="1.0"?>\n'
+        assert ACSM.startswith(header)
+
+        # A DOCTYPE without entity references doesn't change anything. It must not end up in the request.
+        self.write_file("book.acsm", header + '<!DOCTYPE fulfillmentToken>\n' + ACSM[len(header):])
+        server = FakeServer(fulfillment_reply())
+        with patch.object(libadobeFulfill, "send_adept", server.send), \
+                patch.object(libadobeFulfill, "fetchLicenseServiceCertificate", lambda *args: (True, "")):
+            success, reply = quietly(libadobeFulfill.fulfill, os.path.join(self.account_dir, "book.acsm"))
+        self.assertTrue(success, "Fulfillment failed for an ACSM with a DOCTYPE: %s" % (reply))
+        self.assertEqual(self.sent(server), [(OPERATOR + "/Fulfill?ofByteBooks=1", "ByteBooks")], "Wrong requests for an ACSM with a DOCTYPE")
+        self.assertEqual(server.requests[0][1].findtext(ADEPT + "fulfillmentToken/" + ADEPT + "transaction"), "TRANSACTION-1",
+                         "The ACSM isn't in the fulfill request")
+
+        # An entity reference is an error, before anything is sent
+        acsm = header + '<!DOCTYPE fulfillmentToken [<!ENTITY t "TRANSACTION-1">]>\n' + ACSM[len(header):].replace("TRANSACTION-1", "&t;")
+        self.write_file("book.acsm", acsm)
+        server = FakeServer(fulfillment_reply())
+        with patch.object(libadobeFulfill, "send_adept", server.send):
+            success, reply = quietly(libadobeFulfill.fulfill, os.path.join(self.account_dir, "book.acsm"))
+        self.assertFalse(success, "No error for an ACSM with an entity reference")
+        self.assertIn("entity", reply, "Wrong error for an ACSM with an entity reference")
+        self.assertEqual(server.requests, [], "Sent a request for an ACSM with an entity reference")
 
 
     def test_fulfillmentNotification(self):

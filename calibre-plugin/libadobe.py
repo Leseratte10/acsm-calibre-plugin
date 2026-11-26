@@ -707,10 +707,15 @@ def sign_node(node, prefer_bytebooks):
     # type: (etree._Element, bool) -> str
     # Returns the signature for the node in base64, or None if it can't be signed.
     # All callers check for None, so a missing or broken devicesalt, activation.xml
-    # or pkcs12 has to return None here instead of raising an exception.
+    # or pkcs12 has to return None here instead of raising an exception, and so does
+    # a node that can't be hashed.
 
-    sha_hash = hash_node(node)
-    sha_hash = sha_hash.digest()
+    try:
+        sha_hash = hash_node(node).digest()
+    except Exception:
+        print("Signing failed, can't hash the node:")
+        traceback.print_exc()
+        return None
 
     # print("Hash is " + sha_hash.hex())
 
@@ -868,6 +873,12 @@ def hash_node_ctx(node, hash_ctx):
             # before hashing.
             text = (text or "") + (child.tail or "")
             continue
+
+        if child.tag is etree.Entity:
+            # A reference to an entity that a DOCTYPE defines (&name;), which the safe
+            # parser doesn't resolve. The server would hash its replacement text, which
+            # isn't in the tree.
+            raise ValueError("Can't hash XML that contains the entity reference %s" % (child.text))
 
         # Hash the text that lives in *front* of the first child node.
         hash_text_node(hash_ctx, text)

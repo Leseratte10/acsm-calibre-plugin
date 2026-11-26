@@ -272,6 +272,16 @@ class TestAdobeHashing(unittest.TestCase):
         expected_hash = libadobe.hash_node(etree.fromstring(mock_xml_str_without_comments)).hexdigest().lower()
         self.assertEqual(sha_hash, expected_hash, "Text around a comment isn't hashed as one text node")
 
+    def test_hash_node_entity(self):
+        '''Check if XML hashing rejects entity references instead of crashing'''
+
+        # The safe parser keeps references to entities from a DOCTYPE as entity nodes
+        mock_xml_str = """<!DOCTYPE title [<!ENTITY name "Book">]>
+        <title xmlns="http://ns.adobe.com/adept">&name; title</title>"""
+
+        node = etree.fromstring(mock_xml_str, parser=libadobe.safe_xml_parser())
+        self.assertRaises(ValueError, libadobe.hash_node, node)
+
     def test_hash_node_trimsLikeJava(self):
         '''Check if XML hashing trims text nodes like the server does (Java's String.strip())'''
 

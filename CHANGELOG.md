@@ -15,6 +15,7 @@
   - Fix XML hashing for nodes that contain certain nonstandard whitespace characters.
   - Fix XML corruption when using an E-Mail address that contains non-ASCII characters.
   - Make sure XXEs are disabled when parsing untrusted XML files.
+  - Fix crash when entity elements are present in an ACSM file (should never happen with valid ACSM files).
 - Fix several bugs in the activation import from ADE / BDE:
   - Data from a previous (failed) import attempt no longer ends up in the next one.
   - Remove the padding from the decrypted private license key, and fail the import if the padding is invalid (for instance with a wrong encryption key) instead of storing a broken key.

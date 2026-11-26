@@ -79,7 +79,10 @@ def buildFulfillRequest(acsm):
     request += "<adept:user>%s</adept:user>" % (user_uuid)
     request += "<adept:device>%s</adept:device>" % (device_uuid)
     request += "<adept:deviceType>%s</adept:deviceType>" % (device_type)
-    request += etree.tostring(acsm, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+    # Only the fulfillmentToken element. Serializing the whole document would also copy
+    # a DOCTYPE from the ACSM into the middle of the request.
+    acsm_root = acsm.getroot() if hasattr(acsm, "getroot") else acsm
+    request += etree.tostring(acsm_root, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
     request += "<adept:targetDevice>"
 
     request += "<adept:softwareVersion>%s</adept:softwareVersion>" % (version)
@@ -433,8 +436,15 @@ def fulfill(acsm_file, do_notify = False):
 
     try: 
         acsmxml = etree.parse(acsm_file, parser=safe_xml_parser())
-    except: 
+    except:
         return False, "ACSM not found or invalid"
+
+    # The parser doesn't resolve entities, it keeps every reference to one that a DOCTYPE
+    # defines as an entity node. The request can't be signed with these, and once the
+    # ACSM is copied into the request, they're no longer defined. ACSMs from ADEPT
+    # servers don't have any.
+    if next(acsmxml.iter(etree.Entity), None) is not None:
+        return False, "ACSM invalid (it contains entity references, like &name;)"
 
     #print(etree.tostring(acsmxml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8"))
 
