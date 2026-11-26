@@ -557,3 +557,26 @@ class TestAdobeRequests(unittest.TestCase):
             self.assertFalse(success, "No error for %r, %r" % (sorted(loan_record), replies))
             self.assertEqual(len(server.requests), request_count, "Wrong number of requests for %r, %r" % (sorted(loan_record), replies))
 
+
+    def test_sendAdeptTimeLimit(self):
+        '''Check if send_adept gives up on a request that takes longer than the time limit'''
+
+        import threading, time
+        release = threading.Event()
+        self.addCleanup(release.set)    # lets the abandoned request thread end
+
+        def hanging_urlopen(*args, **kwargs):
+            # Like a server that keeps sending a byte now and then, but never finishes.
+            # It does give up after 2 seconds to not hang a failing test forever.
+            release.wait(2)
+            raise IOError("released")
+
+        # The request never finishes, so a short time limit is enough for a test that doesn't
+        # depend on timing. The thread can't have finished by the time the limit is reached.
+        with patch.object(libadobe.ulib, "urlopen", side_effect=hanging_urlopen), \
+                patch.object(libadobe, "VAR_HTTP_REQUEST_TIME_LIMIT", 0.01):
+            start = time.time()
+            with self.assertRaises(libadobe.RequestError) as cm:
+                quietly(libadobe.send_adept, "https://example.com/adept", None, True)
+            self.assertLess(time.time() - start, 2, "send_adept didn't give up at the time limit")
+        self.assertIn("no complete reply within", str(cm.exception))

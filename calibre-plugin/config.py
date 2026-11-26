@@ -52,7 +52,8 @@ if sys.version_info[0] == 2:
 
 class BusyDialog(QDialog):
     # A dialog with a message and a busy indicator that run() shows while it waits for work
-    # in the background. It can't be closed, because that work can't be stopped.
+    # in the background. It can't be closed, because that work can't be stopped. It doesn't
+    # stay open forever though, send_adept() gives up on a request after a time limit.
     #
     # A handler that makes several requests in a row can use one BusyDialog and call run()
     # for each of them. The user then sees a single dialog whose message changes.

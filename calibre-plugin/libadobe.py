@@ -16,7 +16,7 @@ Helper library with code needed for Adobe stuff.
 
 from uuid import getnode
 import sys, os, hashlib, base64, platform, tempfile, stat, traceback
-import ssl
+import ssl, threading
 try: 
     import urllib.request as ulib
     import urllib.error as uliberror
@@ -52,6 +52,10 @@ VAR_ACS_SERVER_HTTPS = "https://activate.dtsbytebooks.com/adept"
 # Network timeout in seconds. It applies to connecting and to every single read while
 # waiting for or receiving a reply, so a slow but working download is not cut off.
 VAR_HTTP_TIMEOUT = 30
+
+# Time limit in seconds for a whole ADEPT request in send_adept(). VAR_HTTP_TIMEOUT alone
+# doesn't end a request if the server sends a byte every now and then.
+VAR_HTTP_REQUEST_TIME_LIMIT = 60
 
 # Errors that urllib does not wrap in a URLError, like a timeout or a dropped connection
 # while waiting for or reading the reply. These all count as "server not reachable".
@@ -506,8 +510,8 @@ def send_adept(url, document, validate_tls, allow_no_content = False):
     # Returns the root element of the reply, which can be an ADEPT <error>. With
     # allow_no_content, an empty reply with HTTP status 204 returns None instead.
     # Raises RequestError for everything else: a URL that can't be used, no connection,
-    # a timeout, a certificate that isn't valid (with validate_tls), an HTTP error, or
-    # a reply that isn't XML.
+    # a timeout, a certificate that isn't valid (with validate_tls), an HTTP error, a
+    # reply that isn't XML, or no reply within VAR_HTTP_REQUEST_TIME_LIMIT seconds.
 
     headers = {
         "Accept": "*/*",
@@ -528,14 +532,31 @@ def send_adept(url, document, validate_tls, allow_no_content = False):
         print("Provider is using malformed URL %s, fixing." % (url))
         url = "http://" + url
 
-    try:
-        req = ulib.Request(url=url, headers=headers, data=data)
-        handler = ulib.urlopen(req, context=create_ssl_context(validate_tls), timeout=VAR_HTTP_TIMEOUT)
+    # The request runs in a thread of its own, so it can be given up after the time limit.
+    # That thread is then left to finish (or hang) on its own, its result is ignored.
+    result = {}
+    def request():
         try:
-            status = handler.getcode()
-            reply = handler.read()
-        finally:
-            handler.close()
+            req = ulib.Request(url=url, headers=headers, data=data)
+            handler = ulib.urlopen(req, context=create_ssl_context(validate_tls), timeout=VAR_HTTP_TIMEOUT)
+            try:
+                result["reply"] = (handler.getcode(), handler.read())
+            finally:
+                handler.close()
+        except BaseException as err:
+            result["error"] = err
+
+    thread = threading.Thread(target=request, name="ACSM Input request")
+    thread.daemon = True    # don't keep Calibre from exiting
+    thread.start()
+    thread.join(VAR_HTTP_REQUEST_TIME_LIMIT)
+    if thread.is_alive():
+        raise RequestError("Request to %s failed: no complete reply within %d seconds" % (url, VAR_HTTP_REQUEST_TIME_LIMIT))
+
+    try:
+        if "error" in result:
+            raise result["error"]
+        status, reply = result["reply"]
 
     except uliberror.HTTPError as err:
         raise RequestError("%s replied with HTTP error %d" % (url, err.code))
