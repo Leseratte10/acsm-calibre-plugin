@@ -40,18 +40,23 @@ def expected_lines_backwards(data):
         lines = [line.decode("latin-1") for line in lines]
     return lines
 
-def build_test_pdf(trailer, eol=b"\n", gen=0, trailer_on_keyword_line=False, trailer_lines=None):
-    # type: (bytes, bytes, int, bool, list) -> tuple
+TEST_EBX_DICT = b"<</Filter/EBX_HANDLER/V 4/R 4/Length 128>>"
+
+def build_test_pdf(trailer, eol=b"\n", gen=0, trailer_on_keyword_line=False, trailer_lines=None, objects=None):
+    # type: (bytes, bytes, int, bool, list, list) -> tuple
     # Builds a minimal PDF with a correct xref table and returns (content, xref offset).
     # Object 5 is the EBX_HANDLER encryption dictionary that patch_drm_into_pdf looks for.
     # The trailer dictionary is written on its own line, on the same line as the
     # "trailer" keyword (trailer_on_keyword_line), or spread over several lines (trailer_lines).
+    # objects replaces the objects of the PDF, as a list of (number, generation, body);
+    # each one is written as "N G obj", body and "endobj" on separate lines.
 
-    objects = [
-        (1, 0, b"<</Type/Catalog/Pages 2 0 R>>"),
-        (2, 0, b"<</Type/Pages/Kids[]/Count 0>>"),
-        (5, gen, b"<</Filter/EBX_HANDLER/V 4/R 4/Length 128>>"),
-    ]
+    if objects is None:
+        objects = [
+            (1, 0, b"<</Type/Catalog/Pages 2 0 R>>"),
+            (2, 0, b"<</Type/Pages/Kids[]/Count 0>>"),
+            (5, gen, TEST_EBX_DICT),
+        ]
 
     pdf = b"%PDF-1.4" + eol
     offsets = {}
@@ -59,9 +64,10 @@ def build_test_pdf(trailer, eol=b"\n", gen=0, trailer_on_keyword_line=False, tra
         offsets[num] = (len(pdf), obj_gen)
         pdf += b"%d %d obj" % (num, obj_gen) + eol + body + eol + b"endobj" + eol
 
+    size = max(6, max(offsets) + 1)
     xref_offset = len(pdf)
-    pdf += b"xref" + eol + b"0 6" + eol + b"0000000000 65535 f\r\n"
-    for num in range(1, 6):
+    pdf += b"xref" + eol + b"0 %d" % size + eol + b"0000000000 65535 f\r\n"
+    for num in range(1, size):
         if num in offsets:
             pdf += b"%010d %05d n\r\n" % offsets[num]
         else:
@@ -349,3 +355,93 @@ class TestPDFFormat(unittest.TestCase):
         for value, name in [(b"/Info<</Title(x)>>", "nested dictionary"), (b"/Foo<1234>", "hex string"), (b"/Foo(a>>b)", "string with >>")]:
             self.check_patched_trailer(start + value + b">>", expected_start + value + b"/Prev %d>>", name + " at the end")
 
+
+    def get_appended_ebx(self, pdf, output, header=b"5 0 obj"):
+        # type: (bytes, bytes, bytes) -> bytes
+        # Returns the EBX dictionary of the object that the patch appended to pdf,
+        # without the EBX_BOOKID and ADEPT_LICENSE that the patch added to it.
+        match = re.match(br"\r" + re.escape(header) + br"\r(.*)/EBX_BOOKID\(urn:uuid:[0-9-]+\)/ADEPT_LICENSE\([A-Za-z0-9+/=]+\)>>\rendobj\r",
+                         output[len(pdf):], re.S)
+        self.assertIsNotNone(match, "patched PDF has no new EBX object")
+        return match.group(1) + b">>"
+
+    def check_patched_ebx(self, objects, expected_ebx, msg, encrypt=b"5 0 R"):
+        # type: (list, bytes, str, bytes) -> None
+        # Patches a test PDF with the given objects and checks the EBX dictionary of the new object.
+        trailer = b"<</Size 16/Root 1 0 R/Encrypt " + encrypt + b"/ID[<aa><bb>]>>"
+        pdf, _ = build_test_pdf(trailer, objects=objects)
+        ret, output = self.patch_pdf(pdf)
+        self.assertTrue(ret, msg + ": patching failed")
+        header = encrypt[:-1].strip() + b" obj"
+        self.assertEqual(self.get_appended_ebx(pdf, output, header), expected_ebx, msg + ": wrong EBX dictionary")
+
+    def test_pdf_patchEbxFromEncryptObject(self):
+        '''Check if patching takes the EBX dictionary from the object that /Encrypt refers to'''
+
+        catalog = (1, 0, b"<</Type/Catalog/Pages 2 0 R>>")
+        other_ebx = b"<</Filter/EBX_HANDLER/V 2/R 3/Length 40>>"
+
+        # An uncompressed content stream after the encryption object that contains
+        # /EBX_HANDLER/, and the text of an object header with a different number.
+        stream_data = b"BT (" + other_ebx + b") Tj ET\n7 0 obj\n" + other_ebx + b"\n"
+        stream = b"<</Length %d>>\nstream\n" % len(stream_data) + stream_data + b"endstream"
+        self.check_patched_ebx([catalog, (5, 0, TEST_EBX_DICT), (6, 0, stream)], TEST_EBX_DICT,
+                               "/EBX_HANDLER/ in a content stream")
+
+        # Another EBX_HANDLER object after the one that /Encrypt refers to.
+        self.check_patched_ebx([catalog, (5, 0, TEST_EBX_DICT), (7, 0, other_ebx)], TEST_EBX_DICT,
+                               "other EBX_HANDLER object after the encryption object")
+
+        # An object whose number ends with the number of the encryption object.
+        self.check_patched_ebx([catalog, (5, 0, TEST_EBX_DICT), (15, 0, other_ebx)], TEST_EBX_DICT,
+                               "object 15 after object 5")
+
+        # An object with the same number, but another generation.
+        self.check_patched_ebx([catalog, (5, 1, TEST_EBX_DICT), (5, 0, other_ebx)], TEST_EBX_DICT,
+                               "same object number, other generation", encrypt=b"5 1 R")
+
+        # The encryption object is defined twice (incremental update), the last one counts.
+        self.check_patched_ebx([catalog, (5, 0, other_ebx), (5, 0, TEST_EBX_DICT)], TEST_EBX_DICT,
+                               "encryption object defined twice")
+
+        # The object number in /Encrypt isn't 5.
+        self.check_patched_ebx([catalog, (5, 0, other_ebx), (12, 0, TEST_EBX_DICT)], TEST_EBX_DICT,
+                               "encryption object 12", encrypt=b"12 0 R")
+
+    def test_pdf_patchEbxLayout(self):
+        '''Check if patching finds EBX dictionaries on the line of the object header or spread over several lines'''
+
+        catalog = (1, 0, b"<</Type/Catalog/Pages 2 0 R>>")
+        multi_line = b"<</Filter/EBX_HANDLER\n/V 4\n/R 4/Length 128\n>>"
+        for body, expected, name in [
+            (TEST_EBX_DICT, TEST_EBX_DICT, "dictionary on its own line"),
+            (multi_line, multi_line, "dictionary spread over several lines"),
+            (b"  " + TEST_EBX_DICT + b"  ", TEST_EBX_DICT, "whitespace around the dictionary"),
+            (b"<</Filter /EBX_HANDLER /V 4>>", b"<</Filter /EBX_HANDLER /V 4>>", "space in front of the handler name"),
+        ]:
+            self.check_patched_ebx([catalog, (5, 0, body)], expected, name)
+
+        # Header, dictionary and endobj on one line
+        trailer = b"<</Size 6/Root 1 0 R/Encrypt 5 0 R/ID[<aa><bb>]>>"
+        pdf = (b"%PDF-1.4\n1 0 obj <</Type/Catalog>> endobj\n5 0 obj " + TEST_EBX_DICT + b" endobj\n" +
+               b"trailer\n" + trailer + b"\nstartxref\n0\n%%EOF\n")
+        ret, output = self.patch_pdf(pdf)
+        self.assertTrue(ret, "object on one line: patching failed")
+        self.assertEqual(self.get_appended_ebx(pdf, output), TEST_EBX_DICT, "object on one line: wrong EBX dictionary")
+
+    def test_pdf_patchEbxMissing(self):
+        '''Check if patching fails if the object that /Encrypt refers to isn't an EBX_HANDLER dictionary'''
+
+        catalog = (1, 0, b"<</Type/Catalog/Pages 2 0 R>>")
+        trailer = b"<</Size 16/Root 1 0 R/Encrypt 5 0 R/ID[<aa><bb>]>>"
+        for objects, name in [
+            ([catalog, (7, 0, TEST_EBX_DICT)], "no object 5"),
+            ([catalog, (15, 0, TEST_EBX_DICT)], "only object 15"),
+            ([catalog, (5, 1, TEST_EBX_DICT)], "object 5 with another generation"),
+            ([catalog, (5, 0, b"<</Filter/Standard/V 2>>"), (7, 0, TEST_EBX_DICT)], "object 5 with another handler"),
+            ([catalog, (5, 0, b"<</Filter/EBX_HANDLERX/V 2>>")], "object 5 with a similar handler name"),
+        ]:
+            pdf, _ = build_test_pdf(trailer, objects=objects)
+            ret, output = self.patch_pdf(pdf)
+            self.assertFalse(ret, name + ": patching should fail")
+            self.assertIsNone(output, name + ": no output file should be written")

@@ -7,7 +7,7 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-import sys, os, zlib, base64, time, shutil, re
+import sys, os, zlib, base64, time, shutil, re, collections
 
 class BackwardReader:
     """
@@ -150,24 +150,46 @@ def update_ebx_with_keys(ebx_data, adept_license, ebx_bookid):
     return ebx_new
 
 
-def find_ebx(filename_in):
+def find_ebx(filename_in, obj_num, obj_gen):
+    """
+    Returns the EBX_HANDLER dictionary of the object obj_num obj_gen, which the
+    /Encrypt entry of the trailer refers to. The header "N G obj" and the dictionary
+    can be on the same line or on separate lines, and the dictionary can be spread
+    over several lines. If the object is defined more than once (incremental updates),
+    the last definition is used. Returns None if there is no such object.
+    """
+
     find_ebx_start = int(time.time() * 1000)
     i = 0
 
-    fl = open(filename_in, "rb")
-    br = BackwardReader(fl)
+    # Object header "N G obj". It has to be preceded by whitespace or the start of the
+    # line, so a header of e.g. object 15 doesn't match object 5.
+    header = re.compile(r"(?:^|(?<=\s))%d\s+%d\s+obj(?![^\s<\[(/%%])" % (int(obj_num), int(obj_gen)))
 
-    for line in br.readlines():
-        i = i + 1
-        if "/EBX_HANDLER/" in line:
-            find_ebx_end = int(time.time() * 1000)
-            print("Found EBX after %d attempts - took %d ms" % (i, find_ebx_end - find_ebx_start))
-            fl.close()
-            return line
+    # The lines after the current one, next line first. The dictionary is short, so
+    # only a few lines are kept, also when the reader is in a large stream.
+    following = collections.deque(maxlen=50)
+
+    with open(filename_in, "rb") as fl:
+        for line in BackwardReader(fl).readlines():
+            i = i + 1
+            # Check for "obj" first, the regex is slower and most lines don't contain it.
+            match = header.search(line) if "obj" in line else None
+            if match is not None:
+                obj_data = line[match.end():] + "\n" + "\n".join(following)
+                if obj_data.lstrip().startswith("<<"):
+                    ebx = trim_encrypt_string(obj_data)
+                    if re.search(r"/Filter\s*/EBX_HANDLER(?![^\s<\[(/%>])", ebx):
+                        find_ebx_end = int(time.time() * 1000)
+                        print("Found EBX after %d attempts - took %d ms" % (i, find_ebx_end - find_ebx_start))
+                        return ebx
+                # Not the encryption dictionary, e.g. the header was text in a stream.
+                # Keep searching for an earlier definition.
+
+            following.appendleft(line)
 
     find_ebx_end = int(time.time() * 1000)
-    print("Error: Did not find EBX_HANDLER - took %d ms" % (find_ebx_end - find_ebx_start))
-    fl.close()
+    print("Error: Did not find EBX_HANDLER in object %s %s - took %d ms" % (obj_num, obj_gen, find_ebx_end - find_ebx_start))
     return None
 
 def find_enc(filename_in):
@@ -295,8 +317,9 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
     r_encrypt_offs2 = encrypt_ref.group(2)
 
 
-    # read EBX element:
-    ebx_elem = find_ebx(filename_in)
+    # read EBX element from the object that /Encrypt refers to, as that's the
+    # object number the new EBX element is written with:
+    ebx_elem = find_ebx(filename_in, r_encrypt_offs1, r_encrypt_offs2)
     
     if (ebx_elem is None):
         print("Err: EBX is None")
