@@ -19,10 +19,8 @@ try:
 except:
     pass
 
-from calibre_plugins.deacsm.__init__ import ACSMInput
+from . import ACSMInput
 
-
-#@@CALIBRE_COMPAT_CODE@@
 
 class ACSMInputGUIExtension(InterfaceActionBase):
     name                        = "ACSM Input Plugin GUI Extension"

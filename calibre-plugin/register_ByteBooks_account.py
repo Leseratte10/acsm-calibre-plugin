@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -10,40 +10,44 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-import getpass, sys
+import sys, getpass
 
-from libadobe import createDeviceKeyFile, VAR_VER_SUPP_CONFIG_NAMES
-from libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+from acsm_input.libadobe import createDeviceKeyFile
+from acsm_input.libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
+
+try:
+    # Python 2: input() runs what you type as Python code, raw_input() returns the text
+    input = raw_input           # type: ignore
+except NameError:
+    pass
 
 # These are the only two variables you'll need to change
-# The mail address and password of your Adobe account to assign. 
-# This tool doesn't support anonymous registrations, 
-# so it's recommended to make a throwaway Adobe account.
+# The mail address and password of your ByteBooks account to assign. 
 
-VAR_MAIL = ""
-VAR_PASS = ""
-VAR_VER = None # 1 for ADE2.0, 2 for ADE3.0
+
+VAR_MAIL = u""
+VAR_PASS = u""
 #################################################################
+
+def typed_text(value):
+    # type: (str|bytes) -> str
+    # On Python 2, raw_input and getpass return what was typed as bytes in the terminal's
+    # encoding. signIn needs text, or a non-ASCII address or password crashes it.
+    if isinstance(value, bytes):
+        return value.decode(sys.stdin.encoding or "utf-8")
+    return value
 
 def main():
 
     global VAR_MAIL
     global VAR_PASS
-    global VAR_VER
 
 
     if (VAR_MAIL == ""):
-        VAR_MAIL = input("Please enter your AdobeID (or press enter for anonymous auth): ")
+        VAR_MAIL = typed_text(input("Please enter your AdobeID (or press enter for anonymous auth): "))
     
     if (VAR_PASS == "" and VAR_MAIL != ""):
-        VAR_PASS = getpass.getpass("Please enter the password for your AdobeID: ")
-
-    if (VAR_VER is None):
-        VAR_VER = int(input("Please enter '1' for ADE 2.0 or '2' for ADE 3.0: "))
-
-    if VAR_VER >= len(VAR_VER_SUPP_CONFIG_NAMES):
-        print("Invalid version")
-        exit(1)
+        VAR_PASS = typed_text(getpass.getpass("Please enter the password for your AdobeID: "))
 
     if (VAR_MAIL != "" and VAR_PASS == ""):
         print("Empty password, aborting")
@@ -52,12 +56,12 @@ def main():
 
     createDeviceKeyFile()
     
-    success = createDeviceFile(True, VAR_VER)
+    success = createDeviceFile(True, 0)
     if (success is False):
         print("Error, couldn't create device file.")
         exit(1)
 
-    success, resp = createUser(VAR_VER, None)
+    success, resp = createUser(0, None, None)
     if (success is False):
         print("Error, couldn't create user: %s" % resp)
         exit(1)
@@ -71,7 +75,7 @@ def main():
         print("Login unsuccessful: " + resp)
         exit(1)
 
-    success, resp = activateDevice(VAR_VER, None)
+    success, resp = activateDevice(0, None)
     if (success is False):
         print("Couldn't activate device: " + resp)
         exit(1)

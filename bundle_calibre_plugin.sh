@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2021-2024 Leseratte10
+# Copyright (c) 2021-2026 Leseratte10
 # This file is part of the ACSM Input Plugin by Leseratte10
 # ACSM Input Plugin for Calibre / acsm-calibre-plugin
 #
@@ -20,62 +20,54 @@ sed_i() {
 }
 
 
-[ ! -f calibre-plugin/asn1crypto.zip ] && ./package_modules.sh
-[ ! -f calibre-plugin/oscrypto.zip ] && ./package_modules.sh
-
 rm -rf calibre-plugin-tmp || /bin/true
 
 cp -r calibre-plugin calibre-plugin-tmp
 
 pushd calibre-plugin-tmp
-pushd keyextract
 
-# Compile C programs: 
-make
 
-base64 < decrypt_win32.exe > decrypt_win32_b64.txt
-base64 < decrypt_win64.exe > decrypt_win64_b64.txt
+if command -v x86_64-w64-mingw32-gcc; then
+    if command -v i686-w64-mingw32-gcc; then
+        echo "Windows crosscompilers found, building WINE executable ..."
 
-# Base64-encode binaries and place them inside decryptor.py: 
-sed_i "/@@@CALIBRE_DECRYPTOR_WIN32_B64@@@/ {
-    r decrypt_win32_b64.txt
-    d
-}" ../keyextractDecryptor.py
+        pushd keyextract
 
-sed_i "/@@@CALIBRE_DECRYPTOR_WIN64_B64@@@/ {
-    r decrypt_win64_b64.txt
-    d
-}" ../keyextractDecryptor.py
+        # Compile C programs: 
+        make
 
-rm decrypt_win32_b64.txt decrypt_win64_b64.txt
-rm decrypt_win32.exe decrypt_win64.exe
+        base64 < decrypt_win32.exe > decrypt_win32_b64.txt
+        base64 < decrypt_win64.exe > decrypt_win64_b64.txt
 
-popd
+        # Base64-encode binaries and place them inside decryptor.py: 
+        sed_i "/@@@CALIBRE_DECRYPTOR_WIN32_B64@@@/ {
+            r decrypt_win32_b64.txt
+            d
+        }" ../keyextractDecryptor.py
 
-# Delete cache
-rm -rf __pycache__
-rm -f *.pyc
+        sed_i "/@@@CALIBRE_DECRYPTOR_WIN64_B64@@@/ {
+            r decrypt_win64_b64.txt
+            d
+        }" ../keyextractDecryptor.py
 
-# Set module ID. This needs to be changed if any of the module ZIPs change.
-echo -n "2023-12-19-01" > module_id.txt
+        rm decrypt_win32_b64.txt decrypt_win64_b64.txt
+        rm decrypt_win32.exe decrypt_win64.exe
+
+        popd
+    else
+        echo "Windows crosscompiler not found, skipping keyextract binary."
+    fi
+else
+    echo "Windows crosscompiler not found, skipping keyextract binary."
+fi
+
+# Delete unnecessary files
+rm -rf __pycache__ customcrypto/__pycache__ customcrypto/customcrypto/__pycache__ customcrypto/tests customcrypto/readme_internal.md
+rm -f *.pyc 
 
 # Copy LICENSE and README.md so it'll be included in the ZIP.
 cp ../LICENSE LICENSE
 cp ../README.md README.md
-
-echo "Injecting Python2 compat code ..."
-find . -name '*.py' | while read -r file;
-do
-    #echo $file
-    # Inject Python2 compat code:
-    sed_i '/#@@CALIBRE_COMPAT_CODE@@/ {
-        r __calibre_compat_code.py
-        d
-    }' "$file"
-
-done
-
-
 
 # Create ZIP file from calibre-plugin folder.
 rm -f ../calibre-plugin.zip

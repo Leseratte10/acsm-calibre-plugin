@@ -13,9 +13,9 @@ body:
       description: What were you doing, and what didn't work?
       placeholder: |
         Please include all relevant information, such as: 
-        - When does the error occur? (Installing plugin, linking ADE account, importing ACSM, ...)
+        - When does the error occur? (Installing plugin, linking Digital Editions account, importing ACSM, ...)
         - If the error happens during ACSM import: Is this an EPUB or a PDF book?
-        - If the error happens during ACSM import: In the plugin settings does it say "Authorized to ADE ID ..." or is there an error message?
+        - If the error happens during ACSM import: In the plugin settings does it say "Authorized to Digital Editions ID ..." or is there an error message?
         - Did this work in the past and randomly stopped, or did this never work / you are installing the plugin for the first time?
     validations:
       required: true
@@ -36,16 +36,16 @@ body:
     id: calibre-version
     attributes:
       label: Which version of Calibre are you running?
-      description: "Example: 9.10"
-      placeholder: "9.10"
+      description: "Example: 9.19"
+      placeholder: "9.19"
     validations: 
       required: true
   - type: input
     id: plugin-version
     attributes:
       label: Which version of the ACSM Input plugin are you running?
-      description: "Example: v0.0.16"
-      placeholder: "v0.0.16"
+      description: "Example: v0.1.0"
+      placeholder: "v0.1.0"
     validations: 
       required: true
   - type: textarea

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -25,9 +25,6 @@ except ImportError:
         from PyQt5.QtWidgets import QMenu, QToolButton
     except ImportError:
         from PyQt4.Qt import QMenu, QToolButton
-
-
-#@@CALIBRE_COMPAT_CODE@@
 
 
 def create_menu_action_unique(ia, parent_menu, menu_text, image=None, tooltip=None,
@@ -68,7 +65,7 @@ def create_menu_action_unique(ia, parent_menu, menu_text, image=None, tooltip=No
     return ac
 
 class ActualACSMInputGUIExtension(InterfaceAction):
-    name                        = "ACSM Input Plugin GUI Extension"
+    name = "ACSM Input Plugin GUI Extension"
     
     try: 
         popup_type = QToolButton.ToolButtonPopupMode.InstantPopup
@@ -81,7 +78,7 @@ class ActualACSMInputGUIExtension(InterfaceAction):
     # Text, icon, tooltip, keyboard shortcut
 
     def genesis(self): 
-        print("ACSM Input: GUI Plugin Genesis!")
+        print("ACSM Input: GUI Plugin loading...")
         self.menu = QMenu(self.gui)
 
         self.rebuild_menus()
@@ -106,16 +103,19 @@ class ActualACSMInputGUIExtension(InterfaceAction):
 
     
     def trigger_loan_dialog(self):
-        import calibre_plugins.deacsm.prefs as prefs
+        from . import prefs
         from calibre.gui2 import info_dialog
-        deacsmprefs = prefs.ACSMInput_Prefs()
+        acsmprefs = prefs.ACSMInput_Prefs()
 
-        from calibre_plugins.deacsm.config import RentedBooksDialog # type: ignore
-        RentedBooksDialog.remove_overdue_books_from_list()
+        # Cleanup the loan list so we can show an info popup if there is none,
+        # instead of opening the full dialog.
+        from .libadobeLoans import remove_overdue_books_from_list
+        acsmprefs.update_loan_list(remove_overdue_books_from_list)
 
-        if (len(deacsmprefs["list_of_rented_books"]) == 0):
+        if (len(acsmprefs["list_of_rented_books"]) == 0):
             return info_dialog(None, "No loaned books", "You currently have no loaned books.", show=True, show_copy_button=False)
 
+        from .config import RentedBooksDialog
         d = RentedBooksDialog(self.gui)
         d.exec_()
         
@@ -124,7 +124,7 @@ class ActualACSMInputGUIExtension(InterfaceAction):
     
     def trigger_config_dialog(self): 
         from calibre.customize.ui import _initialized_plugins
-        from calibre_plugins.deacsm.__init__ import PLUGIN_NAME
+        from . import PLUGIN_NAME
         from calibre.gui2 import error_dialog
 
         plg = None

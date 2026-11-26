@@ -1,11 +1,13 @@
-/calibre-plugin/*.zip
+*.pyc
+__pycache__
+.coverage
+
 /calibre-plugin/keyextract/*.exe
-/calibre-plugin/module_id.txt
-/calibre-plugin/__pycache__
-/calibre-plugin/*.pyc
+/calibre-plugin/customcrypto/readme_internal.md
 /calibre-plugin.zip
 /devel
 /deps
 /releases
+/adobe_account_backup*.zip
+/bytebooks_account_backup*.zip
 
-/adobe_account_backup_*.zip

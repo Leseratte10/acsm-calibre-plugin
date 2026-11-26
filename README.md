@@ -1,15 +1,14 @@
 # Calibre ACSM Input plugin
 
-This is a Calibre plugin that allows you to turn ACSM files into EPUB or PDF files without the need for Adobe Digital Editions. 
-It is a full Python reimplementation of libgourou by Grégory Soutadé (http://indefero.soutade.fr/p/libgourou/), and has since been extended by more and more features.
+This is a Calibre plugin that allows you to turn ACSM files into EPUB or PDF files without the need for Adobe Digital Editions or ByteBooks Digital Editions. 
 
 <details>
-  <summary>ACSM Input Plugin for Calibre - Copyright (c) 2021-2025 Leseratte10</summary>
+  <summary>ACSM Input Plugin for Calibre - Copyright (c) 2021-2026 Leseratte10</summary>
 
 ```
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 Formerly known as "DeACSM"
-Copyright (c) 2021-2025 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 
 This software is based on a Python reimplementation of the C++ library 
 "libgourou" by Grégory Soutadé which is under the LGPLv3 or later 
@@ -38,34 +37,36 @@ See the "LICENSE" file for a full copy of the GNU GPL v3.
 
 </details>
 
+## Important news
 
-## Known bugs
+In 2026, ByteBooks (by Wipro Connected Services) has taken over operation of the ADE and ACS platforms from Adobe. As of June 23rd, 2026, new authorizations using Adobe Digital Editions, ByteBooks Digital Editions, or my Calibre plugin require the usage of a ByteBooks account instead of an Adobe account. If you do not yet have one, you can create one by going to [the ByteBooks webpage](https://dtsbytebooks.com/register). 
 
-- Updating from 0.0.16 to the beta version of 0.1.0 doesn't always work seamlessly, sometimes it's necessary to restart Calibre once or twice, or even to uninstall 0.0.16 before installing the beta version - this is the reason why 0.1.0 is still not released as a proper update yet, sadly.
+If you're migrating from an existing AdobeID, make sure to select the checkbox that says "I have an existing Adobe account to migrate" so that all your eBook licenses will be migrated to the new account. 
 
-- Versions 0.0.16 and below did sometimes return the wrong eBook (or none at all) when trying to return a book to the library through the "Loaned books" list, if you had multiple active loans from the same distributor / library. This will be fixed with the next release. 
+Also, according to the [ByteBooks Transition FAQ](https://dtsbytebooks.com/products/digital-edition/faq), all current versions of ADE and also all previous versions of my Calibre plugin (including the 0.1.0 beta) will stop working after June 2027. 
+
+I will be providing a new updated version of my Calibre plugin long before this cutoff date that will continue to be compatible with ByteBooks after June 2027 onward. This change will require you to wipe the old plugin, reinstall the new updated plugin once it is available, and re-login into your ByteBooks ID account.
+
 
 ## Setup
 
-Download the plugin's ZIP file from Releases and import it into Calibre. You must import the plugin as a ZIP file, do not import the extracted files. Once imported, open the Plugin settings by selecting 'Customize plugin'. The plugin should display "Not authorized for any ADE ID". You now have multiple options to authorize the plugin: 
+Download the plugin's ZIP file from Releases and import it into Calibre. You must import the plugin as a ZIP file, do not import the extracted files. Once imported, open the Plugin settings by selecting 'Customize plugin'. The plugin should display "Not authorized for any ID". You now have multiple options to authorize the plugin: 
 
-- You can click on "Link to ADE account" and enter your AdobeID credentials to link your Calibre installation to your AdobeID account. This uses up one of your available activations. 
+- You can click on "Link to Digital Editions account" and enter your ByteBooks ID credentials to link your Calibre installation to your ByteBooks account. This uses up one of your available activations. 
 - You can click on "Create anonymous authorization" to create an anonymous authorization. Make sure to create backups of that authorization. 
-- If you have ADE installed and activated on your machine, you can click "Import activation from ADE" to clone the existing activation from your ADE installation. 
-- If you have used this plugin before, you can click on "Import existing activation backup" to import a previously created activation backup (ZIP) file to restore an activation. This functionality can also be used to clone one activation to multiple computers. 
+- If you have ADE or BDE installed and activated on your machine, you can click "Import activation from Digital Editions" to clone the existing activation from your installation. 
+- If you have used this plugin before, you can click on "Import existing activation backup" to import a previously created activation backup (ZIP) file to restore an activation. This functionality can also be used to clone one activation to multiple computers. Note that this will only work with backups that have been created with ByteBooks-compatible plugin versions - with the change to ByteBooks a full new authorization with the ByteBooks servers will be required for full compatibility.
 
-During authorization, the plugin may ask you for the ADE version to emulate. Usually you can leave this setting as it is (ADE 2.0.1).
+After you've activated the plugin, make a backup of the activation using the "Export account activation data". Then click "Export account encryption key" and import the resulting file into the DeDRM plugin for DRM removal, if necessary. If you don't have the DeDRM plugin set up properly you will not be able to read the downloaded books in Calibre due to the DRM.
 
-After you've activated the plugin, make a backup of the activation using the "Export account activation data". Then click "Export account encryption key" and import the resulting file into the DeDRM plugin for DRM removal. If you're using noDRM's fork of the DeDRM plugin, this step will happen automatically. If you don't have the DeDRM plugin set up (or you're not using noDRM's fork and didn't import the key file) you will not be able to read the downloaded books in Calibre due to the DRM.
-
-Once that's done, download an ACSM file from Adobe's test library and see if you can import it into Calibre: https://www.adobe.com/de/solutions/ebook/digital-editions/sample-ebook-library.html 
+Once that's done, download an ACSM file from [ByteBooks' test library](https://dtsbytebooks.com/products/digital-edition/sample-library) and see if you can import it into Calibre successfully.
 
 IMPORTANT: 
 
-- Since I created this plugin back in 2021, there have been absolutely no reports of Adobe taking any action against users of this plugin, like banning or deleting accounts. Still, this is software not approved by Adobe and I am not responsible if Adobe does decide to ban people using this plugin in the future. 
-- If losing your main AdobeID account would cause issues for you (because you have other Adobe products or something linked to it or you have DRMed books linked to your main account), I would suggest creating a new dummy AdobeID to use for Calibre, combined with the DeDRM plugin, so just in case Adobe decides to ban you in the future you can just make a new account.
+- Since I created this plugin back in 2021, there have been absolutely no reports of Adobe taking any action against users of this plugin, like banning or deleting accounts. Still, this is software not approved by Adobe or ByteBooks, and I am not responsible if Adobe or ByteBooks do decide to ban people using this plugin in the future. 
+- If losing your main ByteBooks account would cause issues for you (because you have DRMed books linked to your account), I would suggest creating a new dummy account to use for Calibre, combined with the DeDRM plugin, so just in case Adobe or ByteBooks decides to ban you in the future you can just make a new account.
 - If you use an anonymous authorization, make sure you make backups of the activation data. 
-- If you use an anonymous authorization, you have the ability to copy that authorization into an AdobeID account at a later time (by clicking "Connect anonymous auth to ADE account"). This is useful if you have books linked to your authorization that you want to read elsewhere. Same restrictions as with ADE apply - you can only do this ONCE per AdobeID, and only if the AdobeID hasn't been in use elsewhere yet.
+- If you use an anonymous authorization, you have the ability to copy that authorization into a new ByteBooks account at a later time (by clicking "Connect anonymous auth to ByteBooks account"). This is useful if you have books linked to your authorization that you want to read elsewhere. Same restrictions as with BDE apply - you can only do this ONCE per ByteBooks ID, and only if the ID hasn't been in use elsewhere yet. Also, this has not been fully tested yet since the migration from Adobe to ByteBooks, so please do not rely on this feature being available.
 
 ## Returning books
 
@@ -74,31 +75,32 @@ Just open the plugin settings, click "Show loaned books" (the option is only vis
 
 This makes the book available for someone else again, but it does not automatically get deleted from your Calibre library - you are responsible for doing that after returning a book.
 
-Note: You can only return books that you downloaded with this plugin. You cannot return books downloaded with ADE or other tools.
+Note: You can only return books that you downloaded with this plugin. You cannot return books downloaded with Digital Editions or other tools.
 
 ## Authorizing eReaders
 
-As of v0.0.16, the plugin can also authorize an eReader connected to the Computer through USB. For now, this only works with devices that export their `.adobe-digital-editions` folder through USB. In order to authorize such an eReader, just open the plugin settings and click "Authorize eReader over USB" (only available if the plugin is authorized with an AdobeID). Then select the eReader in the folder selection dialog. This process does not work with eReaders relying on a specific USB driver for the ADE connection such as the Sony PRS-T2 (and probably some other older Sony devices). 
+The plugin can also authorize an eReader connected to the Computer through USB. For now, this only works with devices that export their `.adobe-digital-editions` folder through USB. In order to authorize such an eReader, just open the plugin settings and click "Authorize eReader over USB" (only available if the plugin is authorized with a ByteBooks ID). Then select the eReader in the folder selection dialog. This process does not work with eReaders relying on a specific USB driver for the connection such as the Sony PRS-T2 (and probably some other older Sony devices). 
 
 Right now, this process is fairly experimental, and I've only tested this with a Pocketbook reader so far.
 
-Note that this process will use up one of your six mobile/tethered eReader authorizations on your AdobeID. While it is possible to clone a computer activation by exporting it on one computer and importing it on another, this is not possible with eReader authorizations. 
+Note that this process will use up one of your authorizations on your ByteBooks ID. While it is possible to clone a computer activation by exporting it on one computer and importing it on another, this is not possible with eReader authorizations. 
 
 ## Standalone version
 
 In the folder "calibre-plugin" in this repo (or inside the Calibre plugin ZIP file) there's some scripts that can also be used standalone without Calibre. If you want to use these, you need to extract the whole ZIP file. 
 
-- `register_ADE_account.py` can be used to authorize a computer with an ADE account. This creates the three files `activation.xml`, `device.xml` and `devicesalt`. These files are in the same format as the ones for the Calibre computer authorization (inside the `plugins/DeACSM/account/` folder). A ZIP activation export from Calibre will also contain these three files.
-- `fulfill.py` can be used - with valid ADE account files in the same folder - to turn an URLLink.acsm file into an eBook. 
-- `get_key_from_Adobe.py` can be used to contact the Adobe server and download the DER key file for a given AdobeID to import into a DeDRM plugin. Just input your credentials and this script will output the DER file that can be used with DeDRM to decrypt books for this AdobeID. This works independantly from the account activation files or from this plugin, so it's a good way to get your AdobeID decryption key, especially if you're on Linux and it's too difficult to export the keys from ADE running inside Wine. This process does not use up one of your six device activations.
+- `register_ByteBooks_account.py` can be used to authorize a computer with a ByteBooks account. This creates the three files `activation.xml`, `device.xml` and `devicesalt`. These files are in the same format as the ones for the Calibre computer authorization (inside the `plugins/ACSMInput/account` folder). A ZIP activation export from Calibre will also contain these three files.
+- `fulfill.py` can be used - with valid ByteBooks account files in the same folder - to turn an URLLink.acsm file into an eBook. 
+- `get_key_from_ByteBooks.py` can be used to contact the ByteBooks server and download the DER key file for a given AdobeID / ByteBooks ID to import into a DeDRM plugin. Just input your credentials and this script will output the DER file that can be used with DeDRM to decrypt books for this ID. This works independantly from the account activation files or from this plugin, so it's a good way to get your decryption key, especially if you're on Linux and it's too difficult to export the keys from ADE or BDE running inside Wine. This process does not use up one of your available device activations.
 
-Though, generally it's recommended to use the Calibre plugin instead of these standalone scripts. Except for maybe the `get_key_from_Adobe.py` script if you want to remove DRM from existing eBooks without having to extract the key from ADE.
+Though, generally it's recommended to use the Calibre plugin instead of these standalone scripts. Except for maybe the `get_key_from_ByteBooks.py` script if you want to remove DRM from existing eBooks without having to extract the key from Digital Editions.
 
 ## Building from source
 
-If you want to run this plugin from source code (because you want to modify something or run a newer version from the master branch), it is not enough to simply ZIP up the "calibre-plugin" folder. You need to checkout the repository, then execute the "bundle_calibre_plugin.sh" script (which works on Linux and macOS; on macOS install the Windows cross-compiler first with `brew install mingw-w64`). 
+If you want to run this plugin from source code (because you want to modify something or run a newer version from the master branch), it is not enough to simply ZIP up the "calibre-plugin" folder. You need to checkout the repository, then execute the "bundle_calibre_plugin.sh" script (which works on Linux and macOS). This will create the "calibre-plugin.zip" file which you can import into Calibre as a plugin.
 
-This will create the "calibre-plugin.zip" file which you can import into Calibre as a plugin.
+If you want to build a version identical to the released version that includes the Windows executables only necessary for WINE activation imports on Linux, you need to have the Windows cross compiler installed - by running `apt install gcc-mingw-w64-i686 gcc-mingw-w64-x86-64` on Linux or `brew install mingw-w64` on MacOS). In most cases, this will not be necessary, though.
+
 
 ## To-Do list for the future (in no particular order)
 

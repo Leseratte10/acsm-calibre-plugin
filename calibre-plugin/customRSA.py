@@ -66,7 +66,7 @@ class CustomRSA:
     @staticmethod
     def normal_encrypt(key, message):
 
-        if message < 0 or message > key.n: 
+        if message < 0 or message >= key.n: 
             raise ValueError("Invalid message")
 
         encrypted = pow(message, key.d, key.n)

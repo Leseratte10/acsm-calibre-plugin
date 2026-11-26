@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 '''
-Copyright (c) 2021-2023 Leseratte10
+Copyright (c) 2021-2026 Leseratte10
 This file is part of the ACSM Input Plugin by Leseratte10
 ACSM Input Plugin for Calibre / acsm-calibre-plugin
 
@@ -25,8 +25,6 @@ except ImportError:
         exit()
     else:
         raise
-
-#@@CALIBRE_COMPAT_CODE@@
 
 def GetSystemDirectory():
     from ctypes import windll, c_wchar_p, c_uint, create_unicode_buffer
@@ -74,14 +72,18 @@ def GetUserNameWINAPI():
     # Yes, it's actually implemented like that. Encode in UTF16 but only take the lowest byte of each character.
     return buffer.value.encode('utf-16-le')[::2]
 
-def GetUserNameREG():
+def GetUserNameREG(use_bytebooks = True):
     try:
         import winreg
     except ImportError:
         import _winreg as winreg
 
-    try: 
+    if use_bytebooks:
+        DEVICE_KEY_PATH = r'Software\ByteBooks\Adept\Device'
+    else: 
         DEVICE_KEY_PATH = r'Software\Adobe\Adept\Device'
+
+    try: 
         regkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, DEVICE_KEY_PATH)
         # Yes, it's actually implemented like that. Encode in UTF16 but only take the lowest byte of each character.
         userREG = winreg.QueryValueEx(regkey, 'username')[0].encode('utf-16-le')[::2]
@@ -114,7 +116,7 @@ def CryptUnprotectData(indata, entropy):
         return None
     return string_at(outdata.pbData, outdata.cbData)
 
-def GetMasterKey(): 
+def GetMasterKey(use_bytebooks = True): 
 
     import os
 
@@ -123,9 +125,9 @@ def GetMasterKey():
 
     verbose_logging = False
     try: 
-        import calibre_plugins.deacsm.prefs as prefs
-        deacsmprefs = prefs.ACSMInput_Prefs()
-        verbose_logging = deacsmprefs["detailed_logging"]
+        from . import prefs
+        acsmprefs = prefs.ACSMInput_Prefs()
+        verbose_logging = acsmprefs["detailed_logging"]
     except:
         pass
 
@@ -138,8 +140,12 @@ def GetMasterKey():
     
     # Get CPU vendor:
 
-    import cpuid
-    import struct
+    try: 
+        from . import cpuid
+    except ImportError:
+        import cpuid
+
+    import struct, binascii
     cpu = cpuid.CPUID()
     _, b, c, d = cpu(0)
     vendor = struct.pack("III", b, d, c)
@@ -151,12 +157,12 @@ def GetMasterKey():
     signature = struct.pack('>I', signature)[1:]
 
     if verbose_logging:
-        print("Signature: " + str(signature.hex()))
+        print("Signature: " + binascii.hexlify(signature).decode("ascii"))
 
     # Search for the username in the registry:
     user = None
 
-    user_from_registry = GetUserNameREG()
+    user_from_registry = GetUserNameREG(use_bytebooks)
     current_user_name = GetUserNameWINAPI()
 
     if (user_from_registry is not None):
@@ -181,13 +187,19 @@ def GetMasterKey():
     except ImportError:
         import _winreg as winreg
 
-    try: 
+
+    if use_bytebooks:
+        DEVICE_KEY_PATH = r'Software\ByteBooks\Adept\Device'
+    else: 
         DEVICE_KEY_PATH = r'Software\Adobe\Adept\Device'
+    
+    try: 
         regkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, DEVICE_KEY_PATH)
         device = winreg.QueryValueEx(regkey, 'key')[0]
     except: 
         print("Can't find encrypted device key.")
         return None
+    
 
     if verbose_logging:
         print("Encrypted key: " + str(device))
@@ -214,4 +226,8 @@ def GetMasterKey():
 
 
 if __name__ == "__main__":
-    GetMasterKey()
+    print("ByteBooks: ")
+    GetMasterKey(True)
+    print("Adobe: ")
+    GetMasterKey(False)
+

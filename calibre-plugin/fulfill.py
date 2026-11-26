@@ -10,27 +10,49 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-# pyright: reportUndefinedVariable=false
 
-import sys, os, time, shutil
+import sys, os, re, time, shutil
 
 import zipfile
 from lxml import etree
 
-from libadobe import sendHTTPRequest_DL2FILE
-from libadobeFulfill import buildRights, fulfill
-from libpdf import patch_drm_into_pdf
+from acsm_input.libadobe import sendHTTPRequest_DL2FILE, safe_xml_parser, DOWNLOAD_FILE_ERROR
+from acsm_input.libadobeFulfill import buildRights, fulfill
+from acsm_input.libpdf import patch_drm_into_pdf
 
-FILE_DEVICEKEY = "devicesalt"
-FILE_DEVICEXML = "device.xml"
-FILE_ACTIVATIONXML = "activation.xml"
 
 #######################################################################
 
 
+# Names Windows reserves for devices, also with an extension like "CON.epub"
+WINDOWS_RESERVED_NAMES = ["CON", "PRN", "AUX", "NUL"] + ["COM%d" % i for i in range(1, 10)] + ["LPT%d" % i for i in range(1, 10)]
+
+
+def safe_file_name(title):
+    # type: (str|None) -> str
+    # Turns a book title into the name of a file in the current folder that works on
+    # Windows, macOS and Linux. Path separators, ":" (drive letters and NTFS streams) and
+    # the other characters Windows doesn't allow are replaced, reserved device names get a
+    # prefix, and long titles are shortened so that the name still fits into 255 bytes
+    # with the extension and the "tmp_" prefix.
+
+    name = re.sub(r'[\x00-\x1f<>:"/\\|?*]', "_", title or "")
+
+    # Windows drops dots and spaces at the end, and a dot at the start hides the file
+    name = name.strip(" .")
+
+    # At most 200 bytes of UTF-8, without cutting a character in half
+    name = name.encode("utf-8")[:200].decode("utf-8", "ignore").rstrip(" .")
+
+    if name.split(".")[0].strip().upper() in WINDOWS_RESERVED_NAMES:
+        name = "_" + name
+
+    return name or "Book"
+
+
 def download(replyData):
     # replyData: str
-    adobe_fulfill_response = etree.fromstring(replyData)
+    adobe_fulfill_response = etree.fromstring(replyData, parser=safe_xml_parser())
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     adDC = lambda tag: '{%s}%s' % ('http://purl.org/dc/elements/1.1/', tag)
@@ -39,7 +61,7 @@ def download(replyData):
 
 
     download_url = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("src"))).text
-    resource_id = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("resource"))).text
+    #resource_id = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("resource"))).text
     license_token_node = adobe_fulfill_response.find("./%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken")))
 
     rights_xml_str = buildRights(license_token_node)
@@ -55,6 +77,9 @@ def download(replyData):
         book_name = metadata_node.find("./%s" % (adDC("title"))).text
     except: 
         book_name = "Book"
+
+    # The title becomes the file name
+    book_name = safe_file_name(book_name)
     
 
     # Download eBook: 
@@ -64,9 +89,13 @@ def download(replyData):
     filename_tmp = book_name + ".tmp"
 
     dl_start_time = int(time.time() * 1000)
-    ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp)
+    ret = sendHTTPRequest_DL2FILE(download_url, filename_tmp, False)
     dl_end_time = int(time.time() * 1000)
     print("Download took %d milliseconds" % (dl_end_time - dl_start_time))
+
+    if (ret == DOWNLOAD_FILE_ERROR):
+        print("Couldn't save the downloaded book")
+        return False
 
     if (ret != 200):
         print("Download failed with error %d" % (ret))
@@ -85,7 +114,12 @@ def download(replyData):
         filetype = ".pdf"
 
     filename = book_name + filetype
-    shutil.move(filename_tmp, filename)
+    try: 
+        shutil.move(filename_tmp, filename)
+    except: 
+        shutil.move(filename_tmp, "Book" + filetype)
+        filename = "Book" + filetype
+
 
     if filetype == ".epub":
         # Store EPUB rights / encryption stuff
@@ -99,7 +133,7 @@ def download(replyData):
     elif filetype == ".pdf":
         print("Successfully downloaded PDF, patching encryption ...")
 
-        adobe_fulfill_response = etree.fromstring(rights_xml_str)
+        adobe_fulfill_response = etree.fromstring(rights_xml_str, parser=safe_xml_parser())
         NSMAP = { "adept" : "http://ns.adobe.com/adept" }
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
         resource = adobe_fulfill_response.find("./%s/%s" % (adNS("licenseToken"), adNS("resource"))).text
