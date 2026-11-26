@@ -8,7 +8,7 @@ https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
 from lxml import etree
-import base64
+import base64, traceback
 from xml.sax.saxutils import escape as xml_escape
 
 from .libadobe import addNonce, sign_node, get_cert_from_pkcs12, send_adept, RequestError, xml_to_text
@@ -541,6 +541,10 @@ def fulfill(acsm_file, do_notify = False):
     notify_success = False
     if do_notify:
         print("Notifying server ...")
+        # We notify the server right after fulfillment of the book was done. 
+        # It may not be downloaded yet, but after fulfillment, the ACSM is already "used"
+        # and linked to the current account, so there's no point in delaying the notification
+        # until after the download is successful. 
         success, response = performFulfillmentNotification(adobe_fulfill_response, use_bytebooks)
         if not success: 
             print("Some errors occurred during notify: ")
@@ -752,160 +756,170 @@ def tryReturnBook(bookData):
 
 
 def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user = None, device = None):
+    # type: (etree._Element, bool, str, str) -> tuple
+    # Sends the notifications that a fulfillment or loan return reply asks for. Returns
+    # (True, "") if all critical notifications worked, otherwise (False, the errors).
+    # The <notify> elements come from the distributor's server. A broken one is an error
+    # of that notification (if it's critical), never an exception: the fulfillment or the
+    # loan return itself has already worked when this gets called.
 
     verbose_logging = False
-    try: 
+    try:
         from . import prefs
         acsmprefs = prefs.ACSMInput_Prefs()
         verbose_logging = acsmprefs["detailed_logging"]
     except:
         pass
 
-    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-    # Debug output for PassHash testing: 
+    # Debug output for PassHash testing:
     # print(etree.tostring(fulfillmentResultToken, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8"))
 
-    try: 
-        notifiers = fulfillmentResultToken.findall("./%s/%s" % (adNS("fulfillmentResult"), adNS("notify")))
-    except:
-        pass
+    notifiers = fulfillmentResultToken.findall("./%s/%s" % (adNS("fulfillmentResult"), adNS("notify")))
 
-    if len(notifiers) == 0: 
-        try: 
-            notifiers = fulfillmentResultToken.findall("./%s" % (adNS("notify")))
-        except: 
-            pass
+    if len(notifiers) == 0:
+        notifiers = fulfillmentResultToken.findall("./%s" % (adNS("notify")))
 
-    if len(notifiers) == 0: 
-        try: 
-            notifiers = fulfillmentResultToken.findall("./%s/%s" % (adNS("envelope"), adNS("notify")))
-        except: 
-            pass
+    if len(notifiers) == 0:
+        notifiers = fulfillmentResultToken.findall("./%s/%s" % (adNS("envelope"), adNS("notify")))
 
     if len(notifiers) == 0:
         print("<notify> tag not found. Guess nobody wants to be notified.")
         #print(etree.tostring(fulfillmentResultToken, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8"))
         return True, ""
-    
+
+    license_token = "./%s/%s/%s/" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"))
+
+    if (user is None):
+        # "Normal" Adobe fulfillment
+        user = fulfillmentResultToken.findtext(license_token + adNS("user"))
+        if not user:
+            # B&N Adobe PassHash fulfillment. Doesn't use notifications usually ...
+            #user = body.find("./%s" % (adNS("user"))).text
+            print("Skipping notify due to passHash?")
+            print("If this is not a passHash book pls open a bug report.")
+            return True, ""
+
+    if (device is None):
+        # "Normal" Adobe fulfillment
+        device = fulfillmentResultToken.findtext(license_token + adNS("device"))
+        if not device:
+            print("Missing deviceID for loan metadata ... why?")
+            print("Reading from activation.xml instead.")
+            # Lets try to read this from the activation ...
+            try:
+                activationxml = etree.parse(get_activation_xml_path())
+                device = activationxml.findtext("./%s/%s" % (adNS("activationToken"), adNS("device")))
+            except Exception as err:
+                print("Can't read the device ID from activation.xml: %s" % (err))
+                device = None
 
     errmsg = ""
     crit_errors = 0
 
     for element in notifiers:
 
-        url = element.find("./%s" % (adNS("notifyURL"))).text
-        body = element.find("./%s" % (adNS("body")))
+        critical = element.get("critical", "yes") != "no"
 
-        critical = True
+        try:
+            error = sendFulfillmentNotification(element, critical, use_bytebooks, user, device, verbose_logging)
+        except Exception:
+            # Anything else in the notification that isn't what we expect,
+            # like values that don't fit into the request
+            error = "Unexpected error during the notification:\n" + traceback.format_exc()
 
-        if element.get("critical", "yes") == "no":
-            critical = False
-            print("Notifying optional server %s" % (url))
-        else: 
-            print("Notifying server %s" % (url))
-        
-
-        if (user is None):
-            try: 
-                # "Normal" Adobe fulfillment
-                user = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("user"))).text
-            except AttributeError:
-                # B&N Adobe PassHash fulfillment. Doesn't use notifications usually ...
-                #user = body.find("./%s" % (adNS("user"))).text
-                print("Skipping notify due to passHash?")
-                print("If this is not a passHash book pls open a bug report.")
-                continue
-        
-        if (device is None):
-            try: 
-                # "Normal" Adobe fulfillment
-                device = fulfillmentResultToken.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("device"))).text
-            except:
-                print("Missing deviceID for loan metadata ... why?")
-                print("Reading from device.xml instead.")
-                # Lets try to read this from the activation ...
-                activationxml = etree.parse(get_activation_xml_path())
-                device = activationxml.find("./%s/%s" % (adNS("activationToken"), adNS("device"))).text
-
-
-
-        
-        full_text = "<adept:notification xmlns:adept=\"http://ns.adobe.com/adept\">"
-        full_text += "<adept:user>%s</adept:user>" % user
-        full_text += "<adept:device>%s</adept:device>" % device       
-        full_text += etree.tostring(body, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-        full_text += addNonce()
-        full_text += "</adept:notification>"
-
-            
-        NSMAP = { "adept" : "http://ns.adobe.com/adept" }
-        etree.register_namespace("adept", NSMAP["adept"])
-
-        full_text_xml = etree.fromstring(full_text, parser=safe_xml_parser())
-
-        signature = sign_node(full_text_xml, use_bytebooks)
-        if (signature is None):
-            print("SIGN ERROR!")
+        if error is None:
             continue
 
-        etree.SubElement(full_text_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
+        if critical:
+            print("Error during critical notification: %s" % (error))
+            crit_errors += 1
+        else:
+            print("There was an error during an optional fulfillment notification: %s" % (error))
+            print("Continuing execution ...")
+        errmsg += "ERROR\n" + error + "\n\n"
 
-        doc_send = "<?xml version=\"1.0\"?>\n" + etree.tostring(full_text_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
-        
-        # Debug: Print notify request
-        if (verbose_logging):
-            print("Notify payload XML:")
-            print(doc_send)
-
-        url = add_vendor_flag(url, use_bytebooks)
-
-        try: 
-            reply = send_adept(url, doc_send, False, allow_no_content=True)
-        except RequestError as err:
-            exception_text = str(err)
-
-            if not critical:
-                print("There was an error during an optional fulfillment notification:")
-                errmsg += "ERROR\n\n" + exception_text + "\n"
-                print(exception_text)
-                print("Continuing execution ...")
-                continue
-            else:
-                print("Error during critical notification:")
-                errmsg += "ERROR\n\n" + exception_text + "\n"
-                crit_errors += 1
-                continue
-
-        # An empty reply (HTTP 204) also means success
-        msg = xml_to_text(reply) if reply is not None else ""
-
-        if verbose_logging:
-            print("MSG:")
-            print(msg)
-
-        if reply is None:
-            print("Fulfillment notification successful (204).")
-        elif reply.tag == adNS("error"):
-            print("Fulfillment notification error: %s" % (msg))
-            errmsg += "ERROR\n" + url + "\n" + msg + "\n\n"
-            if critical:
-                crit_errors += 1
-
-        elif reply.tag == adNS("success"):
-            print("Fulfillment notification successful.")
-        else: 
-            print("Weird Fulfillment Notification response: %s" % (msg))
-            errmsg += "ERROR\n" + url + "\n" + msg + "\n\n"
-            if critical:
-                crit_errors += 1
-        
-
-    if crit_errors == 0: 
+    if crit_errors == 0:
         return True, ""
 
     return False, errmsg
+
+
+def sendFulfillmentNotification(element, critical, use_bytebooks, user, device, verbose_logging):
+    # type: (etree._Element, bool, bool, str, str, bool) -> str
+    # Sends the notification for one <notify> element, see performFulfillmentNotification().
+    # Returns None if it worked, otherwise what went wrong.
+
+    NSMAP = { "adept" : "http://ns.adobe.com/adept" }
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    url = (element.findtext("./%s" % (adNS("notifyURL"))) or "").strip()
+    body = element.find("./%s" % (adNS("body")))
+
+    if not url:
+        return "The notification has no notifyURL"
+
+    if critical:
+        print("Notifying server %s" % (url))
+    else:
+        print("Notifying optional server %s" % (url))
+
+    if body is None:
+        return "The notification for %s has no body" % (url)
+
+    if not device:
+        return "No device ID for the notification to %s" % (url)
+
+    full_text = "<adept:notification xmlns:adept=\"http://ns.adobe.com/adept\">"
+    full_text += "<adept:user>%s</adept:user>" % user
+    full_text += "<adept:device>%s</adept:device>" % device
+    full_text += etree.tostring(body, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+    full_text += addNonce()
+    full_text += "</adept:notification>"
+
+    etree.register_namespace("adept", NSMAP["adept"])
+
+    full_text_xml = etree.fromstring(full_text, parser=safe_xml_parser())
+
+    signature = sign_node(full_text_xml, use_bytebooks)
+    if (signature is None):
+        print("SIGN ERROR!")
+        return None
+
+    etree.SubElement(full_text_xml, etree.QName(NSMAP["adept"], "signature")).text = signature
+
+    doc_send = "<?xml version=\"1.0\"?>\n" + etree.tostring(full_text_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+
+    # Debug: Print notify request
+    if (verbose_logging):
+        print("Notify payload XML:")
+        print(doc_send)
+
+    url = add_vendor_flag(url, use_bytebooks)
+
+    try:
+        reply = send_adept(url, doc_send, False, allow_no_content=True)
+    except RequestError as err:
+        return str(err)
+
+    # An empty reply (HTTP 204) also means success
+    msg = xml_to_text(reply) if reply is not None else ""
+
+    if verbose_logging:
+        print("MSG:")
+        print(msg)
+
+    if reply is None:
+        print("Fulfillment notification successful (204).")
+        return None
+    elif reply.tag == adNS("success"):
+        print("Fulfillment notification successful.")
+        return None
+    elif reply.tag == adNS("error"):
+        return "Fulfillment notification error from %s:\n%s" % (url, msg)
+    else:
+        return "Weird Fulfillment Notification response from %s:\n%s" % (url, msg)
 
 
 def quote_query_value(value):

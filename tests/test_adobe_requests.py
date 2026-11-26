@@ -432,6 +432,43 @@ class TestAdobeRequests(unittest.TestCase):
                          "Error for a reply without notifications")
 
 
+    def test_fulfillmentNotificationInvalid(self):
+        '''Check if broken notifications from the server are errors, not exceptions'''
+
+        good = '<notify><notifyURL>%s</notifyURL><body><fulfillment>FULFILLMENT-1</fulfillment></body></notify>' % (NOTIFY_URL)
+        no_url = '<notify%s><body><fulfillment>FULFILLMENT-1</fulfillment></body></notify>'
+        no_body = '<notify%s><notifyURL>' + NOTIFY_URL + '?id=2</notifyURL></notify>'
+        # A device ID that doesn't fit into the request
+        bad_device = fulfillment_reply(good).replace(DEVICE, "&lt;broken")
+
+        # (fulfillment reply, success, number of requests)
+        cases = [
+            (fulfillment_reply(no_url % ("") + good), False, 1),
+            (fulfillment_reply(no_url % (' critical="no"') + good), True, 1),
+            (fulfillment_reply(good + no_body % ("")), False, 1),
+            (fulfillment_reply(good + no_body % (' critical="no"')), True, 1),
+            (bad_device, False, 0),
+        ]
+
+        for reply, expected, request_count in cases:
+            server = FakeServer(SUCCESS, SUCCESS)
+            with patch.object(libadobeFulfill, "send_adept", server.send):
+                success, message = quietly(libadobeFulfill.performFulfillmentNotification, etree.fromstring(reply), True)
+            self.assertEqual(success, expected, "Wrong result for %s: %s" % (reply, message))
+            self.assertEqual(len(server.requests), request_count, "Wrong number of notifications for %s" % (reply))
+            if not expected:
+                self.assertTrue(message, "No error message for %s" % (reply))
+
+        # No device ID in the reply or in activation.xml
+        self.write_file("activation.xml", activation_xml().replace("<adept:device>%s</adept:device>" % (DEVICE), ""))
+        reply = etree.fromstring(fulfillment_reply(good).replace("<device>%s</device>" % (DEVICE), ""))
+        server = FakeServer(SUCCESS)
+        with patch.object(libadobeFulfill, "send_adept", server.send):
+            success, message = quietly(libadobeFulfill.performFulfillmentNotification, reply, True)
+        self.assertFalse(success, "No error without a device ID")
+        self.assertEqual(server.requests, [], "Sent a notification without a device ID")
+
+
     def test_loanReturn(self):
         '''Check if tryReturnBook signs with the key of the account that borrowed the book'''
 
