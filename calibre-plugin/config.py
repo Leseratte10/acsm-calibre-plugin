@@ -1018,7 +1018,7 @@ class ConfigWidget(QWidget):
             createDeviceKeyFile()
             createDeviceFile(False, vers_idx)
             try:
-                success, resp = busy.run("Creating the user ...", createUser, vers_idx, authCert_bb, authCert_adobe)
+                success, resp = busy.run("Querying ActivationServiceInfo ...", createUser, vers_idx, authCert_bb, authCert_adobe)
             except Exception:
                 self.show_activation_server_error("while creating the user")
                 return False
