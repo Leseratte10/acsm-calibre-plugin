@@ -59,7 +59,17 @@ def pbkdf1(hash_algorithm, password, salt, iterations, key_length=None):
 
     if iterations < 1:
         raise ValueError('iterations must be greater than 0 - is %d' % iterations)
+
+    # hashlib.new() looks the algorithm up by name on every call, which takes about
+    # a third of the time for the short inputs here, so get the constructor once,
+    # when the function is guaranteed to be available. 
+    # If it's not, we do the old way.
+    if hash_algorithm in hashlib.algorithms_guaranteed:
+        new = getattr(hashlib, hash_algorithm)
+    else:
+        new = lambda data: hashlib.new(hash_algorithm, data)
+
     output = password + salt
     for _ in range(iterations):
-        output = hashlib.new(hash_algorithm, output).digest()
+        output = new(output).digest()
     return output[:key_length]
