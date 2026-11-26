@@ -20,7 +20,8 @@ def pkcs12_kdf(hash_algorithm, password, salt, iterations, key_length, id_):
         "sha1", "sha224", "sha256", "sha384" or "sha512"
 
     :param password:
-        A UTF-8 byte string, converted to a NUL-terminated BMPString as the RFC requires
+        A UTF-8 byte string, converted to a NUL-terminated BMPString as the RFC
+        requires. None stands for no password at all.
 
     :param id_:
         1 to derive a key, 2 for an IV, 3 for a MAC key
@@ -29,7 +30,14 @@ def pkcs12_kdf(hash_algorithm, password, salt, iterations, key_length, id_):
         A byte string of key_length bytes
     """
 
-    password = password.decode('utf-8').encode('utf-16be') + b'\x00\x00'
+    if password is None:
+        password = b''
+    else:
+        try:
+            text = password.decode('utf-8')
+        except UnicodeDecodeError:
+            text = password.decode('latin-1')
+        password = text.encode('utf-16be') + b'\x00\x00'
     v = hashlib.new(hash_algorithm).block_size
 
     def fill(data):

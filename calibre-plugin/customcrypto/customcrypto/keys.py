@@ -18,7 +18,7 @@ __all__ = [
 
 
 class _Der(object):
-    """An encoded ASN.1 structure, kept as the exact bytes found in the PKCS#12 file"""
+    """An encoded ASN.1 structure from the PKCS#12 file"""
 
     def __init__(self, der):
         self._der = der
@@ -107,7 +107,8 @@ def parse_pkcs12(data, password=None):
         A byte string of a DER-encoded PKCS#12 file
 
     :param password:
-        A byte string of the password to any encrypted data
+        A byte string of the password to any encrypted data. An empty password
+        can be None or b''.
 
     :raises:
         ValueError - when any of the parameters are of the wrong value, or the
@@ -138,9 +139,27 @@ def parse_pkcs12(data, password=None):
         raise ValueError('Only password-protected PKCS12 files are currently supported')
     auth_safe_content = auth_safe[1].explicit(0).octets()
 
-    if len(pfx) > 2:
-        _verify_mac(pfx[2], auth_safe_content, password)
+    # PKCS#12 key derivation has two kinds of empty password: an empty BMPString,
+    # which is just its NUL terminator, and no password at all (None for pkcs12_kdf).
+    # OpenSSL tries both, and so does this.
+    passwords = [password] if password else [b'', None]
 
+    if len(pfx) > 2:
+        # The MAC tells which password the file was made with
+        return _parse_auth_safe(auth_safe_content, _verify_mac(pfx[2], auth_safe_content, passwords))
+
+    # Without a MAC, only decrypting does. OpenSSL then takes no password, but its
+    # command line tool an empty one, so try both, the empty one first.
+    errors = []
+    for candidate in passwords:
+        try:
+            return _parse_auth_safe(auth_safe_content, candidate)
+        except ValueError as e:
+            errors.append(e)
+    raise errors[0]
+
+
+def _parse_auth_safe(auth_safe_content, password):
     certs = []
     private_keys = []
 
@@ -161,7 +180,8 @@ def parse_pkcs12(data, password=None):
     return (private_keys[0] if private_keys else None, certs[0] if certs else None, certs[1:])
 
 
-def _verify_mac(mac_data, content, password):
+def _verify_mac(mac_data, content, passwords):
+    """Returns the one of the passwords that the MAC was made with"""
     mac_data = mac_data.seq(2)
     digest_info = mac_data[0].seq(2)
     digest_oid = _algorithm(digest_info[0])[0]
@@ -171,11 +191,13 @@ def _verify_mac(mac_data, content, password):
     salt = mac_data[1].octets()
     iterations = mac_data[2].int() if len(mac_data) > 2 else 1
 
-    # ID 3 is for generating an HMAC key
-    mac_key = pkcs12_kdf(digest, password, salt, iterations, hashlib.new(digest).digest_size, 3)
-    computed_hmac = hmac.new(mac_key, content, getattr(hashlib, digest)).digest()
-    if not hmac.compare_digest(computed_hmac, digest_info[1].octets()):
-        raise ValueError('Password provided is invalid')
+    for password in passwords:
+        # ID 3 is for generating an HMAC key
+        mac_key = pkcs12_kdf(digest, password, salt, iterations, hashlib.new(digest).digest_size, 3)
+        computed_hmac = hmac.new(mac_key, content, getattr(hashlib, digest)).digest()
+        if hmac.compare_digest(computed_hmac, digest_info[1].octets()):
+            return password
+    raise ValueError('Password provided is invalid')
 
 
 def _parse_safe_contents(safe_contents, certs, private_keys, password):
@@ -207,7 +229,9 @@ def _private_key_info(private_key_info):
     # The version, algorithm and key fields. Checking for them rejects what a wrong
     # password decrypts to when the file has no MAC and the padding happens to fit.
     private_key_info.seq(3)
-    return PrivateKeyInfo(private_key_info.raw)
+    # A file in BER, as Windows and some Java versions write them, can have the key in
+    # BER too. As DER, it is what dump() promises, and what PyCryptodome can read.
+    return PrivateKeyInfo(_asn1.der(private_key_info))
 
 
 def _decrypt(algorithm, data, password):
@@ -216,6 +240,10 @@ def _decrypt(algorithm, data, password):
 
     :param algorithm:
         The AlgorithmIdentifier element describing the encryption
+
+    :param password:
+        A byte string, or None for no password at all. Only the PKCS#12 key
+        derivation tells that apart from an empty password.
 
     :return:
         A byte string of the plaintext
@@ -237,7 +265,7 @@ def _decrypt(algorithm, data, password):
             iv = None if cipher == 'rc4' else pkcs12_kdf('sha1', password, salt, iterations, 8, 2)
         else:
             hash_algorithm, cipher = _PBES1[oid]
-            derived = pbkdf1(hash_algorithm, password, salt, iterations, 16)
+            derived = pbkdf1(hash_algorithm, password or b'', salt, iterations, 16)
             key, iv = derived[:8], derived[8:]
         return decrypt(cipher, key, data, iv)
 
@@ -263,15 +291,28 @@ def _decrypt(algorithm, data, password):
     cipher, scheme_key_length = _PBES2_SCHEMES[scheme_oid]
     if cipher == 'rc2':
         rc2_params = scheme_params.seq(1)  # the optional version, then the IV
-        version = rc2_params[0].int() if len(rc2_params) > 1 else None
-        if version not in _RC2_VERSIONS:
-            raise ValueError('Unsupported RC2 parameter version %s' % version)
-        scheme_key_length = _RC2_VERSIONS[version]
+        if len(rc2_params) > 1:
+            version = rc2_params[0].int()
+            if version not in _RC2_VERSIONS:
+                raise ValueError('Unsupported RC2 parameter version %s' % version)
+            scheme_key_length = _RC2_VERSIONS[version]
+        elif key_length is None:
+            raise ValueError('RC2 without a parameter version needs a PBKDF2 key length')
+        else:
+            # Without a version, take the key length from the PBKDF2 parameters, like oscrypto
+            scheme_key_length = key_length
         iv = rc2_params[-1].octets()
     else:
         iv = scheme_params.octets()
 
-    key = hashlib.pbkdf2_hmac(prf, password, salt, iterations, key_length or scheme_key_length)
+    # The PBKDF2 key length is optional, but has to be the cipher's. Deriving a key of
+    # another length would decrypt with another cipher, AES-256 for AES-128, or for RC2,
+    # with other effective key bits than its version says. OpenSSL rejects that too.
+    if key_length is not None and key_length != scheme_key_length:
+        raise ValueError('PBES2 key length %d does not match the %d byte key of the encryption scheme'
+                         % (key_length, scheme_key_length))
+
+    key = hashlib.pbkdf2_hmac(prf, password or b'', salt, iterations, scheme_key_length)
     return decrypt(cipher, key, data, iv)
 
 

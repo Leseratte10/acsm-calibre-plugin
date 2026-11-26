@@ -55,6 +55,11 @@ done
 # Passwords
 p12 openssl-unicode.p12 -inkey test.key -in test.crt -passout 'pass:pässwörd€'
 p12 openssl-unicode-legacy.p12 -legacy -inkey test.key -in test.crt -passout 'pass:pässwörd€'
+# "pässwörd" in Latin-1, which isn't valid UTF-8, so OpenSSL converts it byte by byte
+printf 'p\344ssw\366rd' > pass.tmp
+p12 openssl-latin1.p12 -inkey test.key -in test.crt -passout file:pass.tmp
+p12 openssl-latin1-legacy.p12 -legacy -inkey test.key -in test.crt -passout file:pass.tmp
+rm pass.tmp
 p12 openssl-blank.p12 -inkey test.key -in test.crt -passout pass:
 
 # Chains and certificate selection

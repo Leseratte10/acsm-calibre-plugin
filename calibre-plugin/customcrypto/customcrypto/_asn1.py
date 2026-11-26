@@ -1,5 +1,6 @@
 """
-A minimal BER/DER reader, just enough to walk a PKCS#12 file.
+A minimal BER/DER reader, just enough to walk a PKCS#12 file and encode it
+as DER file.
 
 This replaces the parts of asn1crypto that oscrypto uses for PKCS#12 parsing.
 Instead of declarative schemas, callers navigate the tree by position and the
@@ -145,3 +146,61 @@ def _parse(data, pos, depth):
         raise ValueError('Insufficient data - ASN.1 value is truncated')
 
     return Element(first >> 6, constructed, tag, data[pos:pos + length], data[start:pos + length], depth), pos + length
+
+
+# Universal types that DER always encodes as one primitive value, and that BER can
+# split into chunks: BIT STRING, OCTET STRING, and the character and time strings
+_STRINGS = frozenset([3, 4, 12, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 30])
+
+
+def der(element):
+    """
+    Re-encodes a parsed element as DER: with definite lengths in their shortest
+    form, and with strings that BER split into chunks as a single value. What is
+    inside OCTET STRINGs and the order of SET elements are left as they are.
+    """
+
+    if element.cls == 0 and element.tag in _STRINGS:
+        constructed, contents = False, _string_value(element)
+    elif element.constructed:
+        constructed, contents = True, b''.join(der(child) for child in element.children())
+    else:
+        constructed, contents = False, element.contents
+    return _identifier(element.cls, constructed, element.tag) + _length(len(contents)) + contents
+
+
+def _string_value(element):
+    """The value of a string, with the chunks of a BER-encoded one joined"""
+    if not element.constructed:
+        return element.contents
+    chunks = []
+    for chunk in element.children():
+        if chunk.cls != 0 or chunk.tag != element.tag:
+            raise ValueError('Expected chunks of ASN.1 tag %d, found class %d tag %d' % (element.tag, chunk.cls, chunk.tag))
+        chunks.append(_string_value(chunk))
+    if element.tag != 3:
+        return b''.join(chunks)
+    # Each BIT STRING chunk starts with its number of unused bits, which only the last one can have
+    return (chunks[-1][:1] if chunks else b'\x00') + b''.join(chunk[1:] for chunk in chunks)
+
+
+def _identifier(cls, constructed, tag):
+    first = (cls << 6) | (0x20 if constructed else 0)
+    if tag < 0x1F:
+        return bytes(bytearray([first | tag]))
+    encoded = bytearray([tag & 0x7F])
+    tag >>= 7
+    while tag:
+        encoded.insert(0, 0x80 | (tag & 0x7F))
+        tag >>= 7
+    return bytes(bytearray([first | 0x1F]) + encoded)
+
+
+def _length(length):
+    if length < 0x80:
+        return bytes(bytearray([length]))
+    encoded = bytearray()
+    while length:
+        encoded.insert(0, length & 0xFF)
+        length >>= 8
+    return bytes(bytearray([0x80 | len(encoded)]) + encoded)

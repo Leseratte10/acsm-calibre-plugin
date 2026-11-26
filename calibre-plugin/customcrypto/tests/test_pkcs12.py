@@ -1,14 +1,23 @@
 import base64
+import hashlib
+import hmac
 import os
 import unittest
 
+try:
+    from Cryptodome.Cipher import AES, ARC2, DES, DES3
+except ImportError:
+    from Crypto.Cipher import AES, ARC2, DES, DES3
+
 from customcrypto import keys
+from customcrypto._kdf import pkcs12_kdf
 
 from ._unittest_compat import TestCase
 
 FIXTURES = os.path.join(os.path.dirname(__file__), 'fixtures')
 PASSWORD = b'password123'
 UNICODE_PASSWORD = u'p\xe4ssw\xf6rd\u20ac'.encode('utf-8')
+LATIN1_PASSWORD = u'p\xe4ssw\xf6rd'.encode('latin-1')
 
 
 def read(name):
@@ -47,6 +56,9 @@ FILES = [
     ('openssl-blank.p12', None, RSA),
     ('openssl-unicode.p12', UNICODE_PASSWORD, RSA),
     ('openssl-unicode-legacy.p12', UNICODE_PASSWORD, RSA),
+    # Not valid UTF-8, so OpenSSL converts it byte by byte
+    ('openssl-latin1.p12', LATIN1_PASSWORD, RSA),
+    ('openssl-latin1-legacy.p12', LATIN1_PASSWORD, RSA),
     # PBES2 ciphers
     ('openssl-aes128-aes192.p12', PASSWORD, RSA),
     ('openssl-des3-des.p12', PASSWORD, RSA),
@@ -165,6 +177,58 @@ def cert_bag(cert_der):
     return bag(3, seq(oid('1.2.840.113549.1.9.22.1'), explicit0(tlv(0x04, cert_der))))
 
 
+# For files with encrypted keys and MACs
+
+SALT = b'saltsalt'
+ITERATIONS = 2048
+IV8 = b'01234567'
+IV16 = b'0123456789abcdef'
+
+
+def integer(value):
+    """A DER INTEGER, for a value that isn't negative"""
+    encoded = bytearray([value & 0xFF])
+    value >>= 8
+    while value or encoded[0] & 0x80:
+        encoded.insert(0, value & 0xFF)
+        value >>= 8
+    return tlv(0x02, bytes(encoded))
+
+
+def cbc_encrypt(cipher, key, iv, plaintext, **options):
+    """Encrypts in CBC mode with PKCS#7 padding, as PKCS#12 files do"""
+    pad = cipher.block_size - len(plaintext) % cipher.block_size
+    return cipher.new(key, cipher.MODE_CBC, iv, **options).encrypt(plaintext + bytes(bytearray([pad] * pad)))
+
+
+def pbkdf2(password, length):
+    return hashlib.pbkdf2_hmac('sha1', password, SALT, ITERATIONS, length)
+
+
+def pbes2(scheme, ciphertext, key_length=None):
+    """An EncryptedPrivateKeyInfo for PBES2 with PBKDF2-HMAC-SHA1, the optional key
+    length and the AlgorithmIdentifier of the encryption scheme"""
+    kdf_params = [tlv(0x04, SALT), integer(ITERATIONS)] + ([integer(key_length)] if key_length else [])
+    algorithm = seq(oid('1.2.840.113549.1.5.13'), seq(seq(oid('1.2.840.113549.1.5.12'), seq(*kdf_params)), scheme))
+    return seq(algorithm, tlv(0x04, ciphertext))
+
+
+def aes128_key_bag(plaintext, password=PASSWORD, key_length=None):
+    """A shrouded key bag with PBES2 and AES-128"""
+    scheme = seq(oid('2.16.840.1.101.3.4.1.2'), tlv(0x04, IV16))
+    return bag(2, pbes2(scheme, cbc_encrypt(AES, pbkdf2(password, 16), IV16, plaintext), key_length))
+
+
+def pfx_with_mac(bags, kdf_password):
+    """An unencrypted PKCS#12 file with a SHA-1 MAC, made with the password as pkcs12_kdf()
+    takes it: b'' for an empty one, None for no password at all"""
+    auth_safe = seq(data_content_info(seq(*bags)))
+    mac_key = pkcs12_kdf('sha1', kdf_password, SALT, ITERATIONS, 20, 3)
+    digest = hmac.new(mac_key, auth_safe, hashlib.sha1).digest()
+    mac_data = seq(seq(seq(oid('1.3.14.3.2.26'), tlv(0x05, b'')), tlv(0x04, digest)), tlv(0x04, SALT), integer(ITERATIONS))
+    return seq(tlv(0x02, b'\x03'), data_content_info(auth_safe), mac_data)
+
+
 class ParsePkcs12Tests(TestCase):
 
     def assertResult(self, result, expected):
@@ -236,6 +300,74 @@ class ParsePkcs12Tests(TestCase):
         self.assertIn(b'\xa0\x80\x04\x10', inner)
         ber = to_ber(seq(version, seq(content_type, explicit0(tlv(0x04, inner)))))
         self.assertResult(keys.parse_pkcs12(ber, PASSWORD), RSA)
+
+    def test_ber_key(self):
+        # A file in BER can have the key in BER too, in a key bag or encrypted. It comes
+        # back as DER, which is what PyCryptodome can read.
+        ber_key = to_ber(read('test-pkcs8-der.key'))
+        self.assertIn(b'\x24\x80\x04\x10', ber_key)
+        for name, key_bag in (('key bag', bag(1, ber_key)), ('shrouded key bag', aes128_key_bag(ber_key))):
+            with self.subTest(bag=name):
+                self.assertResult(keys.parse_pkcs12(pfx([[key_bag, cert_bag(read('test-der.crt'))]]), PASSWORD), RSA)
+
+    def test_pbes2_key_length(self):
+        key = read('test-pkcs8-der.key')
+        rc2_40 = seq(oid('1.2.840.113549.3.2'), seq(integer(160), tlv(0x04, IV8)))  # version 160 is 40 bits
+        rc2_ciphertext = cbc_encrypt(ARC2, pbkdf2(PASSWORD, 5), IV8, key, effective_keylen=40)
+        for name, key_bag, valid in (
+            ('AES-128, 16 bytes', aes128_key_bag(key, key_length=16), True),
+            ('RC2-40, 5 bytes', bag(2, pbes2(rc2_40, rc2_ciphertext, 5)), True),
+            # These would be AES-256, and RC2 with 128 effective key bits instead of 40.
+            # OpenSSL rejects them too.
+            ('AES-128, 32 bytes', aes128_key_bag(key, key_length=32), False),
+            ('RC2-40, 16 bytes', bag(2, pbes2(rc2_40, rc2_ciphertext, 16)), False),
+        ):
+            data = pfx([[key_bag, cert_bag(read('test-der.crt'))]])
+            with self.subTest(key_length=name):
+                if valid:
+                    self.assertResult(keys.parse_pkcs12(data, PASSWORD), RSA)
+                else:
+                    with self.assertRaisesRegex(ValueError, 'does not match'):
+                        keys.parse_pkcs12(data, PASSWORD)
+
+    def test_rc2_without_version(self):
+        # The version is optional. Without it, the key length comes from the PBKDF2
+        # parameters, as in oscrypto. OpenSSL rejects these files.
+        rc2 = seq(oid('1.2.840.113549.3.2'), seq(tlv(0x04, IV8)))
+        ciphertext = cbc_encrypt(ARC2, pbkdf2(PASSWORD, 16), IV8, read('test-pkcs8-der.key'), effective_keylen=128)
+        data = pfx([[bag(2, pbes2(rc2, ciphertext, 16)), cert_bag(read('test-der.crt'))]])
+        self.assertResult(keys.parse_pkcs12(data, PASSWORD), RSA)
+
+        data = pfx([[bag(2, pbes2(rc2, ciphertext)), cert_bag(read('test-der.crt'))]])
+        with self.assertRaisesRegex(ValueError, 'needs a PBKDF2 key length'):
+            keys.parse_pkcs12(data, PASSWORD)
+
+    def test_null_password(self):
+        # The PKCS#12 key derivation tells an empty password, the NUL terminator of an
+        # empty BMPString, from no password at all. OpenSSL reads files made with either,
+        # and an empty password has to work for both.
+        key, cert = read('test-pkcs8-der.key'), cert_bag(read('test-der.crt'))
+        for form, kdf_password in (('empty', b''), ('none', None)):
+            # PKCS#12 PBE, the only encryption that depends on the form
+            des3_key = pkcs12_kdf('sha1', kdf_password, SALT, ITERATIONS, 24, 1)
+            des3_iv = pkcs12_kdf('sha1', kdf_password, SALT, ITERATIONS, 8, 2)
+            pkcs12_pbe = seq(seq(oid('1.2.840.113549.1.12.1.3'), seq(tlv(0x04, SALT), integer(ITERATIONS))),
+                             tlv(0x04, cbc_encrypt(DES3, des3_key, des3_iv, key)))
+            # PKCS#5 PBES1 with SHA-1 and DES, and PBES2, take both forms as an empty password
+            derived = SALT
+            for _ in range(ITERATIONS):
+                derived = hashlib.sha1(derived).digest()
+            pbes1 = seq(seq(oid('1.2.840.113549.1.5.10'), seq(tlv(0x04, SALT), integer(ITERATIONS))),
+                        tlv(0x04, cbc_encrypt(DES, derived[:8], derived[8:16], key)))
+            for name, data in (
+                ('PKCS#12 PBE', pfx_with_mac([bag(2, pkcs12_pbe), cert], kdf_password)),
+                ('PKCS#12 PBE without MAC', pfx([[bag(2, pkcs12_pbe), cert]])),
+                ('PBES1', pfx_with_mac([bag(2, pbes1), cert], kdf_password)),
+                ('PBES2', pfx_with_mac([aes128_key_bag(key, b''), cert], kdf_password)),
+            ):
+                for password in (b'', None):
+                    with self.subTest(form=form, file=name, password=password):
+                        self.assertResult(keys.parse_pkcs12(data, password), RSA)
 
     def test_bag_types(self):
         data = pfx([
