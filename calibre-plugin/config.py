@@ -336,7 +336,7 @@ class ConfigWidget(QWidget):
         # So just open up a folder picker dialog and have the user select the eReader's root folder. 
 
         try: 
-            from .libadobe import VAR_VER_HOBBES_VERSIONS, safe_xml_parser, get_device_path
+            from .libadobe import VAR_VER_HOBBES_VERSIONS, safe_xml_parser, get_device_path, RequestError
             from .libadobeAccount import activateDevice, exportProxyAuth
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -525,7 +525,10 @@ class ConfigWidget(QWidget):
 
 
             # Activate the target device with that version.
-            ret, data = run_in_background(self, "Authorizing the eReader ...", activateDevice, v_idx, dev_xml_tree)
+            try:
+                ret, data = run_in_background(self, "Authorizing the eReader ...", activateDevice, v_idx, dev_xml_tree)
+            except RequestError:
+                return self.show_activation_server_error("while authorizing the eReader")
 
             if not ret: 
                 return error_dialog(None, "Authorize eReader", "Couldn't activate device, server returned error.", show=True, det_msg=data, show_copy_button=False)
@@ -974,7 +977,7 @@ class ConfigWidget(QWidget):
         # already shown an error dialog and returns False.
 
         import tempfile, shutil
-        from .libadobe import createDeviceKeyFile, update_account_path, write_files_atomically
+        from .libadobe import createDeviceKeyFile, update_account_path, write_files_atomically, RequestError
         from .libadobeAccount import createDeviceFile, createUser, signIn, activateDevice
         from .libadobeFulfill import getDecryptedCert, is_bytebooks_account
 
@@ -999,19 +1002,27 @@ class ConfigWidget(QWidget):
             createDeviceFile(False, vers_idx)
             try:
                 success, resp = busy.run("Querying ActivationServiceInfo ...", createUser, vers_idx, authCert_bb, authCert_adobe)
-            except Exception:
+            except RequestError:
                 self.show_activation_server_error("while creating the user")
                 return False
             if (success is False):
                 error_dialog(None, title, "Couldn't create user", det_msg=str(resp), show=True, show_copy_button=True)
                 return False
 
-            success, resp = busy.run("Signing in ...", signIn, acc_type, mail, passwd)
+            try:
+                success, resp = busy.run("Signing in ...", signIn, acc_type, mail, passwd)
+            except RequestError:
+                self.show_activation_server_error("while signing in")
+                return False
             if (success is False):
                 error_dialog(None, title, "Login unsuccessful", det_msg=str(resp), show=True, show_copy_button=True)
                 return False
 
-            success, resp = busy.run("Activating the device ...", activateDevice, vers_idx, None)
+            try:
+                success, resp = busy.run("Activating the device ...", activateDevice, vers_idx, None)
+            except RequestError:
+                self.show_activation_server_error("while activating the device")
+                return False
             if (success is False):
                 error_dialog(None, title, "Couldn't activate device", det_msg=str(resp), show=True, show_copy_button=True)
                 return False
@@ -1071,6 +1082,7 @@ class ConfigWidget(QWidget):
     
     def convert_anon_to_account(self): 
         try: 
+            from .libadobe import RequestError
             from .libadobeAccount import convertAnonAuthToAccount
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -1106,7 +1118,10 @@ class ConfigWidget(QWidget):
         if (not ok or passwd is None or len(passwd) == 0):
             return
 
-        success, message = run_in_background(self, "Linking the anonymous authorization ...", convertAnonAuthToAccount, mail, passwd)
+        try:
+            success, message = run_in_background(self, "Linking the anonymous authorization ...", convertAnonAuthToAccount, mail, passwd)
+        except RequestError:
+            return self.show_activation_server_error("while linking the anonymous authorization")
 
         if (success):
             # update display
@@ -1125,6 +1140,7 @@ class ConfigWidget(QWidget):
     def link_account(self):
 
         try: 
+            from .libadobe import RequestError
             from .libadobeAccount import getAuthMethodsAndCert
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
@@ -1134,7 +1150,7 @@ class ConfigWidget(QWidget):
         # Get account types
         try:
             types, authCert_bb, authCert_adobe = run_in_background(self, "Loading the list of ID providers ...", getAuthMethodsAndCert)
-        except Exception:
+        except RequestError:
             return self.show_activation_server_error("while loading the list of ID providers")
                 
         msg = "Please select your ID provider (usually ByteBooks ID)"

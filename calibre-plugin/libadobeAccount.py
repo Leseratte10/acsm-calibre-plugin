@@ -24,7 +24,7 @@ except ImportError:
     from Crypto.Cipher import PKCS1_v1_5
 
 
-from .libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
+from .libadobe import addNonce, sign_node, send_adept, xml_to_text
 from .libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key, get_device_name
 from .libadobe import get_device_key, get_device_path, get_activation_xml_path
 from .libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
@@ -126,9 +126,7 @@ def getAuthMethodsAndCert():
     # Otherwise the plugin will not look 100% like ADE to Adobe.
 
     authenticationURL = VAR_ACS_SERVER_HTTPS + "/AuthenticationServiceInfo?ofByteBooks=1"
-    response2 = sendHTTPRequest(authenticationURL, True)
-
-    adobe_response_xml2 = etree.fromstring(response2, parser=safe_xml_parser())
+    adobe_response_xml2 = send_adept(authenticationURL, None, True)
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
@@ -174,20 +172,12 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
 
     activationURL = VAR_ACS_SERVER_HTTPS + "/ActivationServiceInfo?ofByteBooks=1"
 
-    response = sendHTTPRequest(activationURL, True)
-
-    #print("======================================================")
-    #print("Sending request to " + activationURL)
-    #print("got response:")
-    #print(response)
-    #print("======================================================")
-
-    adobe_response_xml = etree.fromstring(response, parser=safe_xml_parser())
+    adobe_response_xml = send_adept(activationURL, None, True)
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
     # findtext() returns None for a missing element, so an incomplete reply ends up in the
-    # check below instead of raising (which the GUI reports as a connection problem).
+    # check below instead of raising an exception.
     authURL = adobe_response_xml.findtext("./%s" % (adNS("authURL")))
     userInfoURL = adobe_response_xml.findtext("./%s" % (adNS("userInfoURL")))
     certificate_bb, certificate_adobe = find_vendor_values(adobe_response_xml, "certificate")
@@ -212,9 +202,7 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
     if authCertBB is None: 
         # This is not supposed to happen, but if it does, then just query it again from Adobe.
         authenticationURL = authURL + "/AuthenticationServiceInfo?ofByteBooks=1"
-        response2 = sendHTTPRequest(authenticationURL, True)
-
-        adobe_response_xml2 = etree.fromstring(response2, parser=safe_xml_parser())
+        adobe_response_xml2 = send_adept(authenticationURL, None, True)
         authCertBB, authCertAdobe = find_vendor_values(adobe_response_xml2, "certificate")
 
 
@@ -378,13 +366,9 @@ def convertAnonAuthToAccount(username, passwd):
 
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/AddSignInDirect"
     signInURL = add_vendor_flag(signInURL, use_bytebooks)
-    linkResponse = sendRequestDocu(linkRequest, signInURL, True)
-    if linkResponse is None: 
-        return False, "Error while calling AddSignInDirect"
+    credentialsXML = send_adept(signInURL, linkRequest, True)
 
     try: 
-        credentialsXML = etree.fromstring(linkResponse, parser=safe_xml_parser())
-        
         if (credentialsXML.tag == adNS("error")): 
             err = credentialsXML.get("data")
             err_parts = err.split(' ')
@@ -472,21 +456,9 @@ def signIn(account_type, username, passwd):
 
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/SignInDirect?ofByteBooks=1"
 
-    credentials = sendRequestDocu(signInRequest, signInURL, True)
-    
-    
-    #print("======================================================")
-    #print("Sending request to " + signInURL)
-    #print("Payload:")
-    #print(signInRequest)
-    #print("got response:")
-    #print(credentials)
-    #print("======================================================")
-
+    credentialsXML = send_adept(signInURL, signInRequest, True)
 
     try: 
-        credentialsXML = etree.fromstring(credentials, parser=safe_xml_parser())
-        
         if (credentialsXML.tag == adNS("error")): 
             err = credentialsXML.get("data")
 
@@ -936,10 +908,10 @@ def activateDevice(useVersionIndex = 0, proxyData = None):
 
     data = "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
 
-    ret = sendRequestDocu(data, VAR_ACS_SERVER_HTTPS + "/Activate?ofByteBooks=1", True)
+    credentialsXML = send_adept(VAR_ACS_SERVER_HTTPS + "/Activate?ofByteBooks=1", data, True)
+    ret = xml_to_text(credentialsXML)
 
     try: 
-        credentialsXML = etree.fromstring(ret, parser=safe_xml_parser())
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
 

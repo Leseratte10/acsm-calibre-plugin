@@ -37,6 +37,22 @@ from acsm_input import libadobeAccount      # type: ignore
 from acsm_input.customRSA import CustomRSA # type: ignore
 
 
+class FakeResponse(object):
+    '''What urlopen() returns for a server that replies with body'''
+
+    def __init__(self, body):
+        self.body = body
+
+    def getcode(self):
+        return 200
+
+    def read(self):
+        return self.body
+
+    def close(self):
+        pass
+
+
 class TestAdobe(unittest.TestCase): 
 
     def setUp(self):
@@ -482,7 +498,7 @@ class TestAdobe(unittest.TestCase):
                         patch.object(libadobeAccount, "buildActivateReq", return_value=(True, mock_request)), \
                         patch.object(libadobeAccount, "buildActivateReqProxy", return_value=(True, mock_request)), \
                         patch.object(libadobeAccount, "sign_node", return_value="c2lnbmF0dXJl"), \
-                        patch.object(libadobeAccount, "sendRequestDocu", return_value=reply):
+                        patch.object(libadobe.ulib, "urlopen", return_value=FakeResponse(reply)):
 
                     result, _ = libadobeAccount.activateDevice(0, None)
                     self.assertTrue(result, "activateDevice failed (%s)" % name)
@@ -511,7 +527,7 @@ class TestAdobe(unittest.TestCase):
         '''Check if a signed activation request with non-ASCII text reaches the server as it was signed'''
 
         # activateDevice used to decode the request's UTF-8 serialization as Latin-1, and
-        # sendRequestDocu then encoded that as UTF-8 again. Non-ASCII text arrived encoded
+        # sending it encoded that as UTF-8 again. Non-ASCII text arrived encoded
         # twice, so it no longer matched the signature.
 
         adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
@@ -525,14 +541,14 @@ class TestAdobe(unittest.TestCase):
             return "c2lnbmF0dXJl"
 
         sent_data = []
-        def mock_send(URL, document, contenttype, returnRC = False, validate_tls = True):
+        def mock_urlopen(request, **kwargs):
             # What would go over the network
-            sent_data.append(document)
-            return b'<error xmlns="http://ns.adobe.com/adept" data="E_TEST_ONLY"/>'
+            sent_data.append(request.data)
+            return FakeResponse(b'<error xmlns="http://ns.adobe.com/adept" data="E_TEST_ONLY"/>')
 
         with patch.object(libadobeAccount, "buildActivateReq", return_value=(True, mock_request)), \
                 patch.object(libadobeAccount, "sign_node", side_effect=mock_sign_node), \
-                patch.object(libadobe, "sendPOSTHTTPRequest", side_effect=mock_send):
+                patch.object(libadobe.ulib, "urlopen", side_effect=mock_urlopen):
             result, msg = libadobeAccount.activateDevice(0, None)
 
         self.assertFalse(result, "activateDevice should return the mocked server error")

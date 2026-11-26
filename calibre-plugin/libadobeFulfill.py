@@ -11,7 +11,7 @@ from lxml import etree
 import base64
 from xml.sax.saxutils import escape as xml_escape
 
-from .libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
+from .libadobe import addNonce, sign_node, get_cert_from_pkcs12, send_adept, RequestError, xml_to_text
 from .libadobe import get_devkey_path, get_device_path, get_activation_xml_path, get_device_key
 from .libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_HOBBES_VERSIONS
 from .libadobe import safe_xml_parser, write_file_atomically
@@ -244,17 +244,18 @@ def doOperatorAuth(operatorURL, allow_bytebooks = True):
     # same as for /Fulfill: lots of distributors have invalid or expired certs.
     
     try: 
-        replyData = sendRequestDocu(auth_req, add_vendor_flag(authURL + "/Auth", use_bytebooks), False).decode("utf-8")
-    except: 
-        return "ERROR: /Auth returned invalid data or no data at all.", None
-
-    if not "<success" in replyData:
-        if "<error" in replyData and 'E_ADEPT_INVALID_CERTIFICATE' in replyData and use_bytebooks and has_adobe:
-            print("Operator auth using ByteBooks certificate failed, this might be an older ACS server. Retrying with Adobe certificates.")
-            return doOperatorAuth(operatorURL, allow_bytebooks=False)
-        return "ERROR: Operator responded with %s\n" % replyData, None
+        reply = send_adept(add_vendor_flag(authURL + "/Auth", use_bytebooks), auth_req, False)
+    except RequestError as err:
+        return "ERROR: /Auth failed: %s" % (err), None
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+
+    if reply.tag != adNS("success"):
+        if reply.tag == adNS("error") and "E_ADEPT_INVALID_CERTIFICATE" in reply.get("data", "") and use_bytebooks and has_adobe:
+            print("Operator auth using ByteBooks certificate failed, this might be an older ACS server. Retrying with Adobe certificates.")
+            return doOperatorAuth(operatorURL, allow_bytebooks=False)
+        return "ERROR: Operator responded with %s\n" % (xml_to_text(reply)), None
+
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }    
     etree.register_namespace("adept", NSMAP["adept"])
 
@@ -269,16 +270,16 @@ def doOperatorAuth(operatorURL, allow_bytebooks = True):
 
 
     try:
-        resp = sendRequestDocu(init_license_service_request, add_vendor_flag(activationURL + "/InitLicenseService", use_bytebooks), True).decode("utf-8")
-    except: 
-        return "ERROR: /InitLicenseService returned invalid data or no data at all.", None
+        reply = send_adept(add_vendor_flag(activationURL + "/InitLicenseService", use_bytebooks), init_license_service_request, True)
+    except RequestError as err:
+        return "ERROR: /InitLicenseService failed: %s" % (err), None
 
-    if "<error" in resp:
-        return "Looks like that failed: %s" % resp, None
-    elif "<success" in resp:
+    if reply.tag == adNS("error"):
+        return "Looks like that failed: %s" % (xml_to_text(reply)), None
+    elif reply.tag == adNS("success"):
         return None, use_bytebooks
     else: 
-        return "Useless response: %s" % resp, None
+        return "Useless response: %s" % (xml_to_text(reply)), None
 
 
 
@@ -369,9 +370,9 @@ def buildRights(license_token_node):
 
 
 def signAndSendFulfillRequest(fulfill_request, use_bytebooks, fulfillURL):
-    # type: (str, bool, str) -> str
+    # type: (str, bool, str) -> etree._Element
     # Signs the fulfill request with the ByteBooks key (use_bytebooks) or the Adobe
-    # key, sends it and returns the reply. Returns None if signing failed.
+    # key, sends it and returns the reply. Returns None if signing or the request failed.
 
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     etree.register_namespace("adept", NSMAP["adept"])
@@ -394,10 +395,9 @@ def signAndSendFulfillRequest(fulfill_request, use_bytebooks, fulfillURL):
     # fulfillURL = fulfillURL.replace("https:", "http:")
 
     try: 
-        ret = sendRequestDocu(fulfill_req_signed, fulfillURL, False).decode("utf-8")
-        return ret
-    except: 
-        print("Fulfillment request failed ...")
+        return send_adept(fulfillURL, fulfill_req_signed, False)
+    except RequestError as err:
+        print("Fulfillment request failed: %s" % (err))
         return None
 
 
@@ -495,19 +495,19 @@ def fulfill(acsm_file, do_notify = False):
         can_retry_with_adobe = has_bytebooks and has_adobe
 
 
-    replyData = signAndSendFulfillRequest(fulfill_request, use_bytebooks, fulfillURL)
-    if (replyData is None):
+    reply = signAndSendFulfillRequest(fulfill_request, use_bytebooks, fulfillURL)
+    if (reply is None):
         return False, "Signing failed or response invalid."
 
-    if "<error" in replyData and "E_ADEPT_INVALID_CERTIFICATE" in replyData and can_retry_with_adobe:
+    if reply.tag == adNS("error") and "E_ADEPT_INVALID_CERTIFICATE" in reply.get("data", "") and can_retry_with_adobe:
         print("Operator rejected the request signed with the ByteBooks certificate, this might be an older ACS server. Retrying with Adobe certificates...")
         use_bytebooks = False
-        replyData = signAndSendFulfillRequest(fulfill_request, use_bytebooks, fulfillURL)
-        if (replyData is None):
+        reply = signAndSendFulfillRequest(fulfill_request, use_bytebooks, fulfillURL)
+        if (reply is None):
             return False, "Signing failed or response invalid."
 
-    if "<error" in replyData:
-        if "E_ADEPT_DISTRIBUTOR_AUTH" in replyData:
+    if reply.tag == adNS("error"):
+        if "E_ADEPT_DISTRIBUTOR_AUTH" in reply.get("data", ""):
             # This distributor *always* wants authentication, so force that again.
             # The auth tells us which certificate the operator accepted, so re-sign to match.
             ret, use_bytebooks = doOperatorAuth(fulfillURL)
@@ -515,23 +515,27 @@ def fulfill(acsm_file, do_notify = False):
             if (ret is not None):
                 return False, "doOperatorAuth error: %s" % ret
 
-            replyData = signAndSendFulfillRequest(fulfill_request, use_bytebooks, fulfillURL)
-            if (replyData is None):
+            reply = signAndSendFulfillRequest(fulfill_request, use_bytebooks, fulfillURL)
+            if (reply is None):
                 return False, "Signing failed or response invalid."
-            if "<error" in replyData:
-                return False, "Looks like there's been an error during Fulfillment even after auth: %s" % replyData
+            if reply.tag == adNS("error"):
+                return False, "Looks like there's been an error during Fulfillment even after auth: %s" % (xml_to_text(reply))
         else: 
-            return False, "Looks like there's been an error during Fulfillment: %s" % replyData
+            return False, "Looks like there's been an error during Fulfillment: %s" % (xml_to_text(reply))
 
+    replyData = xml_to_text(reply)
     if verbose_logging:
         print("fulfillmentResult:")
         print(replyData)
 
-    adobe_fulfill_response = etree.fromstring(replyData, parser=safe_xml_parser())
+    adobe_fulfill_response = reply
     NSMAP = { "adept" : "http://ns.adobe.com/adept" }
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-    licenseURL = adobe_fulfill_response.find("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("licenseURL"))).text
+    licenseURL = adobe_fulfill_response.findtext("./%s/%s/%s/%s" % (adNS("fulfillmentResult"), adNS("resourceItemInfo"), adNS("licenseToken"), adNS("licenseURL")))
+    if not licenseURL:
+        # A reply that isn't an ADEPT error, but no fulfillment either, like an HTML error page
+        return False, "Invalid fulfillment reply (no licenseURL): %s" % (replyData)
 
 
     notify_success = False
@@ -722,22 +726,22 @@ def tryReturnBook(bookData):
 
 
     try:
-        retval = sendRequestDocu(doc_send, return_server, False)
-        if isinstance(retval, bytes):
-            # Turn the response into a string, ignoring invalid characters.
-            retval = retval.decode("utf-8", "replace")
-    except: 
-        print("Error while returning!")
-        return False, "sendRequest failed."
+        reply = send_adept(return_server, doc_send, False)
+    except RequestError as err:
+        print("Error while returning: %s" % (err))
+        return False, "sendRequest failed: %s" % (err)
 
-    if "<error" in retval: 
+    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
+    retval = xml_to_text(reply)
+
+    if reply.tag == adNS("error"):
         print("Loan return failed: %s" % (retval))
         return False, retval
-    elif "<envelope" in retval: 
+    elif reply.tag == adNS("envelope"):
         print("Loan return successful")
         if verbose_logging:
             print(retval)
-        bl, txt = performFulfillmentNotification(etree.fromstring(retval, parser=safe_xml_parser()), use_bytebooks, user=user, device=device)
+        bl, txt = performFulfillmentNotification(reply, use_bytebooks, user=user, device=device)
         if not bl: 
             print("Error while notifying of book return. Book's probably still been returned properly.")
         return True, retval
@@ -858,10 +862,9 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
         url = add_vendor_flag(url, use_bytebooks)
 
         try: 
-            code, msg = sendRequestDocuRC(doc_send, url, False)
-        except:
-            import traceback
-            exception_text = traceback.format_exc()
+            reply = send_adept(url, doc_send, False, allow_no_content=True)
+        except RequestError as err:
+            exception_text = str(err)
 
             if not critical:
                 print("There was an error during an optional fulfillment notification:")
@@ -875,25 +878,23 @@ def performFulfillmentNotification(fulfillmentResultToken, use_bytebooks, user =
                 crit_errors += 1
                 continue
 
-        if isinstance(msg, bytes):
-            # The reply is only checked for "<error" and "<success" and shown in the log,
-            # so bytes that aren't valid UTF-8 don't change the result.
-            msg = msg.decode("utf-8", "replace")
+        # An empty reply (HTTP 204) also means success
+        msg = xml_to_text(reply) if reply is not None else ""
 
         if verbose_logging:
             print("MSG:")
             print(msg)
 
-        if "<error" in msg: 
+        if reply is None:
+            print("Fulfillment notification successful (204).")
+        elif reply.tag == adNS("error"):
             print("Fulfillment notification error: %s" % (msg))
             errmsg += "ERROR\n" + url + "\n" + msg + "\n\n"
             if critical:
                 crit_errors += 1
 
-        elif "<success" in msg: 
+        elif reply.tag == adNS("success"):
             print("Fulfillment notification successful.")
-        elif code == 204:
-            print("Fulfillment notification successful (204).")
         else: 
             print("Weird Fulfillment Notification response: %s" % (msg))
             errmsg += "ERROR\n" + url + "\n" + msg + "\n\n"
@@ -949,21 +950,12 @@ def fetchLicenseServiceCertificate(licenseURL, operatorURL, use_bytebooks = True
     licenseServiceInfoReq = add_vendor_flag(licenseServiceInfoReq, use_bytebooks)
 
     try: 
-        response = sendHTTPRequest(licenseServiceInfoReq, False).decode("utf-8")
-    except: 
-        return False, "HTTP download for the licenseServiceInfo failed ... why?"
+        responseXML = send_adept(licenseServiceInfoReq, None, False)
+    except RequestError as err:
+        return False, "HTTP download for the licenseServiceInfo failed: %s" % (err)
 
-    if "<error" in response: 
-        return False, "Looks like that failed: %s" % response
-    elif "<licenseServiceInfo" in response: 
-        pass
-    else: 
-        return False, "Looks like that failed: %s" % response
-
-
-    #print(response)
-
-    responseXML = etree.fromstring(response, parser=safe_xml_parser())
+    if responseXML.tag != adNS("licenseServiceInfo"):
+        return False, "Looks like that failed: %s" % (xml_to_text(responseXML))
 
     server_cert = responseXML.find("./%s" % (adNS("certificate"))).text
     server_lic_url = responseXML.find("./%s" % (adNS("licenseURL"))).text

@@ -495,8 +495,19 @@ def sendHTTPRequest_DL2FILE(URL, outputfile, validate_tls = True):
 
     return 200
 
-def sendHTTPRequest_getSimple(URL, validate_tls = True):
-    # type: (str, bool) -> str
+class RequestError(Exception):
+    # Raised by send_adept() if a request gets no usable reply. The message says why.
+    pass
+
+
+def send_adept(url, document, validate_tls, allow_no_content = False):
+    # type: (str, str, bool, bool) -> etree._Element
+    # Sends an ADEPT request: a POST with the XML document, or a GET if document is None.
+    # Returns the root element of the reply, which can be an ADEPT <error>. With
+    # allow_no_content, an empty reply with HTTP status 204 returns None instead.
+    # Raises RequestError for everything else: a URL that can't be used, no connection,
+    # a timeout, a certificate that isn't valid (with validate_tls), an HTTP error, or
+    # a reply that isn't XML.
 
     headers = {
         "Accept": "*/*",
@@ -504,100 +515,52 @@ def sendHTTPRequest_getSimple(URL, validate_tls = True):
         # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
     }
 
-    ctx = create_ssl_context(validate_tls)
-
-    # Callers handle the exceptions, including the ones for a timeout.
-    req = ulib.Request(url=URL, headers=headers)
-    handler = ulib.urlopen(req, context=ctx, timeout=VAR_HTTP_TIMEOUT)
-
-    content = handler.read()
-
-    return content
-
-def sendPOSTHTTPRequest(URL, document, contenttype, returnRC = False, validate_tls = True):
-    # type: (str, bytes, str, bool, bool) -> str
-
-    headers = {
-        "Accept": "*/*",
-        "User-Agent": "book2png",
-        # MacOS uses different User-Agent. Good thing we're emulating a Windows client.
-        "Content-Type": contenttype
-    }
-
-    ctx = create_ssl_context(validate_tls)
+    data = None
+    if document is not None:
+        headers["Content-Type"] = "application/vnd.adobe.adept+xml"
+        data = document.encode("utf-8")
 
     # Make sure URL has a protocol
     # Some vendors (see issue #22) apparently don't include "http://" in some of their URLs.
-    # Python returns an error when it encounters such a URL, so just add that prefix if it's not present. 
+    # Python returns an error when it encounters such a URL, so just add that prefix if it's not present.
 
-    if not "://" in URL:
-        print("Provider is using malformed URL %s, fixing." % (URL))
-        URL = "http://" + URL
+    if not "://" in url:
+        print("Provider is using malformed URL %s, fixing." % (url))
+        url = "http://" + url
 
-    req = ulib.Request(url=URL, headers=headers, data=document)
-    try: 
-        handler = ulib.urlopen(req, context=ctx, timeout=VAR_HTTP_TIMEOUT)
+    try:
+        req = ulib.Request(url=url, headers=headers, data=data)
+        handler = ulib.urlopen(req, context=create_ssl_context(validate_tls), timeout=VAR_HTTP_TIMEOUT)
+        try:
+            status = handler.getcode()
+            reply = handler.read()
+        finally:
+            handler.close()
 
-        ret_code = handler.getcode()
-        if (ret_code == 204 and returnRC):
-            return 204, ""
-        if (ret_code != 200):
-            print("Post request returned something other than 200 - returned %d" % (ret_code))
+    except uliberror.HTTPError as err:
+        raise RequestError("%s replied with HTTP error %d" % (url, err.code))
 
-        content = handler.read()
+    except HTTP_CONNECTION_ERRORS + (ValueError,) as err:
+        # No connection, a timeout or a dropped connection, a certificate error (a ValueError
+        # in Python 2), or a URL that can't be sent, like one with non-ASCII characters.
+        raise RequestError("Request to %s failed: %s" % (url, err))
 
-    except uliberror.HTTPError as err: 
-        # This happens with HTTP 500 and related errors.
-        print("Post request caused HTTPError %d" % (err.code))
-        if returnRC:
-            return err.code, "Post request caused HTTPException"
-        else:
-            return None
+    if status == 204 and allow_no_content:
+        return None
+    if status != 200:
+        print("Request to %s returned HTTP status %s" % (url, status))
 
-    except uliberror.URLError as err: 
-        # This happens if the hostname cannot be resolved, or (with validate_tls)
-        # if the server's certificate chain can't be verified.
-        print("Post request failed with URLError: %s" % (err.reason))
-        if returnRC:
-            return 900, "Post request failed with URLError"
-        else: 
-            return None
-
-    except ssl.CertificateError as err:
-        # Hostname mismatch with validate_tls. Python 2 and Python < 3.7 raise this
-        # directly instead of wrapping it in a URLError like Python 3.7+ does.
-        print("Post request failed, certificate does not match host: %s" % (err))
-        if returnRC:
-            return 900, "Post request failed with CertificateError"
-        else:
-            return None
-
-    except HTTP_CONNECTION_ERRORS as err:
-        # Timeout, or the connection broke while waiting for or reading the reply.
-        print("Post request failed with %s: %s" % (type(err).__name__, err))
-        if returnRC:
-            return 900, "Post request failed with " + type(err).__name__
-        else:
-            return None
-
-    if returnRC:
-        return ret_code, content
-
-    return content
+    try:
+        return etree.fromstring(reply, parser=safe_xml_parser())
+    except etree.XMLSyntaxError as err:
+        # That includes an empty reply
+        raise RequestError("Invalid reply from %s: %s" % (url, err))
 
 
-def sendHTTPRequest(URL, validate_tls = True):
-    # type: (str, bool) -> str
-    return sendHTTPRequest_getSimple(URL, validate_tls)
-
-
-def sendRequestDocu(document, URL, validate_tls = True):
-    # type: (str, str, bool) -> str
-    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", False, validate_tls)
-
-def sendRequestDocuRC(document, URL, validate_tls = True):
-    # type: (str, str, bool) -> str
-    return sendPOSTHTTPRequest(URL, document.encode("utf-8"), "application/vnd.adobe.adept+xml", True, validate_tls)
+def xml_to_text(element):
+    # type: (etree._Element) -> str
+    # The element as XML text, for messages and the log
+    return etree.tostring(element, encoding="unicode")
 
 
 

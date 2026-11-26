@@ -156,18 +156,14 @@ VENDOR_CASES = [
 
 
 class FakeServer(object):
-    '''Stands in for sendRequestDocu (send) or sendRequestDocuRC (send_rc). It records the
-    requests and answers each one with the next reply: a string, (HTTP status, string),
-    or an exception to raise.'''
+    '''Stands in for send_adept. It records the requests and answers each one with the next
+    reply: a string, (HTTP status, string), or an exception to raise.'''
 
     def __init__(self, *replies):
         self.replies = list(replies)
         self.requests = []      # (URL, request XML)
 
-    def send(self, document, url, validate_tls=True):
-        return self.send_rc(document, url, validate_tls)[1]
-
-    def send_rc(self, document, url, validate_tls=True):
+    def send(self, url, document, validate_tls, allow_no_content=False):
         if not isinstance(document, bytes):
             document = document.encode("utf-8")
         self.requests.append((url, etree.fromstring(document)))
@@ -176,7 +172,9 @@ class FakeServer(object):
         if isinstance(reply, Exception):
             raise reply
         status, body = reply if isinstance(reply, tuple) else (200, reply)
-        return status, body.encode("utf-8")
+        if status == 204 and allow_no_content:
+            return None
+        return etree.fromstring(body.encode("utf-8"))
 
 
 def quietly(function, *args):
@@ -297,7 +295,7 @@ class TestAdobeRequests(unittest.TestCase):
     def operator_auth(self, *replies):
         '''Runs doOperatorAuth with a server that gives these replies, returns its result and the server'''
         server = FakeServer(*replies)
-        with patch.object(libadobeFulfill, "sendRequestDocu", server.send):
+        with patch.object(libadobeFulfill, "send_adept", server.send):
             result = quietly(libadobeFulfill.doOperatorAuth, OPERATOR + "/Fulfill")
         return result, server
 
@@ -335,7 +333,7 @@ class TestAdobeRequests(unittest.TestCase):
         # (credentials in the activation, server replies, requests)
         cases = [
             ({}, [ERROR], [self.AUTH_BYTEBOOKS]),
-            ({}, [IOError("Connection refused")], [self.AUTH_BYTEBOOKS]),
+            ({}, [libadobe.RequestError("Connection refused")], [self.AUTH_BYTEBOOKS]),
             ({}, [SUCCESS, ERROR], [self.AUTH_BYTEBOOKS, self.INIT_BYTEBOOKS]),
             # No Adobe credentials to fall back to
             ({"adobe": False}, [INVALID_CERTIFICATE], [self.AUTH_BYTEBOOKS]),
@@ -375,7 +373,7 @@ class TestAdobeRequests(unittest.TestCase):
             self.write_activation(operators=[OPERATOR + "/Fulfill"], **credentials)
             server = FakeServer(*replies)
             license_downloads = []
-            with patch.object(libadobeFulfill, "sendRequestDocu", server.send), \
+            with patch.object(libadobeFulfill, "send_adept", server.send), \
                     patch.object(libadobeFulfill, "fetchLicenseServiceCertificate", lambda *args: license_downloads.append(args) or (True, "")):
                 success, reply = quietly(libadobeFulfill.fulfill, os.path.join(self.account_dir, "book.acsm"))
 
@@ -397,7 +395,7 @@ class TestAdobeRequests(unittest.TestCase):
                 (True, "ByteBooks", [NOTIFY_URL + "?ofByteBooks=1", NOTIFY_URL + "?id=2&ofByteBooks=1"]),
                 (False, "Adobe", [NOTIFY_URL, NOTIFY_URL + "?id=2"])]:
             server = FakeServer(SUCCESS, SUCCESS)
-            with patch.object(libadobeFulfill, "sendRequestDocuRC", server.send_rc):
+            with patch.object(libadobeFulfill, "send_adept", server.send):
                 result = quietly(libadobeFulfill.performFulfillmentNotification, reply, use_bytebooks)
 
             self.assertEqual(result, (True, ""), "Notification failed, use_bytebooks=%s" % (use_bytebooks))
@@ -417,15 +415,15 @@ class TestAdobeRequests(unittest.TestCase):
         cases = [
             ([(204, ""), SUCCESS], True),
             ([SUCCESS, ERROR], True),
-            ([SUCCESS, IOError("Connection refused")], True),
+            ([SUCCESS, libadobe.RequestError("Connection refused")], True),
             ([ERROR, SUCCESS], False),
             ([(200, "<html>Bad gateway</html>"), SUCCESS], False),
-            ([IOError("Connection refused"), SUCCESS], False),
+            ([libadobe.RequestError("Connection refused"), SUCCESS], False),
         ]
 
         for replies, expected in cases:
             server = FakeServer(*replies)
-            with patch.object(libadobeFulfill, "sendRequestDocuRC", server.send_rc):
+            with patch.object(libadobeFulfill, "send_adept", server.send):
                 success, message = quietly(libadobeFulfill.performFulfillmentNotification, reply, True)
             self.assertEqual(success, expected, "Wrong result for %r: %s" % (replies, message))
             self.assertEqual(len(server.requests), 2, "Didn't send both notifications for %r" % (replies,))
@@ -451,8 +449,9 @@ class TestAdobeRequests(unittest.TestCase):
                 book["useByteBooks"] = use_bytebooks
             server = FakeServer(LOAN_RETURN_REPLY)
             notifications = FakeServer(SUCCESS)
-            with patch.object(libadobeFulfill, "sendRequestDocu", server.send), \
-                    patch.object(libadobeFulfill, "sendRequestDocuRC", notifications.send_rc):
+            # The return goes to the operator, the notification that its reply asks for to NOTIFY_URL
+            send = lambda url, *args, **kwargs: (notifications if url.startswith(NOTIFY_URL) else server).send(url, *args, **kwargs)
+            with patch.object(libadobeFulfill, "send_adept", send):
                 success, reply = quietly(libadobeFulfill.tryReturnBook, book)
 
             self.assertTrue(success, "Return failed, useByteBooks=%s: %s" % (use_bytebooks, reply))
@@ -473,13 +472,13 @@ class TestAdobeRequests(unittest.TestCase):
         cases = [
             (book, ['<error xmlns="http://ns.adobe.com/adept" data="E_LOAN_NOT_ON_USER"/>'], 1),
             (book, ["<html>Bad gateway</html>"], 1),
-            (book, [IOError("Connection refused")], 1),
+            (book, [libadobe.RequestError("Connection refused")], 1),
             (dict((key, value) for key, value in book.items() if key != "operatorURL"), [], 0),
         ]
 
         for loan_record, replies, request_count in cases:
             server = FakeServer(*replies)
-            with patch.object(libadobeFulfill, "sendRequestDocu", server.send):
+            with patch.object(libadobeFulfill, "send_adept", server.send):
                 success, reply = quietly(libadobeFulfill.tryReturnBook, loan_record)
             self.assertFalse(success, "No error for %r, %r" % (sorted(loan_record), replies))
             self.assertEqual(len(server.requests), request_count, "Wrong number of requests for %r, %r" % (sorted(loan_record), replies))
