@@ -641,7 +641,7 @@ def addNonce():
         final.extend(tmp.to_bytes(4, 'little'))
     else:
         final = bytearray(int_to_bytes(Ntime, 8, False))
-        final.extend(int_to_bytes(tmp, 4, True))
+        final.extend(int_to_bytes(tmp, 4, False))
 
 
     ret = ""

@@ -54,6 +54,7 @@
 - Fix crash if two threads try to create the config folder at the same time.
 - Prevent Calibre from hanging (too much work on the GUI thread) when logging in / creating an anonymous authorization.
 - Errors during one fulfillment notification block will no longer affect other notifications in the same XML.
+- Fix crash when trying to log into an Adobe account with an email or password longer than 255 characters.
 
 ## 0.1.0 (perpetually in beta between 2022-2026, hasn't been released)
 

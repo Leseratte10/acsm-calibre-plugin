@@ -1180,6 +1180,9 @@ class ConfigWidget(QWidget):
         if (not ok or passwd is None or len(passwd) == 0):
             return
 
+        if (len(mail) > 0xFF or len(passwd) > 0xFF):
+            return error_dialog(None, "Digital Editions activation failed", "Usernames or passwords longer than 255 characters aren't supported.", show=True, show_copy_button=False)
+
         vers_idx = 0
                 
         if not self.create_authorization(vers_idx, acc_type, mail, passwd, authCert_bb, authCert_adobe):
