@@ -113,7 +113,7 @@ def are_ade_version_lists_valid():
     return True
 
 
-devkey_bytes = None
+devkey_bytes = None     # cached by get_device_key()
 
 
 
@@ -229,6 +229,35 @@ def createDeviceKeyFile():
 
     write_file_atomically(FILE_DEVICEKEY, devkey_bytes)
 
+
+def get_device_key():
+    # type: () -> bytes
+    # Returns the device key from devicesalt. The file is only read once: functions
+    # that change devicesalt or the account folder update or reset the cached key.
+
+    global devkey_bytes
+    if devkey_bytes is None:
+        with open(FILE_DEVICEKEY, "rb") as f:
+            devkey_bytes = f.read()
+    return devkey_bytes
+
+
+def write_account_files(device_key, device_xml, activation_xml):
+    # type: (bytes, bytes, bytes) -> None
+    # Replaces devicesalt, device.xml and activation.xml together, see write_files_atomically().
+    # Use this instead of writing devicesalt directly, so the cached device key is reset.
+
+    global devkey_bytes
+    try:
+        write_files_atomically([
+            (FILE_DEVICEKEY, device_key),
+            (FILE_DEVICEXML, device_xml),
+            (FILE_ACTIVATIONXML, activation_xml),
+        ])
+    finally:
+        # Even if writing fails, some of the files may have been replaced
+        devkey_bytes = None
+
 def int_to_bytes(value, length, big_endian = True):
     # Helper function for Python2 only (big endian)
     # Python3 uses int.to_bytes()
@@ -327,13 +356,7 @@ def makeFingerprint(serial):
     # base64(sha1(serial + privateKey))
     # Fingerprint must be 20 bytes or less.
 
-    global devkey_bytes
-    if devkey_bytes is None: 
-        f = open(FILE_DEVICEKEY, "rb")
-        devkey_bytes = f.read()
-        f.close()
-
-    str_to_hash = serial + devkey_bytes.decode('latin-1')
+    str_to_hash = serial + get_device_key().decode('latin-1')
     hashed_str = hashlib.sha1(str_to_hash.encode('latin-1')).digest()
     b64str = base64.b64encode(hashed_str)
 
@@ -585,12 +608,6 @@ def encrypt_with_device_key(data):
 
     data = bytearray(data)
 
-    global devkey_bytes
-    if devkey_bytes is None: 
-        f = open(FILE_DEVICEKEY, "rb")
-        devkey_bytes = f.read()
-        f.close()
-
     remain = 16
     if (len(data) % 16):
         remain = 16 - (len(data) % 16)
@@ -602,7 +619,7 @@ def encrypt_with_device_key(data):
 
 
     iv = Random.get_random_bytes(16)
-    cip = AES.new(devkey_bytes, AES.MODE_CBC, iv)
+    cip = AES.new(get_device_key(), AES.MODE_CBC, iv)
     encrypted = cip.encrypt(data)
 
     res = iv + encrypted
@@ -626,13 +643,7 @@ def decrypt_with_device_key(data):
         # Python2 
         data = bytes(data)
 
-    global devkey_bytes
-    if devkey_bytes is None: 
-        f = open(FILE_DEVICEKEY, "rb")
-        devkey_bytes = f.read()
-        f.close()
-
-    cip = AES.new(devkey_bytes, AES.MODE_CBC, data[:16])
+    cip = AES.new(get_device_key(), AES.MODE_CBC, data[:16])
     return remove_padding(cip.decrypt(data[16:]))
 
 
@@ -740,15 +751,10 @@ def sign_node(node, prefer_bytebooks):
 
     # print("Hash is " + sha_hash.hex())
 
-    global devkey_bytes
-
     # Get private key
 
     try:
-        if devkey_bytes is None:
-            with open(FILE_DEVICEKEY, "rb") as f:
-                devkey_bytes = f.read()
-
+        device_key = get_device_key()
         activationxml = etree.parse(FILE_ACTIVATIONXML)
     except Exception:
         print("Signing failed, can't read devicesalt or activation.xml:")
@@ -771,7 +777,7 @@ def sign_node(node, prefer_bytebooks):
 
     try:
         my_pkcs12 = base64.b64decode(pkcs12)
-        my_priv_key, _, _ = keys.parse_pkcs12(my_pkcs12, base64.b64encode(devkey_bytes))
+        my_priv_key, _, _ = keys.parse_pkcs12(my_pkcs12, base64.b64encode(device_key))
         if my_priv_key is None:
             raise ValueError("The pkcs12 doesn't contain a private key")
         my_priv_key = my_priv_key.dump()

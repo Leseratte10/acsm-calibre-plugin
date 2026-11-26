@@ -26,7 +26,7 @@ except ImportError:
 
 from .libadobe import addNonce, sign_node, sendRequestDocu, sendHTTPRequest
 from .libadobe import makeFingerprint, makeSerial, encrypt_with_device_key, decrypt_with_device_key, get_device_name
-from .libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+from .libadobe import get_device_key, get_device_path, get_activation_xml_path
 from .libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VER_OS_IDENTIFIERS
 from .libadobe import VAR_VER_SUPP_VERSIONS
 from .libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
@@ -239,15 +239,9 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
 def encryptLoginCredentials(username, password, authenticationCertificate): 
     # type: (str, str, str) -> bytes
 
-    from .libadobe import devkey_bytes as devkey_adobe
     import struct
 
-    if devkey_adobe is not None: 
-        devkey_bytes = devkey_adobe
-    else: 
-        f = open(get_devkey_path(), "rb")
-        devkey_bytes = f.read()
-        f.close()
+    devkey_bytes = get_device_key()
 
     _authenticationCertificate = base64.b64decode(authenticationCertificate)
 

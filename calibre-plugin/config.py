@@ -145,6 +145,10 @@ class ConfigWidget(QWidget):
         # get the prefs
         self.acsmprefs = prefs.ACSMInput_Prefs()
 
+        # libadobe reads and writes the account files in this folder
+        from .libadobe import update_account_path
+        update_account_path(self.acsmprefs["path_to_account_data"])
+
 
         # Start Qt Gui dialog layout
         layout = QVBoxLayout(self)
@@ -270,9 +274,8 @@ class ConfigWidget(QWidget):
         self.deauthShortcut.activated.connect(self.delete_ade_auth)
 
         try: 
-            from .libadobe import update_account_path, are_ade_version_lists_valid
+            from .libadobe import are_ade_version_lists_valid
 
-            update_account_path(self.acsmprefs["path_to_account_data"])
             self.resize(self.sizeHint())
     
             # Someone reported getting this error after upgrading the plugin.
@@ -333,14 +336,12 @@ class ConfigWidget(QWidget):
         # So just open up a folder picker dialog and have the user select the eReader's root folder. 
 
         try: 
-            from .libadobe import update_account_path, VAR_VER_HOBBES_VERSIONS, safe_xml_parser
+            from .libadobe import VAR_VER_HOBBES_VERSIONS, safe_xml_parser, get_device_path
             from .libadobeAccount import activateDevice, exportProxyAuth
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
 
-
-        update_account_path(self.acsmprefs["path_to_account_data"])
 
         info_string, activated, mail = self.get_account_info()
 
@@ -494,10 +495,8 @@ class ConfigWidget(QWidget):
             # Okay, if we end up here, the user wants to authorize his eReader to his current ByteBooks ID. 
             # Figure out what ADE version we're currently emulating: 
 
-            device_xml_path = os.path.join(self.acsmprefs["path_to_account_data"], "device.xml")
-
             try: 
-                containerdev = etree.parse(device_xml_path)
+                containerdev = etree.parse(get_device_path())
             except (IOError, FileNotFoundError, OSError) as e:
                 return error_dialog(None, "Failed", "Error while reading device.xml", show=True, show_copy_button=False)
 
@@ -584,9 +583,10 @@ class ConfigWidget(QWidget):
         
         # Okay, once we are here, we can be pretty sure the user actually wants to delete their authorization.
         try: 
-            os.remove(os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml"))
-            os.remove(os.path.join(self.acsmprefs["path_to_account_data"], "device.xml"))
-            os.remove(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"))
+            from .libadobe import get_activation_xml_path, get_device_path, get_devkey_path
+            os.remove(get_activation_xml_path())
+            os.remove(get_device_path())
+            os.remove(get_devkey_path())
         except:
             error_dialog(None, "Remove Digital Editions account", "There was an error while removing the authorization.", show=True, show_copy_button=False)
             return
@@ -637,19 +637,16 @@ class ConfigWidget(QWidget):
 
        
         try: 
-            from .libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS
+            from .libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, get_activation_xml_path, get_device_path
             from .libadobeFulfill import getDecryptedCert, is_bytebooks_account
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
 
-        activation_xml_path = os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml")
-        device_xml_path = os.path.join(self.acsmprefs["path_to_account_data"], "device.xml")
-
         container = None
         try: 
-            container = etree.parse(activation_xml_path)
-            containerdev = etree.parse(device_xml_path)
+            container = etree.parse(get_activation_xml_path())
+            containerdev = etree.parse(get_device_path())
         except (IOError, FileNotFoundError, OSError) as e:
             return "Not authorized for any ID", False, None
         except (etree.XMLSyntaxError):
@@ -727,7 +724,7 @@ class ConfigWidget(QWidget):
     def export_activation(self):
 
         try: 
-            from .libadobe import update_account_path
+            from .libadobe import get_device_path, get_activation_xml_path, get_devkey_path
             from .libadobeAccount import getAccountUUID
             from .libadobeFulfill import is_bytebooks_account
         except: 
@@ -735,8 +732,6 @@ class ConfigWidget(QWidget):
             traceback.print_exc()
             return False
 
-
-        update_account_path(self.acsmprefs["path_to_account_data"])
 
         prefix = "adobe" if not is_bytebooks_account() else "bytebooks"
         
@@ -758,9 +753,9 @@ class ConfigWidget(QWidget):
 
         try: 
             with ZipFile(filename, 'w') as zipfile:
-                zipfile.write(os.path.join(self.acsmprefs["path_to_account_data"], "device.xml"), "device.xml")
-                zipfile.write(os.path.join(self.acsmprefs["path_to_account_data"], "activation.xml"), "activation.xml")
-                zipfile.write(os.path.join(self.acsmprefs["path_to_account_data"], "devicesalt"), "devicesalt")
+                zipfile.write(get_device_path(), "device.xml")
+                zipfile.write(get_activation_xml_path(), "activation.xml")
+                zipfile.write(get_devkey_path(), "devicesalt")
             
             return True
         except: 
@@ -829,14 +824,11 @@ class ConfigWidget(QWidget):
             return error_dialog(None, "Import failed", "The WINEPREFIX you entered doesn't seem to contain an authorized DE.", show=True, show_copy_button=False)
 
 
-        from .libadobe import update_account_path
         from .libadobeImportAccount import importADEactivationLinuxWine
 
         ret, msg = importADEactivationLinuxWine(text, activations=check_registry(text))
 
         if (ret):
-            update_account_path(self.acsmprefs["path_to_account_data"])           
-
             # update display
             info_string, activated, ade_mail = self.update_account_display()
 
@@ -854,14 +846,11 @@ class ConfigWidget(QWidget):
     def import_activation_from_Win(self):
         # This will try to import the activation from Digital Editions on Windows ...
 
-        from .libadobe import update_account_path
         from .libadobeImportAccount import importADEactivationWindows
 
         ret, msg = importADEactivationWindows()
 
         if (ret):
-            update_account_path(self.acsmprefs["path_to_account_data"])
-
             # update display
             info_string, activated, ade_mail = self.update_account_display()
 
@@ -884,14 +873,11 @@ class ConfigWidget(QWidget):
 
         info_dialog(None, "Importing from Digital Editions", msg, show=True, show_copy_button=False)
 
-        from .libadobe import update_account_path
         from .libadobeImportAccount import importADEactivationMac
 
         ret, msg = importADEactivationMac()
 
         if (ret):
-            update_account_path(self.acsmprefs["path_to_account_data"])
-
             # update display
             info_string, activated, ade_mail = self.update_account_display()
 
@@ -913,7 +899,7 @@ class ConfigWidget(QWidget):
         filenames = choose_files(self, "Import DE activation file (ZIP)", _("Import DE activation file (ZIP)"), 
                 filters, all_files=False, select_only_single_file=True)
 
-        from .libadobe import update_account_path, safe_xml_parser, write_files_atomically
+        from .libadobe import safe_xml_parser, write_account_files
         from .libadobeAccount import changeDeviceVersion
         
         try: 
@@ -946,12 +932,7 @@ class ConfigWidget(QWidget):
                 try: 
                     # Copy the files byte for byte, so they're not re-encoded with the system's
                     # default encoding, and replace all three together.
-                    account_folder = self.acsmprefs["path_to_account_data"]
-                    write_files_atomically([
-                        (os.path.join(account_folder, "device.xml"), device),
-                        (os.path.join(account_folder, "activation.xml"), activation),
-                        (os.path.join(account_folder, "devicesalt"), salt),
-                    ])
+                    write_account_files(device_key=salt, device_xml=device, activation_xml=activation)
 
                 except: 
                     err = traceback.format_exc()
@@ -961,7 +942,6 @@ class ConfigWidget(QWidget):
                                 show=True, show_copy_button=False)
 
 
-        update_account_path(self.acsmprefs["path_to_account_data"])
         changeDeviceVersion(0, onlyIfUnknown=True)
         
         # update display
@@ -1068,14 +1048,6 @@ class ConfigWidget(QWidget):
 
     def create_anon_auth(self): 
     
-        try: 
-            from .libadobe import update_account_path
-        except: 
-            print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
-            traceback.print_exc()
-
-        update_account_path(self.acsmprefs["path_to_account_data"])
-
         msg = "You are about to create an anonymous authorization.\n"
         msg += "If you lose access to this authorization, all books linked to it will be lost / inaccessible. "
         msg += "Make sure to create backups of the authorization data!"
@@ -1099,13 +1071,10 @@ class ConfigWidget(QWidget):
     
     def convert_anon_to_account(self): 
         try: 
-            from .libadobe import update_account_path
             from .libadobeAccount import convertAnonAuthToAccount
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
-
-        update_account_path(self.acsmprefs["path_to_account_data"])
 
         # This MUST only be called on anonymous accounts. 
         # The button should be disabled if that's not the case, but just to make sure ...
@@ -1156,13 +1125,10 @@ class ConfigWidget(QWidget):
     def link_account(self):
 
         try: 
-            from .libadobe import update_account_path
             from .libadobeAccount import getAuthMethodsAndCert
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
-
-        update_account_path(self.acsmprefs["path_to_account_data"])
 
 
         # Get account types
@@ -1220,14 +1186,11 @@ class ConfigWidget(QWidget):
     def export_key(self):
 
         try: 
-            from .libadobe import update_account_path
             from .libadobeAccount import exportAccountEncryptionKeyDER, getAccountUUID
         except: 
             print("{0} v{1}: Error while importing Account stuff".format(PLUGIN_NAME, PLUGIN_VERSION))
             traceback.print_exc()
 
-
-        update_account_path(self.acsmprefs["path_to_account_data"])
 
         filters = [("DER Files", ["der"])]
 

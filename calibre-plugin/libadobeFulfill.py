@@ -12,7 +12,7 @@ import base64
 from xml.sax.saxutils import escape as xml_escape
 
 from .libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu, sendRequestDocuRC, sendHTTPRequest
-from .libadobe import get_devkey_path, get_device_path, get_activation_xml_path
+from .libadobe import get_devkey_path, get_device_path, get_activation_xml_path, get_device_key
 from .libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_HOBBES_VERSIONS
 from .libadobe import safe_xml_parser, write_file_atomically
 from .libadobe import find_vendor_values, prefer_vendor
@@ -143,15 +143,7 @@ def getDecryptedCert(pkcs12_b64_string = None, prefer_bytebooks = False):
             return None
 
     pkcs12_data = base64.b64decode(pkcs12_b64_string)
-
-    from .libadobe import devkey_bytes as devkey_adobe
-    
-    if devkey_adobe is not None: 
-        devkey_bytes = devkey_adobe
-    else: 
-        f = open(get_devkey_path(), "rb")
-        devkey_bytes = f.read()
-        f.close()
+    devkey_bytes = get_device_key()
 
     try:     
         return get_cert_from_pkcs12(pkcs12_data, base64.b64encode(devkey_bytes))

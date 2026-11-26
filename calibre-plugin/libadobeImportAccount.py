@@ -28,7 +28,7 @@ class AES(object):
         return self._aes.decrypt(data)
 
 
-from .libadobe import makeSerial, get_devkey_path, get_device_path, get_activation_xml_path, safe_xml_parser, write_files_atomically, remove_padding
+from .libadobe import makeSerial, safe_xml_parser, write_account_files, remove_padding
 from .libadobe import VAR_VER_DEFAULT_BUILD_ID, VAR_VER_BUILD_IDS
 from .libadobeAccount import build_device_xml
 
@@ -390,11 +390,7 @@ def finalize_write_config_Windows(data, key, buildID, account_method=None):
 
     # Content prepared, now replace all three files together.
     try:
-        write_files_atomically([
-            (get_devkey_path(), key),
-            (get_activation_xml_path(), content.encode("utf-8")),
-            (get_device_path(), dev_content),
-        ])
+        write_account_files(device_key=key, device_xml=dev_content, activation_xml=content.encode("utf-8"))
     except (IOError, OSError) as e:
         return False, "Can't write the account files: %s" % (e)
 
@@ -626,11 +622,7 @@ def recreateMacActivationFiles(path_to_activation, deviceKey, deviceFingerprint,
     # Content prepared, now replace all three files together. activation.xml is
     # activation.dat, byte for byte.
     try:
-        write_files_atomically([
-            (get_activation_xml_path(), activation_data),
-            (get_devkey_path(), deviceKey),
-            (get_device_path(), dev_content),
-        ])
+        write_account_files(device_key=deviceKey, device_xml=dev_content, activation_xml=activation_data)
     except (IOError, OSError) as e:
         return False, "Can't write the account files: %s" % (e)
 
