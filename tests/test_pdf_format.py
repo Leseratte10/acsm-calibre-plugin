@@ -18,7 +18,7 @@ import unittest
 from acsm_input.libpdf import trim_encrypt_string, cleanup_encrypt_element, deflate_and_base64_encode  # type: ignore
 from acsm_input.libpdf import BackwardReader, patch_drm_into_pdf  # type: ignore
 
-import io, re, shutil, tempfile
+import io, re, shutil, tempfile, struct, zlib
 
 try:
     # Python 2: print() writes byte strings there, which io.StringIO doesn't accept.
@@ -81,6 +81,33 @@ def build_test_pdf(trailer, eol=b"\n", gen=0, trailer_on_keyword_line=False, tra
         pdf += b"trailer" + eol + trailer + eol
 
     pdf += b"startxref" + eol + b"%d" % xref_offset + eol + b"%%EOF" + eol
+    return pdf, xref_offset
+
+def build_xref_stream_pdf(dict_entries, gen=0):
+    # type: (bytes, int) -> tuple
+    # Builds a minimal PDF with a cross-reference stream (object 6) and returns (content, offset
+    # of the stream). dict_entries are the trailer entries of the stream's dictionary, which is
+    # written over two lines. Object 5 is the EBX_HANDLER encryption dictionary.
+
+    objects = [
+        (1, 0, b"<</Type/Catalog/Pages 2 0 R>>"),
+        (2, 0, b"<</Type/Pages/Kids[]/Count 0>>"),
+        (5, gen, TEST_EBX_DICT),
+    ]
+
+    pdf = b"%PDF-1.5\n"
+    offsets = {}
+    for num, obj_gen, body in objects:
+        offsets[num] = (len(pdf), obj_gen)
+        pdf += b"%d %d obj\n" % (num, obj_gen) + body + b"\nendobj\n"
+
+    xref_offset = len(pdf)
+    offsets[6] = (xref_offset, 0)
+    rows = b"".join(struct.pack(">BHB", 1, *offsets[num]) if num in offsets else b"\0\0\0\0" for num in range(7))
+    rows = zlib.compress(rows)
+    pdf += b"6 0 obj\n<</Type/XRef/Size 7/W[1 2 1]/Index[0 7]/Filter/FlateDecode/DecodeParms<</Columns 4>>\n"
+    pdf += dict_entries + b"/Length %d>>\nstream\r\n" % len(rows) + rows + b"\nendstream\nendobj\n"
+    pdf += b"startxref\n%d\n%%%%EOF\n" % xref_offset
     return pdf, xref_offset
 
 
@@ -445,3 +472,54 @@ class TestPDFFormat(unittest.TestCase):
             ret, output = self.patch_pdf(pdf)
             self.assertFalse(ret, name + ": patching should fail")
             self.assertIsNone(output, name + ": no output file should be written")
+
+    def check_patched_xref_stream(self, dict_entries, expected_entries, msg, gen=0):
+        # type: (bytes, bytes, str, int) -> None
+        # Patches a PDF with a cross-reference stream and checks the stream that the patch appended.
+        # %d in expected_entries is replaced with the offset of the original stream (for /Prev).
+
+        pdf, xref_offset = build_xref_stream_pdf(dict_entries, gen)
+        ret, output = self.patch_pdf(pdf)
+        self.assertTrue(ret, msg + ": patching failed")
+        self.assertEqual(output[:len(pdf)], pdf, msg + ": original PDF data was changed")
+
+        match = re.match(br"\r5 %d obj\r.*\rendobj\r7 0 obj\r(<<.*?>>)\rstream\r\n(.*)\rendstream\rendobj\rstartxref\r(\d+)\r%%%%EOF$" % gen,
+                         output[len(pdf):], re.S)
+        self.assertIsNotNone(match, msg + ": patched PDF has no new cross-reference stream")
+        stream_dict, rows, startxref = match.group(1), match.group(2), int(match.group(3))
+
+        expected = b"<</Type/XRef/Size 8/W[1 8 2]/Index[5 1 7 1]/Length 22" + expected_entries % xref_offset + b">>"
+        self.assertEqual(stream_dict, expected, msg + ": wrong dictionary of the new cross-reference stream")
+
+        # One entry for object 5 and one for the new stream (object 7), both pointing to their objects
+        self.assertEqual(len(rows), 22, msg + ": wrong length of the stream data")
+        type5, offset5, gen5, type7, offset7, gen7 = struct.unpack(">BQHBQH", rows)
+        self.assertEqual((type5, gen5, type7, gen7), (1, gen, 1, 0), msg + ": wrong entry types or generations")
+        self.assertTrue(output[offset5:].startswith(b"5 %d obj" % gen), msg + ": entry doesn't point to object 5")
+        self.assertTrue(output[offset7:].startswith(b"7 0 obj"), msg + ": entry doesn't point to the new stream")
+        self.assertEqual(startxref, offset7, msg + ": startxref doesn't point to the new stream")
+
+    def test_pdf_patchXrefStream(self):
+        '''Check if patching a PDF with a cross-reference stream appends a cross-reference stream with the trailer entries only'''
+
+        self.check_patched_xref_stream(
+            b"/Root 1 0 R/Encrypt 5 0 R/ID[<aa><bb>]",
+            b"/Root 1 0 R/Encrypt 5 0 R/ID[<aa><bb>]/Prev %d", "trailer entries")
+
+        self.check_patched_xref_stream(
+            b"/Info 2 0 R/Prev 9/Root  1 0 R/Encrypt 5 0 R/ID [ <aa> <bb> ]",
+            b"/Root 1 0 R/Info 2 0 R/Encrypt 5 0 R/ID[ <aa> <bb> ]/Prev %d", "/Info, /Prev and extra whitespace")
+
+        self.check_patched_xref_stream(
+            b"/Root 1 0 R/Encrypt 5 0 R/ID[(a]b/c\\)d)(e\nf)]",
+            b"/Root 1 0 R/Encrypt 5 0 R/ID[(a]b/c\\)d)(e\nf)]/Prev %d", "/ID with literal strings")
+
+        self.check_patched_xref_stream(
+            b"/Root 1 0 R/Encrypt 5 1 R/ID[<aa><bb>]",
+            b"/Root 1 0 R/Encrypt 5 1 R/ID[<aa><bb>]/Prev %d", "generation 1", gen=1)
+
+        # Without an /ID that can be copied, the book couldn't be decrypted
+        for entries in [b"/Root 1 0 R/Encrypt 5 0 R", b"/Root 1 0 R/Encrypt 5 0 R/ID[(a(b)c)<bb>]"]:
+            ret, output = self.patch_pdf(build_xref_stream_pdf(entries)[0])
+            self.assertFalse(ret, "%r: patching should fail" % entries)
+            self.assertIsNone(output, "%r: no output file should be written" % entries)

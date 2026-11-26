@@ -7,7 +7,7 @@ For more information, see:
 https://github.com/Leseratte10/acsm-calibre-plugin
 '''
 
-import sys, os, zlib, base64, time, shutil, re, collections
+import sys, os, zlib, base64, time, shutil, re, collections, struct
 
 class BackwardReader:
     """
@@ -295,10 +295,26 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
 
 
 
-    encrypt = find_trailer(filename_in)
+    # In a file with a cross-reference stream (PDF 1.5+), startxref points to that stream,
+    # and its dictionary has the trailer entries. Otherwise it points to an xref table.
+    with open(filename_in, "rb") as fl:
+        fl.seek(startxref_offset)
+        xref_data = fl.read(65536)
+    if sys.version_info[0] >= 3:
+        xref_data = xref_data.decode("latin-1")
+
+    encrypt = None
+    if re.match(r"\s*\d+\s+\d+\s+obj\s*<<", xref_data):
+        encrypt = trim_encrypt_string(xref_data)
+        if not re.search(r"/Type\s*/XRef(?![^\s<\[(/%>])", encrypt):
+            encrypt = None
+    xref_stream = encrypt is not None
+
     if encrypt is None:
-        # No trailer with /Encrypt in front of startxref (e.g. with a cross-reference
-        # stream), so use the last line that contains /Encrypt and /ID instead.
+        encrypt = find_trailer(filename_in)
+    if encrypt is None:
+        # No trailer with /Encrypt in front of startxref, so use the
+        # last line that contains /Encrypt and /ID instead.
         print("No trailer with /Encrypt in front of startxref, searching the file ...")
         encrypt = find_enc(filename_in)
 
@@ -356,6 +372,48 @@ def patch_drm_into_pdf(filename_in, adept_license_string, filename_out, ebx_book
     additional_data += "endobj"
 
     ptr = obj_offset + len(additional_data)
+
+    if xref_stream:
+        # The file uses cross-reference streams, so append one as well, with entries for
+        # the rewritten object and for the stream itself. Its dictionary only gets the
+        # entries of a trailer from the old one, not the ones that describe the old stream.
+        size = re.search(r"/Size\s+(\d+)", encrypt)
+        if size is None:
+            print("Err: Cross-reference stream has no /Size")
+            return False
+        xref_num = max(int(size.group(1)), int(r_encrypt_offs1) + 1)
+
+        rows = struct.pack(">BQH", 1, obj_offset, int(r_encrypt_offs2)) + struct.pack(">BQH", 1, ptr, 0)
+        # As text, like the rest of additional_data. In Python 2 that's unicode too (because
+        # of the base64 data in the EBX dictionary), so a str with bytes >= 0x80 can't be
+        # added to it.
+        rows = rows.decode("latin-1")
+
+        stream_dict = "<</Type/XRef/Size %d/W[1 8 2]/Index[%s 1 %d 1]/Length %d" % (xref_num + 1, r_encrypt_offs1, xref_num, len(rows))
+        for key in ("Root", "Info"):
+            ref = re.search(r"/%s\s+(\d+)\s+(\d+)\s+R" % key, encrypt)
+            if ref is not None:
+                stream_dict += "/%s %s %s R" % (key, ref.group(1), ref.group(2))
+        stream_dict += "/Encrypt %s %s R" % (r_encrypt_offs1, r_encrypt_offs2)
+        # Two hex or literal strings. Literal strings can contain "]", but parentheses in
+        # them have to be escaped here. The ID is needed for decryption, so it has to be found.
+        string = r"(?:<[0-9A-Fa-f\s]*>|\((?:\\.|[^\\()])*\))"
+        file_id = re.search(r"/ID\s*(\[\s*%s\s*%s\s*\])" % (string, string), encrypt, re.S)
+        if file_id is None:
+            print("Err: Cross-reference stream has no /ID that can be copied")
+            return False
+        stream_dict += "/ID" + file_id.group(1)
+        stream_dict += "/Prev %d>>" % startxref_offset
+
+        additional_data += "\r%d 0 obj\r%s\rstream\r\n%s\rendstream\rendobj" % (xref_num, stream_dict, rows)
+        additional_data += "\rstartxref\r" + str(ptr) + "\r%%EOF"
+
+        with open(filename_in, "rb") as inp, open(filename_out, "wb") as out:
+            shutil.copyfileobj(inp, out)
+            out.write(additional_data.encode("latin-1"))
+
+        print("Whole DRM patching took %d milliseconds." % (int(time.time() * 1000) - drm_start_time))
+        return True
 
     # New xref subsection with a single entry for the rewritten object.
     # The entry has to use the generation number of that object.
