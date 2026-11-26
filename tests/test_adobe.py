@@ -375,6 +375,59 @@ class TestAdobe(unittest.TestCase):
         self.assertEqual(signature, expected_signature, "CustomRSA node hash signing method is broken")
 
    
+    def test_findVendorValues(self):
+        '''Check if ByteBooks and Adobe values are told apart correctly'''
+
+        xml = etree.fromstring("""<root xmlns="http://ns.adobe.com/adept">
+  <both><v ofByteBooks="true">BB</v><v ofByteBooks="false">AD</v></both>
+  <unflagged><v>AD</v></unflagged>
+  <bytebooks><v ofByteBooks="true">BB</v></bytebooks>
+  <first><v>AD1</v><v ofByteBooks="false">AD2</v><v ofByteBooks="true">BB1</v><v ofByteBooks="true">BB2</v></first>
+  <empty><v ofByteBooks="true"/><v ofByteBooks="true">BB</v><v></v><v>AD</v></empty>
+  <otherflag><v ofByteBooks="TRUE">X</v><v ofByteBooks="1">Y</v></otherflag>
+  <none/>
+</root>""")
+
+        cases = [
+            # Activations from ADE and older plugin versions have no ofByteBooks flag, that's Adobe
+            ("both", ("BB", "AD")),
+            ("unflagged", (None, "AD")),
+            ("bytebooks", ("BB", None)),
+            # The first value of each vendor
+            ("first", ("BB1", "AD1")),
+            # Elements without text don't count
+            ("empty", ("BB", "AD")),
+            # Neither vendor
+            ("otherflag", (None, None)),
+            ("none", (None, None)),
+        ]
+
+        for parent, expected in cases:
+            self.assertEqual(libadobe.find_vendor_values(xml, parent, "v"), expected, "Wrong values for <%s>" % (parent))
+
+        # The tags are a path from the parent, so <v> elements further down don't count
+        self.assertEqual(libadobe.find_vendor_values(xml, "v"), (None, None), "Found values that aren't children of the parent")
+
+
+    def test_preferVendor(self):
+        '''Check if the preferred vendor's value is chosen, with the other one as fallback'''
+
+        # (ByteBooks value, Adobe value, prefer_bytebooks, expected)
+        cases = [
+            ("BB", "AD", True, ("BB", True)),
+            ("BB", "AD", False, ("AD", False)),
+            ("BB", None, False, ("BB", True)),
+            (None, "AD", True, ("AD", False)),
+            (None, None, True, (None, None)),
+            (None, None, False, (None, None)),
+        ]
+
+        for bytebooks, adobe, prefer_bytebooks, expected in cases:
+            self.assertEqual(libadobe.prefer_vendor(bytebooks, adobe, prefer_bytebooks), expected,
+                             "Wrong choice for %r, %r, prefer_bytebooks=%s" % (bytebooks, adobe, prefer_bytebooks))
+
+
+
     def test_Account_activationReplyWithDeclaration(self):
         '''Check if the /Activate reply is stored correctly without XML declaration'''
 

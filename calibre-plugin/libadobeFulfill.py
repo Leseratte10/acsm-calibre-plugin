@@ -15,6 +15,7 @@ from .libadobe import addNonce, sign_node, get_cert_from_pkcs12, sendRequestDocu
 from .libadobe import get_devkey_path, get_device_path, get_activation_xml_path
 from .libadobe import VAR_VER_SUPP_VERSIONS, VAR_VER_HOBBES_VERSIONS
 from .libadobe import safe_xml_parser, write_file_atomically
+from .libadobe import find_vendor_values, prefer_vendor
 
 
  
@@ -132,36 +133,14 @@ def buildInitLicenseServiceRequest(authURL, force_adobe):
     return "<?xml version=\"1.0\"?>\n" + etree.tostring(req_xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
 
 
-def getDecryptedCert(pkcs12_b64_string = None, force_bytebooks = False): 
+def getDecryptedCert(pkcs12_b64_string = None, prefer_bytebooks = False):
     
     if pkcs12_b64_string is None: 
         activationxml = etree.parse(get_activation_xml_path())
-        adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-
-        try: 
-            certificate_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12"))).text
-        except AttributeError:
-            # When old activation.xmls are loaded in the new plugin.
-            certificate_bb = None
-
-        try: 
-            certificate_adobe = next(
-                c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-        except:
-            certificate_adobe = None
-
-        if certificate_bb is None and certificate_adobe is None: 
+        pkcs12_bb, pkcs12_adobe = find_vendor_values(activationxml, "credentials", "pkcs12")
+        pkcs12_b64_string, _ = prefer_vendor(pkcs12_bb, pkcs12_adobe, prefer_bytebooks)
+        if pkcs12_b64_string is None:
             return None
-        elif certificate_adobe is None: 
-            pkcs12_b64_string = certificate_bb
-        elif certificate_bb is None:
-            pkcs12_b64_string = certificate_adobe
-        elif force_bytebooks and certificate_bb is not None:
-            pkcs12_b64_string = certificate_bb
-        else: 
-            pkcs12_b64_string = certificate_adobe
 
     pkcs12_data = base64.b64decode(pkcs12_b64_string)
 
@@ -195,28 +174,8 @@ def buildAuthRequest(use_bytebooks = False):
     ret += "<adept:user>%s</adept:user>\n" % (activationxml.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text)
     ret += "<adept:certificate>%s</adept:certificate>\n" % (base64.b64encode(my_cert).decode("utf-8"))
 
-    try: 
-        license_cert_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("licenseCertificate"))).text
-        auth_cert_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("authenticationCertificate"))).text
-    except AttributeError:
-        # When old activation.xmls are loaded by the new plugin.
-        license_cert_bb = None
-        auth_cert_bb = None
-
-
-    try: 
-        license_cert_adobe = next(
-                c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("licenseCertificate")))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-
-        auth_cert_adobe = next(
-                c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("authenticationCertificate")))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-    except: 
-        license_cert_adobe = None
-        auth_cert_adobe = None
+    license_cert_bb, license_cert_adobe = find_vendor_values(activationxml, "credentials", "licenseCertificate")
+    auth_cert_bb, auth_cert_adobe = find_vendor_values(activationxml, "credentials", "authenticationCertificate")
 
 
 
@@ -244,26 +203,12 @@ def getAvailableCertTypes():
     # Entries without an ofByteBooks attribute (older activations) count as Adobe,
     # same as everywhere else in the plugin.
 
-    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
     activationxml = etree.parse(get_activation_xml_path())
+    values = [find_vendor_values(activationxml, "credentials", tag) for tag in ["pkcs12", "licenseCertificate", "authenticationCertificate"]]
 
-    def has_complete_set(bytebooks):
-        for tag in ["pkcs12", "licenseCertificate", "authenticationCertificate"]:
-            found = False
-            for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS(tag))):
-                flag = c.get("ofByteBooks")
-                if bytebooks:
-                    matches = (flag == "true")
-                else:
-                    matches = (flag is None or flag == "false")
-                if matches and c.text:
-                    found = True
-                    break
-            if not found:
-                return False
-        return True
-
-    return has_complete_set(True), has_complete_set(False)
+    has_bytebooks = all(bytebooks is not None for bytebooks, adobe in values)
+    has_adobe = all(adobe is not None for bytebooks, adobe in values)
+    return has_bytebooks, has_adobe
 
 def is_bytebooks_account():
     return getAvailableCertTypes()[0]

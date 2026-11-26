@@ -31,6 +31,7 @@ from .libadobe import VAR_VER_SUPP_CONFIG_NAMES, VAR_VER_HOBBES_VERSIONS, VAR_VE
 from .libadobe import VAR_VER_SUPP_VERSIONS
 from .libadobe import VAR_ACS_SERVER_HTTPS, VAR_VER_BUILD_IDS, VAR_VER_ALLOWED_BUILD_IDS_AUTHORIZE
 from .libadobe import safe_xml_parser, write_file_atomically
+from .libadobe import find_vendor_values, prefer_vendor
 
 
 def createDeviceFile(randomSerial, useVersionIndex = 0): 
@@ -131,20 +132,7 @@ def getAuthMethodsAndCert():
 
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-    try: 
-        authCert_bb = None
-        authCert_bb = adobe_response_xml2.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
-    except:
-        pass
-
-    try: 
-        authCert_adobe = None
-        authCert_adobe = next(
-                c.text for c in adobe_response_xml2.findall(adNS("certificate"))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-    except:
-        pass
+    authCert_bb, authCert_adobe = find_vendor_values(adobe_response_xml2, "certificate")
 
     # Get sign-in methods.
     sign_in_methods = adobe_response_xml2.findall("./%s/%s" % (adNS("signInMethods"), adNS("signInMethod")))
@@ -202,17 +190,7 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
     # check below instead of raising (which the GUI reports as a connection problem).
     authURL = adobe_response_xml.findtext("./%s" % (adNS("authURL")))
     userInfoURL = adobe_response_xml.findtext("./%s" % (adNS("userInfoURL")))
-    try: 
-        certificate_bb = adobe_response_xml.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
-    except: 
-        certificate_bb = None
-    try: 
-        certificate_adobe = next(
-                c.text for c in adobe_response_xml.findall(adNS("certificate"))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-    except: 
-        certificate_adobe = None
+    certificate_bb, certificate_adobe = find_vendor_values(adobe_response_xml, "certificate")
 
     if (not authURL or not userInfoURL or not certificate_bb):
         return False, "Error: Unexpected reply from activation service."
@@ -237,17 +215,7 @@ def createUser(useVersionIndex = 0, authCertBB = None, authCertAdobe = None):
         response2 = sendHTTPRequest(authenticationURL, True)
 
         adobe_response_xml2 = etree.fromstring(response2, parser=safe_xml_parser())
-        try: 
-            authCertBB = adobe_response_xml2.find("./%s[@ofByteBooks='true']" % (adNS("certificate"))).text
-        except: 
-            authCertBB = None
-        try: 
-            authCertAdobe = next(
-                c.text for c in adobe_response_xml2.findall(adNS("certificate"))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-        except: 
-            authCertAdobe = None
+        authCertBB, authCertAdobe = find_vendor_values(adobe_response_xml2, "certificate")
 
 
     if authCertBB is not None:
@@ -401,19 +369,13 @@ def convertAnonAuthToAccount(username, passwd):
         # credentials, otherwise Adobe. Anonymous activations from older versions of the
         # plugin or from ADE only have Adobe credentials, without the ofByteBooks flag.
         use_bytebooks = is_bytebooks_account()
-
-        if use_bytebooks:
-            authenticationCertificate = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
-        else:
-            authenticationCertificate = next(
-                    c.text for c in activationxml.findall("./%s/%s" % (adNS("activationServiceInfo"), adNS("authenticationCertificate")))
-                    if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-                )
-    except: 
+    except:
         return False, "Missing authenticationCertificate"
 
-    if not authenticationCertificate:
-        return False, "Empty authenticationCertificate"
+    authcert_bb, authcert_adobe = find_vendor_values(activationxml, "activationServiceInfo", "authenticationCertificate")
+    authenticationCertificate = authcert_bb if use_bytebooks else authcert_adobe
+    if authenticationCertificate is None:
+        return False, "Missing authenticationCertificate"
 
     linkRequest = buildSignInRequestForAnonAuthConvert(username, passwd, authenticationCertificate, use_bytebooks)
 
@@ -505,26 +467,15 @@ def signIn(account_type, username, passwd):
     activationxml = etree.parse(get_activation_xml_path())
     adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
 
-    try: 
-        authcertificate_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("activationServiceInfo"), adNS("authenticationCertificate"))).text
-    except: 
-        # TODO: Is this really a situation that can happen? I'd assume ByteBooks will always send their cert ...
-        authcertificate_bb = None
-
-    try: 
-        authcertificate_adobe = next(
-                c.text for c in activationxml.findall("./%s/%s" % (adNS("activationServiceInfo"), adNS("authenticationCertificate")))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-    except: 
-        authcertificate_adobe = None
+    # TODO: Can the ByteBooks certificate really be missing? I'd assume ByteBooks will always send their cert ...
+    authcertificate_bb, authcertificate_adobe = find_vendor_values(activationxml, "activationServiceInfo", "authenticationCertificate")
 
     if authcertificate_bb is None and authcertificate_adobe is None: 
         return False, "Server response missing auth certificate."
 
     
     # Type = "AdobeID" or "anonymous". For "anonymous", username and passwd need to be the empty string.
-    signInRequest = buildSignInRequest(account_type, username, passwd, authcertificate_bb if authcertificate_bb is not None else authcertificate_adobe)
+    signInRequest = buildSignInRequest(account_type, username, passwd, prefer_vendor(authcertificate_bb, authcertificate_adobe, True)[0])
 
     signInURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text + "/SignInDirect?ofByteBooks=1"
 
@@ -595,17 +546,7 @@ def signIn(account_type, username, passwd):
 
 
 
-    try: 
-        pkcs12_bb = credentialsXML.find("./%s[@ofByteBooks='true']" % (adNS("pkcs12"))).text
-    except: 
-        pkcs12_bb = None
-    try: 
-        pkcs12_adobe = next(
-                c.text for c in credentialsXML.findall("./%s" % (adNS("pkcs12")))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-    except: 
-        pkcs12_adobe = None
+    pkcs12_bb, pkcs12_adobe = find_vendor_values(credentialsXML, "pkcs12")
 
     if pkcs12_bb is None and pkcs12_adobe is None: 
         return False, "No pkcs12 in response"
@@ -636,18 +577,7 @@ def signIn(account_type, username, passwd):
     if pkcs12_adobe is not None: 
         content += "<adept:pkcs12 ofByteBooks=\"false\">%s</adept:pkcs12>\n" % (pkcs12_adobe)
 
-    try: 
-        license_cert_bb = credentialsXML.find("./%s[@ofByteBooks='true']" % (adNS("licenseCertificate"))).text
-    except: 
-        license_cert_bb = None
-
-    try: 
-        license_cert_adobe = next(
-                c.text for c in credentialsXML.findall(adNS("licenseCertificate"))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-    except: 
-        license_cert_adobe = None
+    license_cert_bb, license_cert_adobe = find_vendor_values(credentialsXML, "licenseCertificate")
 
     if license_cert_bb is not None:
         content += "<adept:licenseCertificate ofByteBooks=\"true\">%s</adept:licenseCertificate>\n" % (license_cert_bb)
@@ -681,50 +611,15 @@ def exportProxyAuth(act_xml_path, activationToken):
     rt_si_authURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("authURL"))).text
     rt_si_userInfoURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("userInfoURL"))).text
     rt_si_activationURL = activationxml.find("./%s/%s" % (adNS("activationServiceInfo"), adNS("activationURL"))).text
-    try: 
-        rt_si_certificate_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("activationServiceInfo"), adNS("certificate"))).text
-    except: 
-        rt_si_certificate_bb = None
-
-    try: 
-        rt_si_certificate_ad = next(
-                c.text for c in activationxml.findall("./%s/%s" % (adNS("activationServiceInfo"), adNS("certificate")))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-    except: 
-        rt_si_certificate_ad = None
+    rt_si_certificate_bb, rt_si_certificate_ad = find_vendor_values(activationxml, "activationServiceInfo", "certificate")
 
 
     rt_c_user = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("user"))).text
     rt_c_privateLicenseKey = activationxml.find("./%s/%s" % (adNS("credentials"), adNS("privateLicenseKey"))).text
 
 
-    try: 
-        license_cert_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("licenseCertificate"))).text
-    except AttributeError:
-        # When old activation.xmls are loaded by the new plugin.
-        license_cert_bb = None
-
-    try:
-        auth_cert_bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("authenticationCertificate"))).text
-    except AttributeError:
-        auth_cert_bb = None
-
-    try: 
-        license_cert_adobe = next(
-                c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("licenseCertificate")))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-    except:
-        license_cert_adobe = None
-
-    try:
-        auth_cert_adobe = next(
-                c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("authenticationCertificate")))
-                if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-            )
-    except: 
-        auth_cert_adobe = None
+    license_cert_bb, license_cert_adobe = find_vendor_values(activationxml, "credentials", "licenseCertificate")
+    auth_cert_bb, auth_cert_adobe = find_vendor_values(activationxml, "credentials", "authenticationCertificate")
 
 
 

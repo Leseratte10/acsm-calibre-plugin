@@ -688,6 +688,45 @@ def get_cert_from_pkcs12(_pkcs12, _key):
     return cert.dump()
 
 
+def find_vendor_values(parent, *tags):
+    # type: (etree._Element, str) -> tuple
+    # Activations and server replies contain some values once per vendor. This returns
+    # (ByteBooks, Adobe) for the adept elements at parent/tags[0]/tags[1]/...: the text of the
+    # first element with ofByteBooks="true", and of the first one with ofByteBooks="false" or
+    # without the attribute, which activations from ADE and older plugin versions don't have.
+    # Elements without text are skipped, and a vendor without a value is None.
+
+    path = "./" + "/".join("{http://ns.adobe.com/adept}" + tag for tag in tags)
+
+    bytebooks = None
+    adobe = None
+    for element in parent.findall(path):
+        if not element.text:
+            continue
+        flag = element.get("ofByteBooks")
+        if flag == "true":
+            if bytebooks is None:
+                bytebooks = element.text
+        elif flag is None or flag == "false":
+            if adobe is None:
+                adobe = element.text
+
+    return bytebooks, adobe
+
+
+def prefer_vendor(bytebooks, adobe, prefer_bytebooks):
+    # type: (str, str, bool) -> tuple
+    # Picks one of the values that find_vendor_values() returned: the ByteBooks one if
+    # prefer_bytebooks is set, otherwise the Adobe one, and the other one if that's None.
+    # Returns (value, is_bytebooks), or (None, None) if both are None.
+
+    if bytebooks is not None and (prefer_bytebooks or adobe is None):
+        return bytebooks, True
+    if adobe is not None:
+        return adobe, False
+    return None, None
+
+
 
 
 def sign_node(node, prefer_bytebooks):
@@ -716,40 +755,18 @@ def sign_node(node, prefer_bytebooks):
         traceback.print_exc()
         return None
 
-    adNS = lambda tag: '{%s}%s' % ('http://ns.adobe.com/adept', tag)
-
     # If prefer_bytebooks is set, this function will first try to use the ByteBooks cert. 
     # If it isn't, it tries the Adobe cert. 
     # If the requested one isn't found, it uses the other one.
 
-    try: 
-        pkcs12bb = activationxml.find("./%s/%s[@ofByteBooks='true']" % (adNS("credentials"), adNS("pkcs12"))).text
-    except: 
-        pkcs12bb = None
+    pkcs12bb, pkcs12adobe = find_vendor_values(activationxml, "credentials", "pkcs12")
+    pkcs12, is_bytebooks = prefer_vendor(pkcs12bb, pkcs12adobe, prefer_bytebooks)
 
-    try: 
-        pkcs12adobe = next(
-                        c.text for c in activationxml.findall("./%s/%s" % (adNS("credentials"), adNS("pkcs12")))
-                        if "ofByteBooks" not in c.attrib or c.attrib['ofByteBooks'] == 'false'
-                        )
-    except: 
-        pkcs12adobe = None
-
-
-    if pkcs12adobe is None and pkcs12bb is None: 
+    if pkcs12 is None:
         print("Signing failed, activation.xml doesn't contain a pkcs12")
         return None
 
-    if prefer_bytebooks:
-        if pkcs12bb is not None: 
-            pkcs12, vendor = pkcs12bb, "ByteBooks"
-        else: 
-            pkcs12, vendor = pkcs12adobe, "Adobe"
-    else: 
-        if pkcs12adobe is not None: 
-            pkcs12, vendor = pkcs12adobe, "Adobe"
-        else: 
-            pkcs12, vendor = pkcs12bb, "ByteBooks"
+    vendor = "ByteBooks" if is_bytebooks else "Adobe"
 
 
     try:
